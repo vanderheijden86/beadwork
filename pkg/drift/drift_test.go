@@ -967,6 +967,7 @@ func TestCheckDensity_BaselineZero(t *testing.T) {
 	}
 	t.Log("Correctly skipped density check with zero baseline")
 }
+
 // TestCheckActionable_SmallChanges tests that small changes don't trigger alerts
 func TestCheckActionable_SmallChanges(t *testing.T) {
 	t.Log("Testing checkActionable with small changes (no alert)")
@@ -1037,5 +1038,155 @@ func TestCheckDensity_SmallIncrease(t *testing.T) {
 		if alert.Type == AlertDensityGrowth {
 			t.Errorf("10%% density increase should not alert, got: %s", alert.Message)
 		}
+	}
+}
+
+func TestCalculatorZeroBaseline(t *testing.T) {
+	t.Log("Testing calculator with zero-value baseline")
+
+	bl := &baseline.Baseline{
+		Stats: baseline.GraphStats{}, // All zero
+	}
+
+	// Current has some values
+	current := &baseline.Baseline{
+		Stats: baseline.GraphStats{
+			NodeCount:       10,
+			EdgeCount:       20,
+			Density:         0.1,
+			BlockedCount:    2,
+			ActionableCount: 8,
+		},
+	}
+
+	calc := NewCalculator(bl, current, nil)
+	result := calc.Calculate()
+
+	// Should not crash.
+	// With zero baseline, most percentage calc checks should be skipped or handle div-by-zero safely.
+	// Node/Edge growth checks check "if blNodes > 0".
+	// Density check checks "if blDensity == 0".
+	// Actionable check checks "if blAction > 0".
+	// Blocked check is absolute difference, so 2 - 0 = 2. Threshold is 5. So no alert.
+
+	if result.HasDrift {
+		t.Errorf("expected no drift with zero baseline, got %d alerts", len(result.Alerts))
+		for _, a := range result.Alerts {
+			t.Logf("Alert: %s", a.Message)
+		}
+	}
+}
+
+func TestCalculatorBoundaryThresholds(t *testing.T) {
+	t.Log("Testing exact boundary conditions")
+
+	cfg := &Config{
+		DensityWarningPct: 50.0,
+	}
+
+	bl := &baseline.Baseline{
+		Stats: baseline.GraphStats{
+			NodeCount: 100,
+			Density:   0.50,
+		},
+	}
+
+	// Case 1: Exactly 50% increase (0.50 -> 0.75)
+	// Should trigger warning (using exact float representations)
+	currentExact := &baseline.Baseline{
+		Stats: baseline.GraphStats{
+			NodeCount: 100,
+			Density:   0.75,
+		},
+	}
+
+	calcExact := NewCalculator(bl, currentExact, cfg)
+	resExact := calcExact.Calculate()
+
+	found := false
+	for _, a := range resExact.Alerts {
+		if a.Type == AlertDensityGrowth && a.Severity == SeverityWarning {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("Exact 50% density increase should trigger warning")
+		for _, a := range resExact.Alerts {
+			t.Logf("Found alert: [%s] %s (Delta: %f)", a.Severity, a.Message, a.Delta)
+		}
+	}
+
+	// Case 2: Just below 50% increase (0.10 -> 0.1499)
+	// Should NOT trigger warning (assuming no info threshold or low info threshold)
+	// Default info is 20%, so it might trigger Info. Let's set Info to 49.9 to be safe or ignore info alerts.
+	// Let's explicitly check it does NOT trigger Warning.
+	currentBelow := &baseline.Baseline{
+		Stats: baseline.GraphStats{
+			NodeCount: 100,
+			Density:   0.1499,
+		},
+	}
+
+	calcBelow := NewCalculator(bl, currentBelow, cfg)
+	resBelow := calcBelow.Calculate()
+
+	for _, a := range resBelow.Alerts {
+		if a.Type == AlertDensityGrowth && a.Severity == SeverityWarning {
+			t.Errorf("49.9%% density increase should NOT trigger warning, got: %s", a.Message)
+		}
+	}
+}
+
+func TestCalculatorEmptyMetrics(t *testing.T) {
+	t.Log("Testing with empty metric slices")
+
+	bl := &baseline.Baseline{
+		Stats: baseline.GraphStats{NodeCount: 10},
+		TopMetrics: baseline.TopMetrics{
+			PageRank: []baseline.MetricItem{}, // Empty
+		},
+		Cycles: [][]string{},
+	}
+
+	current := &baseline.Baseline{
+		Stats: baseline.GraphStats{NodeCount: 10},
+		TopMetrics: baseline.TopMetrics{
+			PageRank: []baseline.MetricItem{}, // Empty
+		},
+		Cycles: [][]string{},
+	}
+
+	calc := NewCalculator(bl, current, nil)
+	result := calc.Calculate()
+
+	if result.HasDrift {
+		t.Error("Empty metrics should not trigger drift")
+	}
+}
+
+func TestCalculatorLargeValues(t *testing.T) {
+	t.Log("Testing with large values to ensure no overflow/panic")
+
+	bl := &baseline.Baseline{
+		Stats: baseline.GraphStats{
+			NodeCount: 1000000,
+			EdgeCount: 5000000,
+			Density:   0.5,
+		},
+	}
+
+	current := &baseline.Baseline{
+		Stats: baseline.GraphStats{
+			NodeCount: 1000000, // No change
+			EdgeCount: 5000000,
+			Density:   0.5,
+		},
+	}
+
+	calc := NewCalculator(bl, current, nil)
+	result := calc.Calculate()
+
+	if result.HasDrift {
+		t.Error("Large stable values should not trigger drift")
 	}
 }
