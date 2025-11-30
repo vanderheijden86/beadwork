@@ -3,8 +3,11 @@ package hooks
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
+
+	"gopkg.in/yaml.v3"
 )
 
 func TestExportContextToEnv(t *testing.T) {
@@ -472,5 +475,196 @@ hooks:
 	ws := loader.Warnings()
 	if len(ws) == 0 {
 		t.Fatal("expected warning for empty command")
+	}
+}
+
+func TestRunPreExportStopsOnFail(t *testing.T) {
+	config := &Config{
+		Hooks: HooksByPhase{
+			PreExport: []Hook{
+				{Name: "fail-fast", Command: "exit 1", Timeout: time.Second, OnError: "fail"},
+				{Name: "should-not-run", Command: "echo nope", Timeout: time.Second, OnError: "fail"},
+			},
+		},
+	}
+
+	executor := NewExecutor(config, ExportContext{})
+	err := executor.RunPreExport()
+	if err == nil {
+		t.Fatal("expected error from failing pre-export hook")
+	}
+
+	results := executor.Results()
+	if len(results) != 1 {
+		t.Fatalf("expected only first hook to run, got %d results", len(results))
+	}
+	if results[0].Success {
+		t.Errorf("expected failure result, got success")
+	}
+}
+
+func TestRunPostExportFailOnErrorStillRunsAll(t *testing.T) {
+	config := &Config{
+		Hooks: HooksByPhase{
+			PostExport: []Hook{
+				{Name: "fail", Command: "exit 1", Timeout: time.Second, OnError: "fail"},
+				{Name: "after", Command: "echo ok", Timeout: time.Second, OnError: "continue"},
+			},
+		},
+	}
+
+	executor := NewExecutor(config, ExportContext{})
+	err := executor.RunPostExport()
+	if err == nil {
+		t.Fatal("expected error for post-export hook with on_error=fail")
+	}
+
+	results := executor.Results()
+	if len(results) != 2 {
+		t.Fatalf("expected both hooks to run, got %d", len(results))
+	}
+	if results[1].Stdout != "ok" {
+		t.Errorf("expected second hook to run despite earlier failure, got stdout %q", results[1].Stdout)
+	}
+}
+
+func TestRunHooksNoHooksConfigured(t *testing.T) {
+	projectDir := t.TempDir()
+
+	executor, err := RunHooks(projectDir, ExportContext{}, false)
+	if err != nil {
+		t.Fatalf("expected no error when no hooks file present, got %v", err)
+	}
+	if executor != nil {
+		t.Fatalf("expected no executor when no hooks configured, got %#v", executor)
+	}
+}
+
+func TestLoadDefaultNoHooks(t *testing.T) {
+	origWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(origWD)
+	})
+
+	tmp := t.TempDir()
+	if err := os.Chdir(tmp); err != nil {
+		t.Fatalf("chdir temp: %v", err)
+	}
+
+	loader, err := LoadDefault()
+	if err != nil {
+		t.Fatalf("expected no error loading default without config, got %v", err)
+	}
+	if loader.HasHooks() {
+		t.Fatalf("expected no hooks loaded in empty directory")
+	}
+}
+
+func TestHookUnmarshalYAMLInvalidTimeout(t *testing.T) {
+	var h Hook
+	err := yaml.Unmarshal([]byte("name: bad\ntimeout: nope\ncommand: echo hi\n"), &h)
+	if err == nil {
+		t.Fatal("expected error for invalid duration")
+	}
+}
+
+func TestLoaderGetHooksUnknownPhase(t *testing.T) {
+	loader := &Loader{
+		config: &Config{
+			Hooks: HooksByPhase{
+				PreExport: []Hook{{Name: "test", Command: "echo ok"}},
+			},
+		},
+	}
+
+	if hooks := loader.GetHooks(HookPhase("unknown")); hooks != nil {
+		t.Fatalf("expected nil for unknown phase, got %#v", hooks)
+	}
+}
+
+func TestExecutorCommandNotFound(t *testing.T) {
+	config := &Config{
+		Hooks: HooksByPhase{
+			PreExport: []Hook{
+				{Name: "missing", Command: "definitely-not-a-real-command-xyz", Timeout: time.Second, OnError: "fail"},
+			},
+		},
+	}
+
+	exec := NewExecutor(config, ExportContext{})
+	err := exec.RunPreExport()
+	if err == nil {
+		t.Fatalf("expected error for missing command")
+	}
+	results := exec.Results()
+	if len(results) != 1 || results[0].Success {
+		t.Fatalf("expected failure result for missing command, got %+v", results)
+	}
+	if results[0].Stderr == "" {
+		t.Fatalf("expected stderr to include shell error")
+	}
+}
+
+func TestExecutorPermissionDenied(t *testing.T) {
+	tmp := t.TempDir()
+	script := filepath.Join(tmp, "script.sh")
+	if err := os.WriteFile(script, []byte("#!/bin/sh\necho nope\n"), 0644); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	config := &Config{
+		Hooks: HooksByPhase{
+			PreExport: []Hook{
+				{Name: "perm", Command: script, Timeout: time.Second, OnError: "fail"},
+			},
+		},
+	}
+
+	exec := NewExecutor(config, ExportContext{})
+	err := exec.RunPreExport()
+	if err == nil {
+		t.Fatalf("expected permission error")
+	}
+	results := exec.Results()
+	if len(results) != 1 || results[0].Success {
+		t.Fatalf("expected failure result, got %+v", results)
+	}
+}
+
+func TestExecutorLargeStderrTruncatedInSummary(t *testing.T) {
+	config := &Config{
+		Hooks: HooksByPhase{
+			PostExport: []Hook{
+				{
+					Name:    "noisy",
+					Command: "printf '%0300d' 0 1>&2; exit 1",
+					OnError: "continue",
+					Timeout: time.Second,
+				},
+			},
+		},
+	}
+
+	exec := NewExecutor(config, ExportContext{})
+	_ = exec.RunPostExport()
+
+	summary := exec.Summary()
+	if summary == "" {
+		t.Fatalf("expected summary to include failure")
+	}
+	if !contains(summary, "stderr:") {
+		t.Fatalf("expected stderr line in summary: %s", summary)
+	}
+	lines := strings.Split(summary, "\n")
+	for _, line := range lines {
+		if strings.Contains(line, "stderr:") && len(line) > 230 {
+			t.Fatalf("expected truncated stderr line, got length %d", len(line))
+		}
+	}
+	if !strings.Contains(summary, "...") {
+		t.Fatalf("expected ellipsis indicating truncation")
 	}
 }
