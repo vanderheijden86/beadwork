@@ -197,6 +197,45 @@ func (h *HistoryModel) ToggleFocus() {
 	}
 }
 
+// NextCommit moves to the next commit within the selected bead (J key)
+func (h *HistoryModel) NextCommit() {
+	if h.selectedBead >= len(h.histories) {
+		return
+	}
+	commits := h.histories[h.selectedBead].Commits
+	if h.selectedCommit < len(commits)-1 {
+		h.selectedCommit++
+	}
+}
+
+// PrevCommit moves to the previous commit within the selected bead (K key)
+func (h *HistoryModel) PrevCommit() {
+	if h.selectedCommit > 0 {
+		h.selectedCommit--
+	}
+}
+
+// CycleConfidence cycles through common confidence thresholds (0, 0.5, 0.75, 0.9)
+func (h *HistoryModel) CycleConfidence() {
+	thresholds := []float64{0, 0.5, 0.75, 0.9}
+	// Find current threshold index
+	currentIdx := 0
+	for i, t := range thresholds {
+		if h.minConfidence >= t-0.01 && h.minConfidence <= t+0.01 {
+			currentIdx = i
+			break
+		}
+	}
+	// Move to next threshold (wrap around)
+	nextIdx := (currentIdx + 1) % len(thresholds)
+	h.SetMinConfidence(thresholds[nextIdx])
+}
+
+// GetMinConfidence returns the current minimum confidence threshold
+func (h *HistoryModel) GetMinConfidence() float64 {
+	return h.minConfidence
+}
+
 // ToggleExpand expands/collapses the commits for the selected bead
 func (h *HistoryModel) ToggleExpand() {
 	if h.selectedBead < len(h.beadIDs) {

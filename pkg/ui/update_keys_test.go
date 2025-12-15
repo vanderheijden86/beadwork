@@ -65,3 +65,75 @@ func TestUpdateMsgSetsUpdateAvailable(t *testing.T) {
 		t.Fatalf("update flag not set")
 	}
 }
+
+func TestHistoryViewToggle(t *testing.T) {
+	issues := []model.Issue{
+		{ID: "bv-1", Title: "Test Issue", Status: model.StatusOpen},
+	}
+	m := NewModel(issues, nil, "")
+
+	// Make model ready
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 140, Height: 40})
+	m = updated.(Model)
+
+	// H should toggle history view on
+	if m.isHistoryView {
+		t.Fatalf("history view should be off initially")
+	}
+
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("H")})
+	m = updated.(Model)
+
+	if !m.isHistoryView {
+		t.Fatalf("expected history view to be on after H key")
+	}
+	if m.focused != focusHistory {
+		t.Fatalf("expected focus to be on history, got %v", m.focused)
+	}
+
+	// H again should toggle off
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("H")})
+	m = updated.(Model)
+
+	if m.isHistoryView {
+		t.Fatalf("expected history view to be off after second H key")
+	}
+	if m.focused != focusList {
+		t.Fatalf("expected focus to be back on list, got %v", m.focused)
+	}
+}
+
+func TestHistoryViewKeys(t *testing.T) {
+	issues := []model.Issue{
+		{ID: "bv-1", Title: "Test Issue", Status: model.StatusOpen},
+	}
+	m := NewModel(issues, nil, "")
+
+	// Make model ready
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 140, Height: 40})
+	m = updated.(Model)
+
+	// Enter history view
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("H")})
+	m = updated.(Model)
+
+	// Esc should close history view
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	m = updated.(Model)
+
+	if m.isHistoryView {
+		t.Fatalf("expected history view to be closed after Esc")
+	}
+
+	// Re-enter and test 'c' key cycles confidence
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("H")})
+	m = updated.(Model)
+
+	initialConf := m.historyView.GetMinConfidence()
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("c")})
+	m = updated.(Model)
+
+	if m.historyView.GetMinConfidence() == initialConf {
+		t.Fatalf("expected confidence to change after 'c' key")
+	}
+}

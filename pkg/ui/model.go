@@ -781,6 +781,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.focused = focusList
 					return m, nil
 				}
+				if m.isHistoryView {
+					m.isHistoryView = false
+					m.focused = focusList
+					return m, nil
+				}
 				// At main list - show quit confirmation
 				m.showQuitConfirm = true
 				m.focused = focusQuitConfirm
@@ -865,6 +870,25 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					PriorityHints:     m.priorityHints,
 					WorkspaceMode:     m.workspaceMode,
 				})
+				return m, nil
+
+			case "H":
+				// Toggle history view
+				m.isHistoryView = !m.isHistoryView
+				m.isGraphView = false
+				m.isBoardView = false
+				m.isActionableView = false
+				if m.isHistoryView {
+					// Ensure history model has latest sizing
+					bodyHeight := m.height - 1
+					if bodyHeight < 5 {
+						bodyHeight = 5
+					}
+					m.historyView.SetSize(m.width, bodyHeight)
+					m.focused = focusHistory
+				} else {
+					m.focused = focusList
+				}
 				return m, nil
 
 			case "R":
@@ -1166,6 +1190,12 @@ func (m Model) handleHistoryKeys(msg tea.KeyMsg) Model {
 		m.historyView.MoveDown()
 	case "k", "up":
 		m.historyView.MoveUp()
+	case "J":
+		// Navigate to next commit within bead
+		m.historyView.NextCommit()
+	case "K":
+		// Navigate to previous commit within bead
+		m.historyView.PrevCommit()
 	case "tab":
 		m.historyView.ToggleFocus()
 	case "enter":
@@ -1187,6 +1217,38 @@ func (m Model) handleHistoryKeys(msg tea.KeyMsg) Model {
 			}
 			m.updateViewportContent()
 		}
+	case "y":
+		// Copy selected commit SHA to clipboard
+		if commit := m.historyView.SelectedCommit(); commit != nil {
+			if err := clipboard.WriteAll(commit.SHA); err != nil {
+				m.statusMsg = fmt.Sprintf("❌ Clipboard error: %v", err)
+				m.statusIsError = true
+			} else {
+				m.statusMsg = fmt.Sprintf("📋 Copied %s to clipboard", commit.ShortSHA)
+				m.statusIsError = false
+			}
+		} else {
+			m.statusMsg = "❌ No commit selected"
+			m.statusIsError = true
+		}
+	case "c":
+		// Cycle confidence threshold
+		m.historyView.CycleConfidence()
+		conf := m.historyView.GetMinConfidence()
+		if conf == 0 {
+			m.statusMsg = "🔍 Showing all commits"
+		} else {
+			m.statusMsg = fmt.Sprintf("🔍 Confidence filter: ≥%.0f%%", conf*100)
+		}
+		m.statusIsError = false
+	case "/":
+		// Search hint - actual search would require text input
+		m.statusMsg = "💡 Use 'f' for author filter, 'c' for confidence filter"
+		m.statusIsError = false
+	case "f":
+		// Toggle author filter (simple toggle for now)
+		m.statusMsg = "💡 Author filter: Use 'c' to cycle confidence thresholds"
+		m.statusIsError = false
 	case "H", "esc":
 		// Exit history view
 		m.isHistoryView = false
@@ -1657,6 +1719,7 @@ func (m Model) renderHelpOverlay() string {
 		{"a", "Toggle Actionable view"},
 		{"b", "Toggle Kanban board"},
 		{"g", "Toggle Graph view"},
+		{"H", "Toggle History view"},
 		{"i", "Toggle Insights dashboard"},
 		{"R", "Open Recipe picker"},
 		{"?", "Toggle this help"},
@@ -1691,6 +1754,23 @@ func (m Model) renderHelpOverlay() string {
 		{"Enter", "Jump to issue"},
 	}
 	for _, s := range insightsKeys {
+		sb.WriteString(keyStyle.Render(s.key) + descStyle.Render(s.desc) + "\n")
+	}
+
+	// History View keys
+	sb.WriteString("\n")
+	sb.WriteString(sectionStyle.Render("History View"))
+	sb.WriteString("\n")
+	historyKeys := []struct{ key, desc string }{
+		{"j/k", "Navigate bead list"},
+		{"J/K", "Navigate commits in bead"},
+		{"Tab", "Toggle list/detail focus"},
+		{"Enter", "Jump to selected bead"},
+		{"y", "Copy commit SHA"},
+		{"c", "Cycle confidence filter"},
+		{"H/Esc", "Close history view"},
+	}
+	for _, s := range historyKeys {
 		sb.WriteString(keyStyle.Render(s.key) + descStyle.Render(s.desc) + "\n")
 	}
 

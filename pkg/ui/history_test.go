@@ -475,3 +475,73 @@ func TestHistoryModel_HasReport(t *testing.T) {
 		t.Error("HasReport() should return true with report")
 	}
 }
+
+func TestHistoryModel_CommitNavigation(t *testing.T) {
+	report := createTestHistoryReport()
+	theme := testTheme()
+	h := NewHistoryModel(report, theme)
+
+	// Find a bead with 2 commits
+	for i, hist := range h.histories {
+		if len(hist.Commits) >= 2 {
+			h.selectedBead = i
+			break
+		}
+	}
+
+	// Start at first commit
+	if h.selectedCommit != 0 {
+		t.Errorf("initial selectedCommit = %d, want 0", h.selectedCommit)
+	}
+
+	// NextCommit moves to next
+	h.NextCommit()
+	if h.selectedCommit != 1 {
+		t.Errorf("selectedCommit after NextCommit = %d, want 1", h.selectedCommit)
+	}
+
+	// PrevCommit moves back
+	h.PrevCommit()
+	if h.selectedCommit != 0 {
+		t.Errorf("selectedCommit after PrevCommit = %d, want 0", h.selectedCommit)
+	}
+
+	// PrevCommit at 0 stays at 0
+	h.PrevCommit()
+	if h.selectedCommit != 0 {
+		t.Errorf("selectedCommit after PrevCommit at 0 = %d, want 0", h.selectedCommit)
+	}
+}
+
+func TestHistoryModel_CycleConfidence(t *testing.T) {
+	report := createTestHistoryReport()
+	theme := testTheme()
+	h := NewHistoryModel(report, theme)
+
+	// Initial confidence is 0
+	if h.GetMinConfidence() != 0 {
+		t.Errorf("initial confidence = %f, want 0", h.GetMinConfidence())
+	}
+
+	// Cycle through thresholds
+	h.CycleConfidence()
+	if h.GetMinConfidence() != 0.5 {
+		t.Errorf("confidence after first cycle = %f, want 0.5", h.GetMinConfidence())
+	}
+
+	h.CycleConfidence()
+	if h.GetMinConfidence() != 0.75 {
+		t.Errorf("confidence after second cycle = %f, want 0.75", h.GetMinConfidence())
+	}
+
+	h.CycleConfidence()
+	if h.GetMinConfidence() != 0.9 {
+		t.Errorf("confidence after third cycle = %f, want 0.9", h.GetMinConfidence())
+	}
+
+	// Wrap around to 0
+	h.CycleConfidence()
+	if h.GetMinConfidence() != 0 {
+		t.Errorf("confidence after fourth cycle = %f, want 0", h.GetMinConfidence())
+	}
+}
