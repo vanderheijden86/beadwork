@@ -234,23 +234,10 @@ func ComputeTriageWithOptions(issues []model.Issue, opts TriageOptions) TriageRe
 		BlockersToClear: blockersToClear,
 		ProjectHealth: ProjectHealth{
 			Counts: counts,
-			Graph: GraphHealth{
-				NodeCount:   stats.NodeCount,
-				EdgeCount:   stats.EdgeCount,
-				Density:     stats.Density,
-				HasCycles:   len(stats.Cycles()) > 0,
-				CycleCount:  len(stats.Cycles()),
-				Phase2Ready: stats.IsPhase2Ready(),
-			},
+			Graph:  buildGraphHealth(stats),
 			// Velocity and Staleness are nil until those features are implemented
 		},
-		Commands: CommandHelpers{
-			ClaimTop:      fmt.Sprintf("bd update %s --status=in_progress", topID),
-			ShowTop:       fmt.Sprintf("bd show %s", topID),
-			ListReady:     "bd ready",
-			ListBlocked:   "bd blocked",
-			RefreshTriage: "bv --robot-triage",
-		},
+		Commands: buildCommands(topID),
 	}
 }
 
@@ -369,19 +356,24 @@ func determineAction(score ImpactScore, unblocks []string, issue *model.Issue) (
 		reasons = append(reasons, fmt.Sprintf("Unblocks %d item(s)", len(unblocks)))
 	}
 
-	// Staleness
-	if score.Breakdown.StalenessNorm > 0.5 {
+	// Staleness - check if issue is stale
+	isStale := score.Breakdown.StalenessNorm > 0.5
+	if isStale {
 		days := int(score.Breakdown.StalenessNorm * 30)
 		reasons = append(reasons, fmt.Sprintf("Stale for %d+ days", days))
-		if issue.Status == model.StatusInProgress {
-			action = "review" // May be stuck
-		}
 	}
 
-	// In progress for a while without completion
-	if issue.Status == model.StatusInProgress && score.Breakdown.StalenessNorm > 0.3 {
-		action = "review"
-		reasons = append(reasons, "In progress but may need attention")
+	// In progress items may need review
+	if issue.Status == model.StatusInProgress {
+		if isStale {
+			// Very stale in_progress - definitely needs review
+			action = "review"
+			reasons = append(reasons, "In progress but appears stuck")
+		} else if score.Breakdown.StalenessNorm > 0.3 {
+			// Moderately stale in_progress - might need attention
+			action = "review"
+			reasons = append(reasons, "In progress - may need attention")
+		}
 	}
 
 	// Priority consideration
@@ -412,12 +404,15 @@ func buildQuickWins(scores []ImpactScore, unblocksMap map[string][]string, limit
 	for _, score := range scores {
 		unblocks := unblocksMap[score.IssueID]
 		// Quick win score: benefits unblocking, penalizes complexity
+		// - High unblock count = good (helps project progress)
+		// - Low BlockerRatioNorm = few things depend on this = safer to work on
+		// - High priority number (P3, P4) = likely simpler tasks
 		qwScore := float64(len(unblocks)) * 0.5
 		if score.Breakdown.BlockerRatioNorm < 0.3 {
-			qwScore += 0.3 // Bonus for being less blocked
+			qwScore += 0.3 // Bonus: not a critical bottleneck (fewer downstream deps)
 		}
 		if score.Priority >= 3 {
-			qwScore += 0.2 // Bonus for lower priority (simpler)
+			qwScore += 0.2 // Bonus: lower priority often means simpler
 		}
 		candidates = append(candidates, candidate{score, unblocks, qwScore})
 	}
@@ -519,4 +514,41 @@ func buildTopPicks(recommendations []Recommendation, limit int) []TopPick {
 	}
 
 	return picks
+}
+
+// buildGraphHealth constructs graph health metrics from stats
+func buildGraphHealth(stats *GraphStats) GraphHealth {
+	// Call Cycles() once to avoid duplicate work (it makes a copy each time)
+	cycles := stats.Cycles()
+	cycleCount := 0
+	if cycles != nil {
+		cycleCount = len(cycles)
+	}
+
+	return GraphHealth{
+		NodeCount:   stats.NodeCount,
+		EdgeCount:   stats.EdgeCount,
+		Density:     stats.Density,
+		HasCycles:   cycleCount > 0,
+		CycleCount:  cycleCount,
+		Phase2Ready: stats.IsPhase2Ready(),
+	}
+}
+
+// buildCommands constructs helper commands, handling empty topID gracefully
+func buildCommands(topID string) CommandHelpers {
+	claimTop := "bd ready  # No top pick available"
+	showTop := "bd ready  # No top pick available"
+	if topID != "" {
+		claimTop = fmt.Sprintf("bd update %s --status=in_progress", topID)
+		showTop = fmt.Sprintf("bd show %s", topID)
+	}
+
+	return CommandHelpers{
+		ClaimTop:      claimTop,
+		ShowTop:       showTop,
+		ListReady:     "bd ready",
+		ListBlocked:   "bd blocked",
+		RefreshTriage: "bv --robot-triage",
+	}
 }

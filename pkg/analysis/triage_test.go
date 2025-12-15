@@ -251,3 +251,73 @@ func TestTriageWithCycles(t *testing.T) {
 		t.Error("expected cycle count > 0")
 	}
 }
+
+func TestTriageEmptyCommands(t *testing.T) {
+	// When there are no open issues, commands should be gracefully handled
+	issues := []model.Issue{
+		{ID: "closed-1", Status: model.StatusClosed},
+	}
+
+	triage := ComputeTriage(issues)
+
+	// Should not have "bd update  --status" (empty ID)
+	if triage.Commands.ClaimTop == "bd update  --status=in_progress" {
+		t.Error("ClaimTop should not have empty ID")
+	}
+	// Should have a fallback message
+	if triage.Commands.ClaimTop == "" {
+		t.Error("ClaimTop should not be empty")
+	}
+}
+
+func TestTriageNoRecommendationsCommands(t *testing.T) {
+	// Empty project
+	triage := ComputeTriage(nil)
+
+	// Commands should be valid even with no recommendations
+	if triage.Commands.ListReady != "bd ready" {
+		t.Errorf("expected 'bd ready', got %s", triage.Commands.ListReady)
+	}
+	// ClaimTop should have fallback, not empty ID
+	if triage.Commands.ClaimTop == "bd update  --status=in_progress" {
+		t.Error("ClaimTop should not have empty ID in command")
+	}
+}
+
+func TestTriageInProgressAction(t *testing.T) {
+	// Test the different staleness thresholds for in_progress items
+	tests := []struct {
+		name           string
+		daysOld        int
+		expectedAction string
+	}{
+		{"fresh in_progress", 5, "work"},      // < 9 days (0.3 * 30)
+		{"moderate in_progress", 12, "review"}, // > 9 days, < 15 days
+		{"stale in_progress", 20, "review"},    // > 15 days (0.5 * 30)
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			issues := []model.Issue{
+				{
+					ID:        "wip",
+					Title:     tt.name,
+					Status:    model.StatusInProgress,
+					Priority:  1,
+					UpdatedAt: time.Now().Add(-time.Duration(tt.daysOld) * 24 * time.Hour),
+				},
+			}
+
+			triage := ComputeTriage(issues)
+			if len(triage.Recommendations) == 0 {
+				t.Fatal("expected recommendations")
+			}
+
+			rec := triage.Recommendations[0]
+			if rec.Action != tt.expectedAction {
+				t.Errorf("expected action %q, got %q (staleness: %.2f)",
+					tt.expectedAction, rec.Action, rec.Breakdown.StalenessNorm)
+			}
+		})
+	}
+}
