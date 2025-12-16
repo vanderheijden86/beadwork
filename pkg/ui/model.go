@@ -1975,7 +1975,7 @@ func (m Model) renderLabelHealthDetail(lh analysis.LabelHealth) string {
 	sb.WriteString(valStyle.Render(fmt.Sprintf("%d", lh.Blocked)))
 	sb.WriteString("\n")
 
-	sb.WriteString(lipgloss.NewStyle().Foreground(t.Subtext).Render("esc/q/enter to close; enter on table selects label"))
+	sb.WriteString(t.Renderer.NewStyle().Foreground(t.Subtext).Render("esc/q/enter to close; enter on table selects label"))
 
 	content := boxStyle.Render(sb.String())
 

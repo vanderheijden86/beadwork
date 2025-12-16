@@ -2235,8 +2235,8 @@ func buildAttentionReason(score analysis.LabelAttentionScore) string {
 		parts = append(parts, fmt.Sprintf("%d stale", score.StaleCount))
 	}
 
-	// Low velocity
-	if score.VelocityFactor < 1.0 {
+	// Low velocity (VelocityFactor = ClosedLast30Days + 1, so 1.0 means zero closures)
+	if score.VelocityFactor <= 1.0 {
 		parts = append(parts, "low velocity")
 	}
 
