@@ -55,6 +55,7 @@ const (
 	focusTimeTravelInput
 	focusHistory
 	focusAttention
+	focusLabelPicker
 )
 
 // LabelGraphAnalysisResult holds label-specific graph analysis results (bv-109)
@@ -229,6 +230,10 @@ type Model struct {
 	recipePicker     RecipePickerModel
 	activeRecipe     *recipe.Recipe
 	recipeLoader     *recipe.Loader
+
+	// Label picker (bv-126)
+	showLabelPicker bool
+	labelPicker     LabelPickerModel
 
 	// Repo picker (workspace mode)
 	showRepoPicker bool
@@ -534,6 +539,10 @@ func NewModel(issues []model.Issue, activeRecipe *recipe.Recipe, beadsPath strin
 	_ = recipeLoader.Load() // Load recipes (errors are non-fatal, will just show empty)
 	recipePicker := NewRecipePickerModel(recipeLoader.List(), theme)
 
+	// Initialize label picker (bv-126)
+	labelExtraction := analysis.ExtractLabels(issues)
+	labelPicker := NewLabelPickerModel(labelExtraction.Labels, theme)
+
 	// Initialize time-travel input
 	ti := textinput.New()
 	ti.Placeholder = "HEAD~5, main, v1.0.0, 2024-01-01..."
@@ -600,6 +609,7 @@ func NewModel(issues []model.Issue, activeRecipe *recipe.Recipe, beadsPath strin
 		recipeLoader:        recipeLoader,
 		recipePicker:        recipePicker,
 		activeRecipe:        activeRecipe,
+		labelPicker:         labelPicker,
 		labelDrilldownCache: make(map[string][]model.Issue),
 		timeTravelInput:     ti,
 		statusMsg:           initialStatus,
@@ -1399,6 +1409,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// Export to Markdown file
 				m.exportToMarkdown()
 				return m, nil
+
+			case "l":
+				// Open label picker for quick filter (bv-126)
+				if len(m.issues) == 0 {
+					return m, nil
+				}
+				// Update labels in case they changed
+				labelExtraction := analysis.ExtractLabels(m.issues)
+				m.labelPicker.SetLabels(labelExtraction.Labels)
+				m.labelPicker.Reset()
+				m.labelPicker.SetSize(m.width, m.height-1)
+				m.showLabelPicker = true
+				m.focused = focusLabelPicker
+				return m, nil
 			}
 
 			// Focus-specific key handling
@@ -1408,6 +1432,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			case focusRepoPicker:
 				m = m.handleRepoPickerKeys(msg)
+
+			case focusLabelPicker:
+				m = m.handleLabelPickerKeys(msg)
 
 			case focusInsights:
 				m = m.handleInsightsKeys(msg)
@@ -1854,6 +1881,32 @@ func (m Model) handleRepoPickerKeys(msg tea.KeyMsg) Model {
 	return m
 }
 
+// handleLabelPickerKeys handles keyboard input when label picker is focused (bv-126)
+func (m Model) handleLabelPickerKeys(msg tea.KeyMsg) Model {
+	switch msg.String() {
+	case "esc":
+		m.showLabelPicker = false
+		m.focused = focusList
+	case "j", "down", "ctrl+n":
+		m.labelPicker.MoveDown()
+	case "k", "up", "ctrl+p":
+		m.labelPicker.MoveUp()
+	case "enter":
+		if selected := m.labelPicker.SelectedLabel(); selected != "" {
+			m.currentFilter = "label:" + selected
+			m.applyFilter()
+			m.statusMsg = fmt.Sprintf("Filtered by label: %s", selected)
+			m.statusIsError = false
+		}
+		m.showLabelPicker = false
+		m.focused = focusList
+	default:
+		// Pass other keys to text input for fuzzy search
+		m.labelPicker.UpdateInput(msg)
+	}
+	return m
+}
+
 // handleInsightsKeys handles keyboard input when insights panel is focused
 func (m Model) handleInsightsKeys(msg tea.KeyMsg) Model {
 	switch msg.String() {
@@ -2065,6 +2118,8 @@ func (m Model) View() string {
 		body = m.recipePicker.View()
 	} else if m.showRepoPicker {
 		body = m.repoPicker.View()
+	} else if m.showLabelPicker {
+		body = m.labelPicker.View()
 	} else if m.showHelp {
 		body = m.renderHelpOverlay()
 	} else if m.focused == focusInsights {
@@ -3206,6 +3261,8 @@ func (m *Model) renderFooter() string {
 		keyHints = append(keyHints, keyStyle.Render("j/k")+" nav", keyStyle.Render("⏎")+" apply", keyStyle.Render("esc")+" cancel")
 	} else if m.showRepoPicker {
 		keyHints = append(keyHints, keyStyle.Render("j/k")+" nav", keyStyle.Render("space")+" toggle", keyStyle.Render("⏎")+" apply", keyStyle.Render("esc")+" cancel")
+	} else if m.showLabelPicker {
+		keyHints = append(keyHints, "type to filter", keyStyle.Render("j/k")+" nav", keyStyle.Render("⏎")+" apply", keyStyle.Render("esc")+" cancel")
 	} else if m.focused == focusInsights {
 		keyHints = append(keyHints, keyStyle.Render("h/l")+" panels", keyStyle.Render("e")+" explain", keyStyle.Render("⏎")+" jump", keyStyle.Render("?")+" help")
 		keyHints = append(keyHints, keyStyle.Render("A")+" attention", keyStyle.Render("F")+" flow")
@@ -3229,7 +3286,7 @@ func (m *Model) renderFooter() string {
 		} else if m.showDetails {
 			keyHints = append(keyHints, keyStyle.Render("esc")+" back", keyStyle.Render("C")+" copy", keyStyle.Render("O")+" edit", keyStyle.Render("?")+" help")
 		} else {
-			keyHints = append(keyHints, keyStyle.Render("⏎")+" details", keyStyle.Render("t")+" diff", keyStyle.Render("S")+" triage", keyStyle.Render("ECO")+" actions", keyStyle.Render("?")+" help")
+			keyHints = append(keyHints, keyStyle.Render("⏎")+" details", keyStyle.Render("t")+" diff", keyStyle.Render("S")+" triage", keyStyle.Render("l")+" labels", keyStyle.Render("?")+" help")
 			if m.workspaceMode {
 				keyHints = append(keyHints, keyStyle.Render("w")+" repos")
 			}
