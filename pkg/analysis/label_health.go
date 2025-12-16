@@ -1,7 +1,9 @@
 package analysis
 
 import (
+	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/Dicklesworthstone/beads_viewer/pkg/model"
@@ -123,6 +125,54 @@ type CrossLabelFlow struct {
 	CriticalPaths       []LabelPath       `json:"critical_paths"`         // Label-level critical paths
 	BottleneckLabels    []string          `json:"bottleneck_labels"`      // Labels causing most blockage
 	TotalCrossLabelDeps int               `json:"total_cross_label_deps"` // Total inter-label dependencies
+}
+
+// ============================================================================
+// Blockage Impact Cascade (bv-112)
+// Compute transitive downstream impact of blocked labels
+// ============================================================================
+
+// BlockageCascadeResult shows the transitive downstream impact of blocked issues
+type BlockageCascadeResult struct {
+	SourceLabel     string                   `json:"source_label"`     // The label with blocked issues
+	BlockedCount    int                      `json:"blocked_count"`    // Number of blocked issues in source
+	CascadeLevels   []CascadeLevel           `json:"cascade_levels"`   // Downstream impact by depth
+	TotalImpact     int                      `json:"total_impact"`     // Total downstream issues affected
+	AffectedLabels  []string                 `json:"affected_labels"`  // All labels in the cascade
+	Recommendations []UnblockRecommendation  `json:"recommendations"`  // What to unblock first
+}
+
+// CascadeLevel represents one depth level in the cascade tree
+type CascadeLevel struct {
+	Level         int                  `json:"level"`          // Depth (1 = direct, 2 = indirect, etc.)
+	Labels        []LabelCascadeEntry  `json:"labels"`         // Labels affected at this level
+	TotalAffected int                  `json:"total_affected"` // Total issues at this level
+}
+
+// LabelCascadeEntry shows a label's impact in the cascade
+type LabelCascadeEntry struct {
+	Label        string `json:"label"`
+	WaitingCount int    `json:"waiting_count"` // Issues waiting due to cascade
+	FromLabels   []string `json:"from_labels"` // Which labels are blocking this one
+}
+
+// UnblockRecommendation suggests which issue to unblock for maximum impact
+type UnblockRecommendation struct {
+	IssueID       string `json:"issue_id"`
+	IssueTitle    string `json:"issue_title,omitempty"`
+	Label         string `json:"label"`
+	UnblocksCount int    `json:"unblocks_count"` // How many issues this unblocks
+	CascadeDepth  int    `json:"cascade_depth"`  // How deep the cascade goes
+	Reason        string `json:"reason"`
+}
+
+// BlockageCascadeAnalysis holds all cascade results for a project
+type BlockageCascadeAnalysis struct {
+	GeneratedAt   time.Time               `json:"generated_at"`
+	TotalBlocked  int                     `json:"total_blocked"`   // Total blocked issues
+	Cascades      []BlockageCascadeResult `json:"cascades"`        // Per-source-label cascades
+	TopUnblocks   []UnblockRecommendation `json:"top_unblocks"`    // Global top recommendations
+	CriticalChain []string                `json:"critical_chain"`  // Longest cascade chain (labels)
 }
 
 // LabelPath represents a sequence of labels in a dependency chain
@@ -977,6 +1027,279 @@ func ComputeBlockedByLabel(issues []model.Issue, analyzer *Analyzer) map[string]
 	}
 
 	return blocked
+}
+
+// ComputeBlockageCascade computes the transitive downstream impact when labels have blocked issues.
+// For each label with blocked issues, it shows which other labels are waiting (transitively).
+// Example output: database(4 blocked) -> backend: 3 waiting -> testing: 2 waiting
+func ComputeBlockageCascade(issues []model.Issue, flow CrossLabelFlow, cfg LabelHealthConfig) BlockageCascadeAnalysis {
+	result := BlockageCascadeAnalysis{
+		GeneratedAt: time.Now(),
+		Cascades:    []BlockageCascadeResult{},
+		TopUnblocks: []UnblockRecommendation{},
+	}
+
+	if len(flow.Labels) == 0 {
+		return result
+	}
+
+	// Build label index for matrix lookups
+	labelIndex := make(map[string]int, len(flow.Labels))
+	for i, label := range flow.Labels {
+		labelIndex[label] = i
+	}
+
+	// Build issue map and count blocked per label
+	issueMap := make(map[string]model.Issue, len(issues))
+	blockedByLabel := make(map[string][]model.Issue)
+	for _, iss := range issues {
+		issueMap[iss.ID] = iss
+		if iss.Status == model.StatusBlocked {
+			for _, label := range iss.Labels {
+				blockedByLabel[label] = append(blockedByLabel[label], iss)
+			}
+		}
+	}
+
+	// Count total blocked
+	for _, blocked := range blockedByLabel {
+		result.TotalBlocked += len(blocked)
+	}
+
+	// For each label with blocked issues, compute cascade
+	var allCascades []BlockageCascadeResult
+	for sourceLabel, blockedIssues := range blockedByLabel {
+		if len(blockedIssues) == 0 {
+			continue
+		}
+
+		cascade := computeSingleCascade(sourceLabel, blockedIssues, flow, labelIndex, issueMap)
+		if cascade.TotalImpact > 0 || cascade.BlockedCount > 0 {
+			allCascades = append(allCascades, cascade)
+		}
+	}
+
+	// Sort cascades by total impact (highest first)
+	sort.Slice(allCascades, func(i, j int) bool {
+		return allCascades[i].TotalImpact > allCascades[j].TotalImpact
+	})
+	result.Cascades = allCascades
+
+	// Collect all recommendations and sort by unblock count
+	var allRecs []UnblockRecommendation
+	for _, cascade := range allCascades {
+		allRecs = append(allRecs, cascade.Recommendations...)
+	}
+	sort.Slice(allRecs, func(i, j int) bool {
+		if allRecs[i].UnblocksCount != allRecs[j].UnblocksCount {
+			return allRecs[i].UnblocksCount > allRecs[j].UnblocksCount
+		}
+		return allRecs[i].CascadeDepth > allRecs[j].CascadeDepth
+	})
+
+	// Take top 10 recommendations
+	if len(allRecs) > 10 {
+		allRecs = allRecs[:10]
+	}
+	result.TopUnblocks = allRecs
+
+	// Find critical chain (longest cascade)
+	var longestChain []string
+	for _, cascade := range allCascades {
+		chain := []string{cascade.SourceLabel}
+		for _, level := range cascade.CascadeLevels {
+			for _, entry := range level.Labels {
+				chain = append(chain, entry.Label)
+			}
+		}
+		if len(chain) > len(longestChain) {
+			longestChain = chain
+		}
+	}
+	result.CriticalChain = longestChain
+
+	return result
+}
+
+// computeSingleCascade computes the cascade for a single source label
+func computeSingleCascade(sourceLabel string, blockedIssues []model.Issue, flow CrossLabelFlow, labelIndex map[string]int, issueMap map[string]model.Issue) BlockageCascadeResult {
+	result := BlockageCascadeResult{
+		SourceLabel:     sourceLabel,
+		BlockedCount:    len(blockedIssues),
+		CascadeLevels:   []CascadeLevel{},
+		AffectedLabels:  []string{},
+		Recommendations: []UnblockRecommendation{},
+	}
+
+	if _, ok := labelIndex[sourceLabel]; !ok {
+		return result
+	}
+
+	// BFS to find transitive downstream labels
+	visited := make(map[string]bool)
+	visited[sourceLabel] = true
+	currentLevel := []string{sourceLabel}
+	level := 0
+	totalImpact := 0
+	affectedSet := make(map[string]bool)
+
+	for len(currentLevel) > 0 && level < 10 { // Cap at 10 levels to prevent infinite loops
+		level++
+		var nextLevel []string
+		levelEntries := []LabelCascadeEntry{}
+		levelTotal := 0
+
+		for _, fromLabel := range currentLevel {
+			fromIdx, hasFrom := labelIndex[fromLabel]
+			if !hasFrom {
+				continue
+			}
+
+			// Find labels that this label blocks (outgoing edges in flow matrix)
+			for toIdx, count := range flow.FlowMatrix[fromIdx] {
+				if count == 0 {
+					continue
+				}
+				toLabel := flow.Labels[toIdx]
+				if visited[toLabel] {
+					continue
+				}
+				visited[toLabel] = true
+				nextLevel = append(nextLevel, toLabel)
+				affectedSet[toLabel] = true
+
+				// Find which labels block this one at this level
+				fromLabels := []string{}
+				for _, fl := range currentLevel {
+					fIdx, ok := labelIndex[fl]
+					if ok && flow.FlowMatrix[fIdx][toIdx] > 0 {
+						fromLabels = append(fromLabels, fl)
+					}
+				}
+				sort.Strings(fromLabels)
+
+				levelEntries = append(levelEntries, LabelCascadeEntry{
+					Label:        toLabel,
+					WaitingCount: count,
+					FromLabels:   fromLabels,
+				})
+				levelTotal += count
+			}
+		}
+
+		if len(levelEntries) > 0 {
+			// Sort entries by waiting count (highest first)
+			sort.Slice(levelEntries, func(i, j int) bool {
+				return levelEntries[i].WaitingCount > levelEntries[j].WaitingCount
+			})
+
+			result.CascadeLevels = append(result.CascadeLevels, CascadeLevel{
+				Level:         level,
+				Labels:        levelEntries,
+				TotalAffected: levelTotal,
+			})
+			totalImpact += levelTotal
+		}
+
+		currentLevel = nextLevel
+	}
+
+	result.TotalImpact = totalImpact
+
+	// Convert affected set to sorted slice
+	for label := range affectedSet {
+		result.AffectedLabels = append(result.AffectedLabels, label)
+	}
+	sort.Strings(result.AffectedLabels)
+
+	// Generate recommendations - find blockers that would unblock the most
+	blockerImpact := make(map[string]int) // issueID -> transitive unblock count
+	for _, blockedIssue := range blockedIssues {
+		for _, dep := range blockedIssue.Dependencies {
+			if dep == nil || dep.Type != model.DepBlocks {
+				continue
+			}
+			blocker, exists := issueMap[dep.DependsOnID]
+			if !exists || blocker.Status == model.StatusClosed {
+				continue
+			}
+			// Count how many issues this blocker transitively affects
+			impact := 1 + totalImpact/max(1, len(blockedIssues))
+			blockerImpact[blocker.ID] += impact
+		}
+	}
+
+	// Sort blockers by impact
+	type blockerRec struct {
+		id     string
+		impact int
+	}
+	var blockers []blockerRec
+	for id, impact := range blockerImpact {
+		blockers = append(blockers, blockerRec{id: id, impact: impact})
+	}
+	sort.Slice(blockers, func(i, j int) bool {
+		return blockers[i].impact > blockers[j].impact
+	})
+
+	// Take top 5 recommendations for this cascade
+	for i, b := range blockers {
+		if i >= 5 {
+			break
+		}
+		iss := issueMap[b.id]
+		label := sourceLabel
+		if len(iss.Labels) > 0 {
+			label = iss.Labels[0]
+		}
+		result.Recommendations = append(result.Recommendations, UnblockRecommendation{
+			IssueID:       b.id,
+			IssueTitle:    iss.Title,
+			Label:         label,
+			UnblocksCount: b.impact,
+			CascadeDepth:  len(result.CascadeLevels),
+			Reason:        fmt.Sprintf("Unblocks %d issues across %d downstream labels", b.impact, len(result.AffectedLabels)),
+		})
+	}
+
+	return result
+}
+
+// GetCascadeForLabel returns the cascade result for a specific label
+func (r *BlockageCascadeAnalysis) GetCascadeForLabel(label string) *BlockageCascadeResult {
+	for i := range r.Cascades {
+		if r.Cascades[i].SourceLabel == label {
+			return &r.Cascades[i]
+		}
+	}
+	return nil
+}
+
+// GetMostImpactfulCascade returns the cascade with the highest total impact
+func (r *BlockageCascadeAnalysis) GetMostImpactfulCascade() *BlockageCascadeResult {
+	if len(r.Cascades) == 0 {
+		return nil
+	}
+	return &r.Cascades[0] // Already sorted by impact
+}
+
+// FormatCascadeTree returns a human-readable tree representation of a cascade
+func (c *BlockageCascadeResult) FormatCascadeTree() string {
+	if c == nil {
+		return ""
+	}
+
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("%s (%d blocked)\n", c.SourceLabel, c.BlockedCount))
+
+	for _, level := range c.CascadeLevels {
+		indent := strings.Repeat("  ", level.Level)
+		for _, entry := range level.Labels {
+			sb.WriteString(fmt.Sprintf("%s└─> %s: %d waiting\n", indent, entry.Label, entry.WaitingCount))
+		}
+	}
+
+	return sb.String()
 }
 
 // ============================================================================

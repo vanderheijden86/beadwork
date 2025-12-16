@@ -2,6 +2,7 @@ package analysis
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -2336,5 +2337,195 @@ func TestComputeAllHistoricalVelocity(t *testing.T) {
 	// ui should have 2 issues (bv-2 and bv-3)
 	if uiVel.WeeklyVelocity[0].Closed != 2 {
 		t.Errorf("ui week 0: expected 2 closed, got %d", uiVel.WeeklyVelocity[0].Closed)
+	}
+}
+
+// ============================================================================
+// Blockage Impact Cascade Tests (bv-112)
+// ============================================================================
+
+func TestComputeBlockageCascadeEmpty(t *testing.T) {
+	cfg := DefaultLabelHealthConfig()
+	flow := CrossLabelFlow{
+		Labels:     []string{},
+		FlowMatrix: [][]int{},
+	}
+
+	result := ComputeBlockageCascade([]model.Issue{}, flow, cfg)
+
+	if result.TotalBlocked != 0 {
+		t.Errorf("Expected 0 total blocked, got %d", result.TotalBlocked)
+	}
+	if len(result.Cascades) != 0 {
+		t.Errorf("Expected 0 cascades, got %d", len(result.Cascades))
+	}
+}
+
+func TestComputeBlockageCascadeNoCascade(t *testing.T) {
+	cfg := DefaultLabelHealthConfig()
+
+	// No cross-label dependencies in flow
+	flow := CrossLabelFlow{
+		Labels:     []string{"api", "ui"},
+		FlowMatrix: [][]int{{0, 0}, {0, 0}},
+	}
+
+	issues := []model.Issue{
+		{ID: "bv-1", Labels: []string{"api"}, Status: model.StatusBlocked},
+	}
+
+	result := ComputeBlockageCascade(issues, flow, cfg)
+
+	// Should have 1 cascade (api with blocked issue) but no downstream impact
+	if result.TotalBlocked != 1 {
+		t.Errorf("Expected 1 total blocked, got %d", result.TotalBlocked)
+	}
+}
+
+func TestComputeBlockageCascadeSimple(t *testing.T) {
+	cfg := DefaultLabelHealthConfig()
+
+	// api blocks ui (flow direction: from=api, to=ui means api->ui dependency)
+	flow := CrossLabelFlow{
+		Labels:     []string{"api", "ui"},
+		FlowMatrix: [][]int{{0, 2}, {0, 0}}, // api blocks 2 ui issues
+	}
+
+	issues := []model.Issue{
+		{ID: "bv-1", Labels: []string{"api"}, Status: model.StatusBlocked},
+		{ID: "bv-2", Labels: []string{"ui"}, Status: model.StatusOpen},
+		{ID: "bv-3", Labels: []string{"ui"}, Status: model.StatusOpen},
+	}
+
+	result := ComputeBlockageCascade(issues, flow, cfg)
+
+	if result.TotalBlocked != 1 {
+		t.Errorf("Expected 1 total blocked, got %d", result.TotalBlocked)
+	}
+	if len(result.Cascades) != 1 {
+		t.Errorf("Expected 1 cascade, got %d", len(result.Cascades))
+	}
+	if len(result.Cascades) > 0 {
+		cascade := result.Cascades[0]
+		if cascade.SourceLabel != "api" {
+			t.Errorf("Expected source label 'api', got %s", cascade.SourceLabel)
+		}
+		if cascade.TotalImpact != 2 {
+			t.Errorf("Expected total impact 2, got %d", cascade.TotalImpact)
+		}
+	}
+}
+
+func TestComputeBlockageCascadeTransitive(t *testing.T) {
+	cfg := DefaultLabelHealthConfig()
+
+	// Chain: db -> api -> ui
+	flow := CrossLabelFlow{
+		Labels: []string{"db", "api", "ui"},
+		FlowMatrix: [][]int{
+			{0, 3, 0}, // db blocks 3 api issues
+			{0, 0, 2}, // api blocks 2 ui issues
+			{0, 0, 0}, // ui blocks nothing
+		},
+	}
+
+	issues := []model.Issue{
+		{ID: "bv-1", Labels: []string{"db"}, Status: model.StatusBlocked},
+	}
+
+	result := ComputeBlockageCascade(issues, flow, cfg)
+
+	if len(result.Cascades) != 1 {
+		t.Fatalf("Expected 1 cascade, got %d", len(result.Cascades))
+	}
+
+	cascade := result.Cascades[0]
+	if cascade.SourceLabel != "db" {
+		t.Errorf("Expected source label 'db', got %s", cascade.SourceLabel)
+	}
+
+	// Should have 2 levels: api (level 1) and ui (level 2)
+	if len(cascade.CascadeLevels) != 2 {
+		t.Errorf("Expected 2 cascade levels, got %d", len(cascade.CascadeLevels))
+	}
+
+	// Total impact should be 3 (api) + 2 (ui) = 5
+	if cascade.TotalImpact != 5 {
+		t.Errorf("Expected total impact 5, got %d", cascade.TotalImpact)
+	}
+}
+
+func TestBlockageCascadeResult_FormatCascadeTree(t *testing.T) {
+	cascade := &BlockageCascadeResult{
+		SourceLabel:  "database",
+		BlockedCount: 4,
+		CascadeLevels: []CascadeLevel{
+			{Level: 1, Labels: []LabelCascadeEntry{{Label: "backend", WaitingCount: 3}}},
+			{Level: 2, Labels: []LabelCascadeEntry{{Label: "testing", WaitingCount: 2}}},
+		},
+	}
+
+	tree := cascade.FormatCascadeTree()
+
+	// Check basic structure
+	if tree == "" {
+		t.Error("FormatCascadeTree returned empty string")
+	}
+	if !strings.Contains(tree, "database (4 blocked)") {
+		t.Errorf("Tree should contain source label info, got: %s", tree)
+	}
+	if !strings.Contains(tree, "backend: 3 waiting") {
+		t.Errorf("Tree should contain backend entry, got: %s", tree)
+	}
+	if !strings.Contains(tree, "testing: 2 waiting") {
+		t.Errorf("Tree should contain testing entry, got: %s", tree)
+	}
+}
+
+func TestBlockageCascadeAnalysis_GetCascadeForLabel(t *testing.T) {
+	analysis := &BlockageCascadeAnalysis{
+		Cascades: []BlockageCascadeResult{
+			{SourceLabel: "api", BlockedCount: 2},
+			{SourceLabel: "db", BlockedCount: 3},
+		},
+	}
+
+	// Found case
+	cascade := analysis.GetCascadeForLabel("api")
+	if cascade == nil {
+		t.Fatal("Expected to find cascade for 'api'")
+	}
+	if cascade.BlockedCount != 2 {
+		t.Errorf("Expected blocked count 2, got %d", cascade.BlockedCount)
+	}
+
+	// Not found case
+	cascade = analysis.GetCascadeForLabel("nonexistent")
+	if cascade != nil {
+		t.Error("Expected nil for nonexistent label")
+	}
+}
+
+func TestBlockageCascadeAnalysis_GetMostImpactfulCascade(t *testing.T) {
+	// Empty case
+	analysis := &BlockageCascadeAnalysis{Cascades: []BlockageCascadeResult{}}
+	cascade := analysis.GetMostImpactfulCascade()
+	if cascade != nil {
+		t.Error("Expected nil for empty cascades")
+	}
+
+	// Non-empty case (cascades are pre-sorted by impact)
+	analysis = &BlockageCascadeAnalysis{
+		Cascades: []BlockageCascadeResult{
+			{SourceLabel: "high", TotalImpact: 10},
+			{SourceLabel: "low", TotalImpact: 2},
+		},
+	}
+	cascade = analysis.GetMostImpactfulCascade()
+	if cascade == nil {
+		t.Fatal("Expected non-nil cascade")
+	}
+	if cascade.SourceLabel != "high" {
+		t.Errorf("Expected 'high' label, got %s", cascade.SourceLabel)
 	}
 }
