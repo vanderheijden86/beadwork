@@ -1,6 +1,14 @@
 ### Using bv as an AI sidecar
 
-  bv is a fast terminal UI for Beads projects (.beads/beads.jsonl). It renders lists/details and precomputes dependency metrics (PageRank, critical path, cycles, etc.) so you instantly see blockers and execution order. For agents, it’s a graph sidecar: instead of parsing JSONL or risking hallucinated traversal, call the robot flags to get deterministic, dependency-aware outputs.
+  bv is a fast terminal UI for Beads projects (.beads/beads.jsonl). It renders lists/details and precomputes dependency metrics (PageRank, critical path, cycles, etc.) so you instantly see blockers and execution order. For agents, it's a graph sidecar: instead of parsing JSONL or risking hallucinated traversal, call the robot flags to get deterministic, dependency-aware outputs.
+
+  **Scope boundary:** bv helps agents understand *what to work on next* (triage, priority, plan). It does NOT handle agent-to-agent communication, registration, or coordination. That functionality is provided by the complementary project [MCP Agent Mail](https://github.com/Dicklesworthstone/mcp_agent_mail), which handles:
+  - Agent registration and identity management
+  - Message passing between agents
+  - Work claiming/handoff coordination
+  - File reservation and conflict detection
+
+  If you need multi-agent coordination features, use MCP Agent Mail alongside bv. Keep bv focused on issue triage and work prioritization.
 
   - bv --robot-help — shows all AI-facing commands.
   - **bv --robot-triage** — THE MEGA-COMMAND. Single entry point for AI agents. Returns unified JSON with:
