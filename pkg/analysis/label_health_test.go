@@ -791,3 +791,453 @@ func TestComputeFreshnessMetricsScoreCapping(t *testing.T) {
 		t.Errorf("Expected 0 freshness score for very stale issue, got %d", f.FreshnessScore)
 	}
 }
+
+// ============================================================================
+// Label Subgraph Extraction Tests (bv-113)
+// ============================================================================
+
+func TestComputeLabelSubgraphEmpty(t *testing.T) {
+	// Empty issues
+	sg := ComputeLabelSubgraph([]model.Issue{}, "api")
+	if !sg.IsEmpty() {
+		t.Errorf("Expected empty subgraph for empty issues, got %d issues", sg.IssueCount)
+	}
+
+	// Empty label
+	issues := []model.Issue{{ID: "bv-1", Labels: []string{"api"}}}
+	sg = ComputeLabelSubgraph(issues, "")
+	if !sg.IsEmpty() {
+		t.Errorf("Expected empty subgraph for empty label, got %d issues", sg.IssueCount)
+	}
+}
+
+func TestComputeLabelSubgraphSingleLabel(t *testing.T) {
+	issues := []model.Issue{
+		{ID: "bv-1", Labels: []string{"api"}},
+		{ID: "bv-2", Labels: []string{"api"}},
+		{ID: "bv-3", Labels: []string{"ui"}}, // Different label, not included
+	}
+
+	sg := ComputeLabelSubgraph(issues, "api")
+
+	if sg.CoreCount != 2 {
+		t.Errorf("Expected 2 core issues, got %d", sg.CoreCount)
+	}
+	if sg.IssueCount != 2 {
+		t.Errorf("Expected 2 total issues (no deps), got %d", sg.IssueCount)
+	}
+	if len(sg.DependencyIssues) != 0 {
+		t.Errorf("Expected 0 dependency issues, got %d", len(sg.DependencyIssues))
+	}
+}
+
+func TestComputeLabelSubgraphWithDependencies(t *testing.T) {
+	// bv-1 (api) is blocked by bv-3 (core)
+	// bv-2 (api) blocks bv-4 (ui)
+	issues := []model.Issue{
+		{
+			ID:     "bv-1",
+			Labels: []string{"api"},
+			Dependencies: []*model.Dependency{
+				{DependsOnID: "bv-3", Type: model.DepBlocks},
+			},
+		},
+		{ID: "bv-2", Labels: []string{"api"}},
+		{ID: "bv-3", Labels: []string{"core"}}, // Blocker, not in api label
+		{
+			ID:     "bv-4",
+			Labels: []string{"ui"},
+			Dependencies: []*model.Dependency{
+				{DependsOnID: "bv-2", Type: model.DepBlocks}, // Blocked by bv-2 (api)
+			},
+		},
+	}
+
+	sg := ComputeLabelSubgraph(issues, "api")
+
+	// Core issues: bv-1, bv-2
+	if sg.CoreCount != 2 {
+		t.Errorf("Expected 2 core issues, got %d", sg.CoreCount)
+	}
+	expectedCore := []string{"bv-1", "bv-2"}
+	for i, id := range expectedCore {
+		if sg.CoreIssues[i] != id {
+			t.Errorf("CoreIssues[%d]: expected %s, got %s", i, id, sg.CoreIssues[i])
+		}
+	}
+
+	// Dependency issues: bv-3 (blocker of bv-1), bv-4 (blocked by bv-2)
+	if len(sg.DependencyIssues) != 2 {
+		t.Errorf("Expected 2 dependency issues, got %d: %v", len(sg.DependencyIssues), sg.DependencyIssues)
+	}
+
+	// Total: 4 issues in subgraph
+	if sg.IssueCount != 4 {
+		t.Errorf("Expected 4 total issues, got %d", sg.IssueCount)
+	}
+
+	// Edge: bv-3 -> bv-1 (bv-3 blocks bv-1)
+	if sg.OutDegree["bv-3"] != 1 {
+		t.Errorf("Expected bv-3 out-degree 1, got %d", sg.OutDegree["bv-3"])
+	}
+	if sg.InDegree["bv-1"] != 1 {
+		t.Errorf("Expected bv-1 in-degree 1, got %d", sg.InDegree["bv-1"])
+	}
+
+	// Edge: bv-2 -> bv-4 (bv-2 blocks bv-4)
+	if sg.OutDegree["bv-2"] != 1 {
+		t.Errorf("Expected bv-2 out-degree 1, got %d", sg.OutDegree["bv-2"])
+	}
+	if sg.InDegree["bv-4"] != 1 {
+		t.Errorf("Expected bv-4 in-degree 1, got %d", sg.InDegree["bv-4"])
+	}
+}
+
+func TestComputeLabelSubgraphRootsAndLeaves(t *testing.T) {
+	// Chain: bv-1 -> bv-2 -> bv-3 (all api)
+	issues := []model.Issue{
+		{ID: "bv-1", Labels: []string{"api"}},
+		{
+			ID:     "bv-2",
+			Labels: []string{"api"},
+			Dependencies: []*model.Dependency{
+				{DependsOnID: "bv-1", Type: model.DepBlocks},
+			},
+		},
+		{
+			ID:     "bv-3",
+			Labels: []string{"api"},
+			Dependencies: []*model.Dependency{
+				{DependsOnID: "bv-2", Type: model.DepBlocks},
+			},
+		},
+	}
+
+	sg := ComputeLabelSubgraph(issues, "api")
+
+	// bv-1 has no blockers (root)
+	roots := sg.GetSubgraphRoots()
+	if len(roots) != 1 || roots[0] != "bv-1" {
+		t.Errorf("Expected roots [bv-1], got %v", roots)
+	}
+
+	// bv-3 doesn't block anything (leaf)
+	leaves := sg.GetSubgraphLeaves()
+	if len(leaves) != 1 || leaves[0] != "bv-3" {
+		t.Errorf("Expected leaves [bv-3], got %v", leaves)
+	}
+}
+
+func TestComputeLabelSubgraphAdjacency(t *testing.T) {
+	// bv-1 blocks bv-2 and bv-3
+	issues := []model.Issue{
+		{ID: "bv-1", Labels: []string{"api"}},
+		{
+			ID:     "bv-2",
+			Labels: []string{"api"},
+			Dependencies: []*model.Dependency{
+				{DependsOnID: "bv-1", Type: model.DepBlocks},
+			},
+		},
+		{
+			ID:     "bv-3",
+			Labels: []string{"api"},
+			Dependencies: []*model.Dependency{
+				{DependsOnID: "bv-1", Type: model.DepBlocks},
+			},
+		},
+	}
+
+	sg := ComputeLabelSubgraph(issues, "api")
+
+	// Check adjacency: bv-1 -> [bv-2, bv-3]
+	adj := sg.Adjacency["bv-1"]
+	if len(adj) != 2 {
+		t.Errorf("Expected bv-1 to have 2 adjacencies, got %d", len(adj))
+	}
+	// Adjacency list should be sorted
+	if adj[0] != "bv-2" || adj[1] != "bv-3" {
+		t.Errorf("Expected bv-1 adjacency [bv-2, bv-3], got %v", adj)
+	}
+
+	// Total edge count
+	if sg.EdgeCount != 2 {
+		t.Errorf("Expected 2 edges, got %d", sg.EdgeCount)
+	}
+}
+
+func TestComputeLabelSubgraphCoreIssueSet(t *testing.T) {
+	issues := []model.Issue{
+		{ID: "bv-1", Labels: []string{"api"}},
+		{ID: "bv-2", Labels: []string{"api"}},
+		{ID: "bv-3", Labels: []string{"ui"}},
+	}
+
+	sg := ComputeLabelSubgraph(issues, "api")
+	coreSet := sg.GetCoreIssueSet()
+
+	if !coreSet["bv-1"] {
+		t.Error("Expected bv-1 in core set")
+	}
+	if !coreSet["bv-2"] {
+		t.Error("Expected bv-2 in core set")
+	}
+	if coreSet["bv-3"] {
+		t.Error("bv-3 should not be in core set")
+	}
+}
+
+func TestComputeLabelSubgraphNonBlockingDeps(t *testing.T) {
+	// Non-blocking dependencies should not be included in adjacency
+	issues := []model.Issue{
+		{ID: "bv-1", Labels: []string{"api"}},
+		{
+			ID:     "bv-2",
+			Labels: []string{"api"},
+			Dependencies: []*model.Dependency{
+				{DependsOnID: "bv-1", Type: model.DepRelated}, // Related, not blocking
+			},
+		},
+	}
+
+	sg := ComputeLabelSubgraph(issues, "api")
+
+	// No edges since dependency is "related" not "blocks"
+	if sg.EdgeCount != 0 {
+		t.Errorf("Expected 0 edges for non-blocking deps, got %d", sg.EdgeCount)
+	}
+}
+
+func TestHasLabel(t *testing.T) {
+	issue := model.Issue{
+		ID:     "bv-1",
+		Labels: []string{"api", "bug", "urgent"},
+	}
+
+	if !HasLabel(issue, "api") {
+		t.Error("Expected HasLabel to return true for 'api'")
+	}
+	if !HasLabel(issue, "bug") {
+		t.Error("Expected HasLabel to return true for 'bug'")
+	}
+	if HasLabel(issue, "feature") {
+		t.Error("Expected HasLabel to return false for 'feature'")
+	}
+	if HasLabel(issue, "") {
+		t.Error("Expected HasLabel to return false for empty string")
+	}
+}
+
+// ============================================================================
+// Label-Specific PageRank Tests (bv-114)
+// ============================================================================
+
+func TestComputeLabelPageRankEmpty(t *testing.T) {
+	// Empty subgraph
+	sg := ComputeLabelSubgraph([]model.Issue{}, "api")
+	result := ComputeLabelPageRank(sg)
+
+	if result.IssueCount != 0 {
+		t.Errorf("Expected 0 issues, got %d", result.IssueCount)
+	}
+	if len(result.Scores) != 0 {
+		t.Errorf("Expected empty scores, got %d", len(result.Scores))
+	}
+	if len(result.TopIssues) != 0 {
+		t.Errorf("Expected empty top issues, got %d", len(result.TopIssues))
+	}
+}
+
+func TestComputeLabelPageRankSingleNode(t *testing.T) {
+	issues := []model.Issue{
+		{ID: "bv-1", Labels: []string{"api"}},
+	}
+
+	result := ComputeLabelPageRankFromIssues(issues, "api")
+
+	if result.IssueCount != 1 {
+		t.Errorf("Expected 1 issue, got %d", result.IssueCount)
+	}
+	if result.CoreCount != 1 {
+		t.Errorf("Expected 1 core issue, got %d", result.CoreCount)
+	}
+	if len(result.Scores) != 1 {
+		t.Errorf("Expected 1 score, got %d", len(result.Scores))
+	}
+	// Single node should have PageRank of 1.0 (all probability mass)
+	if result.Scores["bv-1"] < 0.9 {
+		t.Errorf("Expected single node PageRank ~1.0, got %f", result.Scores["bv-1"])
+	}
+}
+
+func TestComputeLabelPageRankChain(t *testing.T) {
+	// Chain: bv-1 blocks bv-2 blocks bv-3 (all api)
+	// In PageRank, nodes with more incoming links have higher scores
+	issues := []model.Issue{
+		{ID: "bv-1", Labels: []string{"api"}},
+		{
+			ID:     "bv-2",
+			Labels: []string{"api"},
+			Dependencies: []*model.Dependency{
+				{DependsOnID: "bv-1", Type: model.DepBlocks},
+			},
+		},
+		{
+			ID:     "bv-3",
+			Labels: []string{"api"},
+			Dependencies: []*model.Dependency{
+				{DependsOnID: "bv-2", Type: model.DepBlocks},
+			},
+		},
+	}
+
+	result := ComputeLabelPageRankFromIssues(issues, "api")
+
+	if result.IssueCount != 3 {
+		t.Errorf("Expected 3 issues, got %d", result.IssueCount)
+	}
+
+	// All three should have scores
+	if len(result.Scores) != 3 {
+		t.Errorf("Expected 3 scores, got %d", len(result.Scores))
+	}
+
+	// Top issues should be sorted by score
+	if len(result.TopIssues) != 3 {
+		t.Errorf("Expected 3 top issues, got %d", len(result.TopIssues))
+	}
+	// First rank should be 1
+	if result.TopIssues[0].Rank != 1 {
+		t.Errorf("Expected first issue to have rank 1, got %d", result.TopIssues[0].Rank)
+	}
+}
+
+func TestComputeLabelPageRankNormalized(t *testing.T) {
+	issues := []model.Issue{
+		{ID: "bv-1", Labels: []string{"api"}},
+		{
+			ID:     "bv-2",
+			Labels: []string{"api"},
+			Dependencies: []*model.Dependency{
+				{DependsOnID: "bv-1", Type: model.DepBlocks},
+			},
+		},
+	}
+
+	result := ComputeLabelPageRankFromIssues(issues, "api")
+
+	// Normalized scores should be between 0 and 1
+	for id, norm := range result.Normalized {
+		if norm < 0 || norm > 1 {
+			t.Errorf("Normalized score for %s out of range: %f", id, norm)
+		}
+	}
+
+	// With varying scores, one should be at 1.0 (max) and one at 0.0 (min)
+	if result.MaxScore != result.MinScore {
+		foundMax := false
+		foundMin := false
+		for _, norm := range result.Normalized {
+			if norm == 1.0 {
+				foundMax = true
+			}
+			if norm == 0.0 {
+				foundMin = true
+			}
+		}
+		if !foundMax {
+			t.Error("Expected one normalized score to be 1.0")
+		}
+		if !foundMin {
+			t.Error("Expected one normalized score to be 0.0")
+		}
+	}
+}
+
+func TestComputeLabelPageRankCoreVsDep(t *testing.T) {
+	// bv-1 (api) is blocked by bv-2 (core - not api label)
+	issues := []model.Issue{
+		{
+			ID:     "bv-1",
+			Labels: []string{"api"},
+			Dependencies: []*model.Dependency{
+				{DependsOnID: "bv-2", Type: model.DepBlocks},
+			},
+		},
+		{ID: "bv-2", Labels: []string{"core"}}, // Dependency, not core
+	}
+
+	result := ComputeLabelPageRankFromIssues(issues, "api")
+
+	// Should have 2 issues total (1 core + 1 dep)
+	if result.IssueCount != 2 {
+		t.Errorf("Expected 2 issues, got %d", result.IssueCount)
+	}
+	if result.CoreCount != 1 {
+		t.Errorf("Expected 1 core issue, got %d", result.CoreCount)
+	}
+
+	// CoreOnly should only have bv-1
+	if len(result.CoreOnly) != 1 {
+		t.Errorf("Expected 1 core-only score, got %d", len(result.CoreOnly))
+	}
+	if _, ok := result.CoreOnly["bv-1"]; !ok {
+		t.Error("Expected bv-1 in CoreOnly")
+	}
+	if _, ok := result.CoreOnly["bv-2"]; ok {
+		t.Error("bv-2 should not be in CoreOnly")
+	}
+
+	// TopIssues should mark IsCore correctly
+	for _, ri := range result.TopIssues {
+		if ri.ID == "bv-1" && !ri.IsCore {
+			t.Error("bv-1 should be marked as IsCore")
+		}
+		if ri.ID == "bv-2" && ri.IsCore {
+			t.Error("bv-2 should not be marked as IsCore")
+		}
+	}
+}
+
+func TestComputeLabelPageRankGetTopCoreIssues(t *testing.T) {
+	// 3 core issues, 1 dependency
+	issues := []model.Issue{
+		{ID: "bv-1", Labels: []string{"api"}},
+		{
+			ID:     "bv-2",
+			Labels: []string{"api"},
+			Dependencies: []*model.Dependency{
+				{DependsOnID: "bv-1", Type: model.DepBlocks},
+			},
+		},
+		{
+			ID:     "bv-3",
+			Labels: []string{"api"},
+			Dependencies: []*model.Dependency{
+				{DependsOnID: "bv-4", Type: model.DepBlocks},
+			},
+		},
+		{ID: "bv-4", Labels: []string{"core"}}, // Not api
+	}
+
+	result := ComputeLabelPageRankFromIssues(issues, "api")
+
+	// Get top 2 core issues
+	topCore := result.GetTopCoreIssues(2)
+	if len(topCore) != 2 {
+		t.Errorf("Expected 2 top core issues, got %d", len(topCore))
+	}
+
+	// All returned should be core
+	for _, ri := range topCore {
+		if !ri.IsCore {
+			t.Errorf("Expected IsCore=true for %s", ri.ID)
+		}
+	}
+
+	// Get all core issues (more than exist)
+	allCore := result.GetTopCoreIssues(10)
+	if len(allCore) != 3 {
+		t.Errorf("Expected 3 core issues when asking for 10, got %d", len(allCore))
+	}
+}

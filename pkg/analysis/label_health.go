@@ -5,6 +5,8 @@ import (
 	"time"
 
 	"github.com/Dicklesworthstone/beads_viewer/pkg/model"
+	"gonum.org/v1/gonum/graph/network"
+	"gonum.org/v1/gonum/graph/simple"
 )
 
 // ============================================================================
@@ -943,4 +945,386 @@ func ComputeBlockedByLabel(issues []model.Issue, analyzer *Analyzer) map[string]
 	}
 
 	return blocked
+}
+
+// ============================================================================
+// Label Subgraph Extraction (bv-113)
+// Extract a subgraph for label-scoped graph analysis
+// ============================================================================
+
+// LabelSubgraph represents a subgraph of issues filtered by label.
+// It includes core issues (those with the label) plus their direct dependencies
+// (even if outside the label) to enable meaningful graph analysis within label context.
+type LabelSubgraph struct {
+	Label            string              `json:"label"`             // The filter label
+	CoreIssues       []string            `json:"core_issues"`       // Issue IDs with this label (sorted)
+	DependencyIssues []string            `json:"dependency_issues"` // Direct dependencies outside label
+	AllIssues        []string            `json:"all_issues"`        // CoreIssues + DependencyIssues
+	IssueCount       int                 `json:"issue_count"`       // len(AllIssues)
+	CoreCount        int                 `json:"core_count"`        // len(CoreIssues)
+	EdgeCount        int                 `json:"edge_count"`        // Total dependency edges in subgraph
+	Adjacency        map[string][]string `json:"adjacency"`         // from -> [to] (blocking relationships)
+	InDegree         map[string]int      `json:"in_degree"`         // blocked_by count per issue
+	OutDegree        map[string]int      `json:"out_degree"`        // blocks count per issue
+	IssueMap         map[string]model.Issue `json:"-"`              // Quick lookup for issues in subgraph
+}
+
+// ComputeLabelSubgraph extracts a subgraph for issues with a given label.
+// This function:
+// 1. Finds all issues with the target label (core issues)
+// 2. Includes direct dependencies of core issues (even if they don't have the label)
+// 3. Builds an adjacency structure for label-scoped graph analysis
+//
+// The resulting subgraph can be used to run PageRank, critical path, and other
+// graph algorithms within the context of a specific label.
+func ComputeLabelSubgraph(issues []model.Issue, label string) LabelSubgraph {
+	result := LabelSubgraph{
+		Label:            label,
+		CoreIssues:       []string{},
+		DependencyIssues: []string{},
+		AllIssues:        []string{},
+		Adjacency:        make(map[string][]string),
+		InDegree:         make(map[string]int),
+		OutDegree:        make(map[string]int),
+		IssueMap:         make(map[string]model.Issue),
+	}
+
+	if label == "" || len(issues) == 0 {
+		return result
+	}
+
+	// Build issue lookup map for the full issue set
+	fullIssueMap := make(map[string]model.Issue, len(issues))
+	for _, iss := range issues {
+		fullIssueMap[iss.ID] = iss
+	}
+
+	// Find core issues (those with the target label)
+	coreSet := make(map[string]bool)
+	for _, iss := range issues {
+		for _, l := range iss.Labels {
+			if l == label {
+				coreSet[iss.ID] = true
+				result.IssueMap[iss.ID] = iss
+				break
+			}
+		}
+	}
+
+	// Find dependency issues (direct dependencies of core issues, even if outside label)
+	depSet := make(map[string]bool)
+	for coreID := range coreSet {
+		coreIssue := result.IssueMap[coreID]
+
+		// Add issues that this core issue depends on (blockers)
+		for _, dep := range coreIssue.Dependencies {
+			if dep == nil {
+				continue
+			}
+			blockerID := dep.DependsOnID
+			if _, inCore := coreSet[blockerID]; !inCore {
+				if blockerIssue, exists := fullIssueMap[blockerID]; exists {
+					depSet[blockerID] = true
+					result.IssueMap[blockerID] = blockerIssue
+				}
+			}
+		}
+
+		// Add issues that depend on this core issue (blocked by it)
+		for _, iss := range issues {
+			for _, dep := range iss.Dependencies {
+				if dep != nil && dep.DependsOnID == coreID {
+					if _, inCore := coreSet[iss.ID]; !inCore {
+						depSet[iss.ID] = true
+						result.IssueMap[iss.ID] = iss
+					}
+				}
+			}
+		}
+	}
+
+	// Build sorted issue ID lists
+	for id := range coreSet {
+		result.CoreIssues = append(result.CoreIssues, id)
+	}
+	sort.Strings(result.CoreIssues)
+
+	for id := range depSet {
+		result.DependencyIssues = append(result.DependencyIssues, id)
+	}
+	sort.Strings(result.DependencyIssues)
+
+	// Combine into AllIssues
+	result.AllIssues = make([]string, 0, len(coreSet)+len(depSet))
+	result.AllIssues = append(result.AllIssues, result.CoreIssues...)
+	result.AllIssues = append(result.AllIssues, result.DependencyIssues...)
+	sort.Strings(result.AllIssues)
+
+	result.CoreCount = len(result.CoreIssues)
+	result.IssueCount = len(result.AllIssues)
+
+	// Build adjacency structure for issues in the subgraph
+	subgraphSet := make(map[string]bool, len(result.AllIssues))
+	for _, id := range result.AllIssues {
+		subgraphSet[id] = true
+	}
+
+	for _, id := range result.AllIssues {
+		iss := result.IssueMap[id]
+		for _, dep := range iss.Dependencies {
+			if dep == nil || dep.Type != model.DepBlocks {
+				continue
+			}
+			blockerID := dep.DependsOnID
+			// Only include edges where both ends are in the subgraph
+			if subgraphSet[blockerID] {
+				// Edge: blockerID -> id (blocker blocks this issue)
+				result.Adjacency[blockerID] = append(result.Adjacency[blockerID], id)
+				result.OutDegree[blockerID]++
+				result.InDegree[id]++
+				result.EdgeCount++
+			}
+		}
+	}
+
+	// Sort adjacency lists for deterministic output
+	for from := range result.Adjacency {
+		sort.Strings(result.Adjacency[from])
+	}
+
+	return result
+}
+
+// HasLabel checks if an issue has a specific label
+func HasLabel(issue model.Issue, label string) bool {
+	for _, l := range issue.Labels {
+		if l == label {
+			return true
+		}
+	}
+	return false
+}
+
+// GetSubgraphRoots returns issues in the subgraph with no incoming edges (not blocked)
+func (sg *LabelSubgraph) GetSubgraphRoots() []string {
+	var roots []string
+	for _, id := range sg.AllIssues {
+		if sg.InDegree[id] == 0 {
+			roots = append(roots, id)
+		}
+	}
+	sort.Strings(roots)
+	return roots
+}
+
+// GetSubgraphLeaves returns issues in the subgraph with no outgoing edges (not blocking anything)
+func (sg *LabelSubgraph) GetSubgraphLeaves() []string {
+	var leaves []string
+	for _, id := range sg.AllIssues {
+		if sg.OutDegree[id] == 0 {
+			leaves = append(leaves, id)
+		}
+	}
+	sort.Strings(leaves)
+	return leaves
+}
+
+// GetCoreIssueSet returns the core issues as a set for O(1) lookup
+func (sg *LabelSubgraph) GetCoreIssueSet() map[string]bool {
+	set := make(map[string]bool, len(sg.CoreIssues))
+	for _, id := range sg.CoreIssues {
+		set[id] = true
+	}
+	return set
+}
+
+// IsEmpty returns true if the subgraph has no issues
+func (sg *LabelSubgraph) IsEmpty() bool {
+	return sg.IssueCount == 0
+}
+
+// ============================================================================
+// Label-Specific PageRank (bv-114)
+// Run PageRank on a label subgraph for label-scoped centrality analysis
+// ============================================================================
+
+// LabelPageRankResult contains PageRank scores for a label subgraph
+type LabelPageRankResult struct {
+	Label      string             `json:"label"`        // The label analyzed
+	Scores     map[string]float64 `json:"scores"`       // Issue ID -> PageRank score
+	Normalized map[string]float64 `json:"normalized"`   // Scores normalized to 0-1 range
+	TopIssues  []RankedIssue      `json:"top_issues"`   // Top issues by PageRank, sorted
+	CoreOnly   map[string]float64 `json:"core_only"`    // Scores for core issues only (with label)
+	IssueCount int                `json:"issue_count"`  // Total issues in subgraph
+	CoreCount  int                `json:"core_count"`   // Issues with the label
+	MaxScore   float64            `json:"max_score"`    // Highest score in subgraph
+	MinScore   float64            `json:"min_score"`    // Lowest score in subgraph
+}
+
+// RankedIssue represents an issue with its ranking information
+type RankedIssue struct {
+	ID       string  `json:"id"`
+	Score    float64 `json:"score"`
+	Rank     int     `json:"rank"`
+	IsCore   bool    `json:"is_core"`   // True if issue has the target label
+	Title    string  `json:"title,omitempty"`
+}
+
+// ComputeLabelPageRank runs PageRank on a label subgraph.
+// This provides label-scoped centrality analysis, useful for:
+// - Finding the most important issues within a label
+// - Identifying bottlenecks in label-specific workflows
+// - Comparing relative importance of issues within a feature area
+//
+// The damping factor is 0.85 (standard PageRank value).
+// The tolerance is 1e-6 for convergence.
+func ComputeLabelPageRank(sg LabelSubgraph) LabelPageRankResult {
+	result := LabelPageRankResult{
+		Label:      sg.Label,
+		Scores:     make(map[string]float64),
+		Normalized: make(map[string]float64),
+		CoreOnly:   make(map[string]float64),
+		TopIssues:  []RankedIssue{},
+		IssueCount: sg.IssueCount,
+		CoreCount:  sg.CoreCount,
+	}
+
+	if sg.IsEmpty() {
+		return result
+	}
+
+	// Build gonum graph from subgraph adjacency
+	g := simple.NewDirectedGraph()
+	idToNode := make(map[string]int64, sg.IssueCount)
+	nodeToID := make(map[int64]string, sg.IssueCount)
+
+	// Add nodes
+	for _, id := range sg.AllIssues {
+		n := g.NewNode()
+		g.AddNode(n)
+		idToNode[id] = n.ID()
+		nodeToID[n.ID()] = id
+	}
+
+	// Add edges from adjacency (blocker -> blocked)
+	for from, toList := range sg.Adjacency {
+		fromNode, ok := idToNode[from]
+		if !ok {
+			continue
+		}
+		for _, to := range toList {
+			toNode, exists := idToNode[to]
+			if !exists {
+				continue
+			}
+			// Edge direction: blocker -> blocked (from blocks to)
+			g.SetEdge(g.NewEdge(g.Node(fromNode), g.Node(toNode)))
+		}
+	}
+
+	// Run PageRank (damping 0.85, tolerance 1e-6)
+	pr := network.PageRank(g, 0.85, 1e-6)
+
+	// Convert to string IDs and find min/max
+	var maxScore, minScore float64
+	first := true
+	for nodeID, score := range pr {
+		issueID := nodeToID[nodeID]
+		result.Scores[issueID] = score
+		if first {
+			maxScore = score
+			minScore = score
+			first = false
+		} else {
+			if score > maxScore {
+				maxScore = score
+			}
+			if score < minScore {
+				minScore = score
+			}
+		}
+	}
+
+	result.MaxScore = maxScore
+	result.MinScore = minScore
+
+	// Normalize scores to 0-1 range
+	scoreRange := maxScore - minScore
+	if scoreRange > 0 {
+		for id, score := range result.Scores {
+			result.Normalized[id] = (score - minScore) / scoreRange
+		}
+	} else {
+		// All scores equal, normalize to 0.5
+		for id := range result.Scores {
+			result.Normalized[id] = 0.5
+		}
+	}
+
+	// Extract core-only scores
+	coreSet := sg.GetCoreIssueSet()
+	for id, score := range result.Scores {
+		if coreSet[id] {
+			result.CoreOnly[id] = score
+		}
+	}
+
+	// Build ranked list
+	type scorePair struct {
+		id    string
+		score float64
+	}
+	var pairs []scorePair
+	for id, score := range result.Scores {
+		pairs = append(pairs, scorePair{id: id, score: score})
+	}
+	// Sort by score descending, then by ID for determinism
+	sort.Slice(pairs, func(i, j int) bool {
+		if pairs[i].score != pairs[j].score {
+			return pairs[i].score > pairs[j].score
+		}
+		return pairs[i].id < pairs[j].id
+	})
+
+	for rank, p := range pairs {
+		title := ""
+		if iss, ok := sg.IssueMap[p.id]; ok {
+			title = iss.Title
+		}
+		result.TopIssues = append(result.TopIssues, RankedIssue{
+			ID:     p.id,
+			Score:  p.score,
+			Rank:   rank + 1,
+			IsCore: coreSet[p.id],
+			Title:  title,
+		})
+	}
+
+	return result
+}
+
+// ComputeLabelPageRankFromIssues is a convenience function that creates the subgraph
+// and runs PageRank in one call.
+func ComputeLabelPageRankFromIssues(issues []model.Issue, label string) LabelPageRankResult {
+	sg := ComputeLabelSubgraph(issues, label)
+	return ComputeLabelPageRank(sg)
+}
+
+// GetTopCoreIssues returns the top N core issues (those with the label) by PageRank
+func (r *LabelPageRankResult) GetTopCoreIssues(n int) []RankedIssue {
+	var coreIssues []RankedIssue
+	for _, ri := range r.TopIssues {
+		if ri.IsCore {
+			coreIssues = append(coreIssues, ri)
+			if len(coreIssues) >= n {
+				break
+			}
+		}
+	}
+	return coreIssues
+}
+
+// GetNormalizedScore returns the normalized (0-1) score for an issue
+func (r *LabelPageRankResult) GetNormalizedScore(id string) float64 {
+	return r.Normalized[id]
 }

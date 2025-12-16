@@ -154,18 +154,20 @@ type Model struct {
 	updateURL       string
 
 	// Focus and View State
-	focused          focus
-	isSplitView      bool
-	isBoardView      bool
-	isGraphView      bool
-	isActionableView bool
-	isHistoryView    bool
-	showDetails      bool
-	showHelp         bool
-	showQuitConfirm  bool
-	ready            bool
-	width            int
-	height           int
+	focused               focus
+	isSplitView           bool
+	isBoardView           bool
+	isGraphView           bool
+	isActionableView      bool
+	isHistoryView         bool
+	showDetails           bool
+	showHelp              bool
+	showQuitConfirm       bool
+	ready                 bool
+	width                 int
+	height                int
+	showLabelHealthDetail bool
+	labelHealthDetail     *analysis.LabelHealth
 
 	// Actionable view
 	actionableView ActionableModel
@@ -692,6 +694,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.statusMsg = ""
 		m.statusIsError = false
 
+		// Close label health detail modal if open
+		if m.showLabelHealthDetail {
+			s := msg.String()
+			if s == "esc" || s == "q" || s == "enter" || s == "h" {
+				m.showLabelHealthDetail = false
+				m.labelHealthDetail = nil
+				return m, nil
+			}
+		}
+
 		// Handle quit confirmation first
 		if m.showQuitConfirm {
 			switch msg.String() {
@@ -907,6 +919,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				health := analysis.ComputeAllLabelHealth(m.issues, cfg, time.Now().UTC())
 				m.labelDashboard.SetData(health.Labels)
 				m.labelDashboard.SetSize(m.width, m.height-1)
+				m.statusMsg = fmt.Sprintf("Labels: %d total • critical %d • warning %d", health.TotalLabels, health.CriticalCount, health.WarningCount)
+				m.statusIsError = false
 				return m, nil
 
 			case "R":
@@ -944,6 +958,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.applyFilter()
 					m.focused = focusList
 					return m, cmd
+				}
+				// Open detail modal on 'h'
+				if msg.String() == "h" && len(m.labelDashboard.labels) > 0 {
+					idx := m.labelDashboard.cursor
+					if idx >= 0 && idx < len(m.labelDashboard.labels) {
+						lh := m.labelDashboard.labels[idx]
+						m.showLabelHealthDetail = true
+						m.labelHealthDetail = &lh
+						return m, nil
+					}
 				}
 
 			case focusGraph:
@@ -1079,7 +1103,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			WorkspaceMode:     m.workspaceMode,
 		})
 
-		// Resize label dashboard table
+		// Resize label dashboard table and modal overlay sizing
 		m.labelDashboard.SetSize(m.width, bodyHeight)
 
 		m.insightsPanel.SetSize(m.width, bodyHeight)
@@ -1465,6 +1489,8 @@ func (m Model) View() string {
 	// Quit confirmation overlay takes highest priority
 	if m.showQuitConfirm {
 		body = m.renderQuitConfirm()
+	} else if m.showLabelHealthDetail && m.labelHealthDetail != nil {
+		body = m.renderLabelHealthDetail(*m.labelHealthDetail)
 	} else if m.showTimeTravelPrompt {
 		body = m.renderTimeTravelPrompt()
 	} else if m.showRecipePicker {
@@ -1543,6 +1569,8 @@ func (m Model) renderQuitConfirm() string {
 		box,
 	)
 }
+
+
 
 func (m Model) renderListWithHeader() string {
 	t := m.theme
@@ -1857,6 +1885,83 @@ func (m Model) renderHelpOverlay() string {
 		lipgloss.Center,
 		lipgloss.Center,
 		helpBox,
+	)
+}
+
+func (m Model) renderLabelHealthDetail(lh analysis.LabelHealth) string {
+	t := m.theme
+
+	// Create styles similar to help overlay
+	boxStyle := t.Renderer.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(t.Primary).
+		Padding(1, 2)
+
+	titleStyle := t.Renderer.NewStyle().
+		Foreground(t.Primary).
+		Bold(true).
+		MarginBottom(1)
+
+	labelStyle := t.Renderer.NewStyle().
+		Foreground(t.Secondary).
+		Bold(true)
+
+	valueStyle := t.Renderer.NewStyle().
+		Foreground(t.Base.GetForeground())
+
+	var sb strings.Builder
+
+	// Header
+	sb.WriteString(titleStyle.Render(fmt.Sprintf("Label Health: %s", lh.Label)))
+	sb.WriteString("\n\n")
+
+	// Main Health
+	sb.WriteString(labelStyle.Render("Overall Health: "))
+	sb.WriteString(valueStyle.Render(fmt.Sprintf("%d/100 (%s)", lh.Health, lh.HealthLevel)))
+	sb.WriteString("\n")
+
+	// Stats
+	sb.WriteString(labelStyle.Render("Issues: "))
+	sb.WriteString(valueStyle.Render(fmt.Sprintf("%d total (%d open, %d blocked, %d closed)",
+		lh.IssueCount, lh.OpenCount, lh.Blocked, lh.ClosedCount)))
+	sb.WriteString("\n\n")
+
+	// Breakdown
+	sb.WriteString(titleStyle.Render("Breakdown"))
+	sb.WriteString("\n")
+
+	sb.WriteString(labelStyle.Render("Velocity: "))
+	sb.WriteString(valueStyle.Render(fmt.Sprintf("%d/100 (Closed: %d/7d, %d/30d)",
+		lh.Velocity.VelocityScore, lh.Velocity.ClosedLast7Days, lh.Velocity.ClosedLast30Days)))
+	sb.WriteString("\n")
+
+	sb.WriteString(labelStyle.Render("Freshness: "))
+	sb.WriteString(valueStyle.Render(fmt.Sprintf("%d/100 (Stale: %d)",
+		lh.Freshness.FreshnessScore, lh.Freshness.StaleCount)))
+	sb.WriteString("\n")
+
+	sb.WriteString(labelStyle.Render("Flow: "))
+	sb.WriteString(valueStyle.Render(fmt.Sprintf("%d/100 (Incoming: %d, Outgoing: %d)",
+		lh.Flow.FlowScore, lh.Flow.IncomingDeps, lh.Flow.OutgoingDeps)))
+	sb.WriteString("\n")
+
+	sb.WriteString(labelStyle.Render("Criticality: "))
+	sb.WriteString(valueStyle.Render(fmt.Sprintf("%d/100 (Critical path: %d)",
+		lh.Criticality.CriticalityScore, lh.Criticality.CriticalPathCount)))
+	sb.WriteString("\n")
+
+	// Footer hint
+	sb.WriteString("\n")
+	sb.WriteString(t.Renderer.NewStyle().Foreground(t.Secondary).Italic(true).Render("Press Esc to close"))
+
+	content := boxStyle.Render(sb.String())
+
+	return lipgloss.Place(
+		m.width,
+		m.height-1,
+		lipgloss.Center,
+		lipgloss.Center,
+		content,
 	)
 }
 
