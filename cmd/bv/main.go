@@ -93,6 +93,11 @@ func main() {
 	// Sprint flags (bv-156)
 	robotSprintList := flag.Bool("robot-sprint-list", false, "Output sprints as JSON")
 	robotSprintShow := flag.String("robot-sprint-show", "", "Output specific sprint details as JSON")
+	// Forecast flags (bv-158)
+	robotForecast := flag.String("robot-forecast", "", "Output ETA forecast for bead ID, or 'all' for all open issues")
+	forecastLabel := flag.String("forecast-label", "", "Filter forecast by label")
+	forecastSprint := flag.String("forecast-sprint", "", "Filter forecast by sprint ID")
+	forecastAgents := flag.Int("forecast-agents", 1, "Number of parallel agents for capacity calculation")
 	// Static pages export flags (bv-73f)
 	exportPages := flag.String("export-pages", "", "Export static site to directory (e.g., ./bv-pages)")
 	pagesTitle := flag.String("pages-title", "", "Custom title for static site")
@@ -104,10 +109,14 @@ func main() {
 	// Ensure static export flags are retained even when build tags strip features in some environments.
 	_ = exportPages
 	_ = pagesTitle
-	_ = pagesIncludeClosed
-	_ = previewPages
-	_ = pagesWizard
-	_ = labelScope
+		_ = pagesIncludeClosed
+		_ = previewPages
+		_ = pagesWizard
+		_ = robotForecast
+		_ = forecastLabel
+		_ = forecastSprint
+		_ = forecastAgents
+		_ = labelScope
 
 	envRobot := os.Getenv("BV_ROBOT") == "1"
 	stdoutIsTTY := term.IsTerminal(int(os.Stdout.Fd()))
@@ -202,6 +211,17 @@ func main() {
 		fmt.Println("      Outputs details for a specific sprint as JSON.")
 		fmt.Println("      Returns the full sprint object with all fields.")
 		fmt.Println("      Example: bv --robot-sprint-show sprint-1")
+		fmt.Println("")
+		fmt.Println("  --robot-forecast <id|all>")
+		fmt.Println("      Outputs ETA forecast for a specific bead or all open issues.")
+		fmt.Println("      Returns estimated completion date, confidence, and factors.")
+		fmt.Println("      Options:")
+		fmt.Println("        --forecast-label=X    Filter by label")
+		fmt.Println("        --forecast-sprint=Y   Filter by sprint")
+		fmt.Println("        --forecast-agents=N   Parallel agents (default: 1)")
+		fmt.Println("      Example: bv --robot-forecast bv-123")
+		fmt.Println("      Example: bv --robot-forecast all --forecast-label=backend")
+		fmt.Println("      Example: bv --robot-forecast all --forecast-agents=2")
 		fmt.Println("")
 		fmt.Println("  --export-md <file>")
 		fmt.Println("      Generates a readable status report with Mermaid.js visualizations.")
@@ -1781,6 +1801,163 @@ func main() {
 				fmt.Fprintf(os.Stderr, "Error encoding sprints: %v\n", err)
 				os.Exit(1)
 			}
+		}
+		os.Exit(0)
+	}
+
+	// Handle --robot-forecast flag (bv-158)
+	if *robotForecast != "" {
+		cwd, err := os.Getwd()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error getting current directory: %v\n", err)
+			os.Exit(1)
+		}
+
+		// Build graph stats for depth calculation
+		analyzer := analysis.NewAnalyzer(issues)
+		graphStats := analyzer.Analyze()
+
+		// Filter issues by label and sprint if specified
+		targetIssues := make([]model.Issue, 0, len(issues))
+		var sprintBeadIDs map[string]bool
+		if *forecastSprint != "" {
+			sprints, err := loader.LoadSprints(cwd)
+			if err == nil {
+				for _, s := range sprints {
+					if s.ID == *forecastSprint {
+						sprintBeadIDs = make(map[string]bool)
+						for _, bid := range s.BeadIDs {
+							sprintBeadIDs[bid] = true
+						}
+						break
+					}
+				}
+			}
+			if sprintBeadIDs == nil {
+				fmt.Fprintf(os.Stderr, "Sprint not found: %s\n", *forecastSprint)
+				os.Exit(1)
+			}
+		}
+
+		for _, iss := range issues {
+			// Filter by label
+			if *forecastLabel != "" {
+				hasLabel := false
+				for _, l := range iss.Labels {
+					if l == *forecastLabel {
+						hasLabel = true
+						break
+					}
+				}
+				if !hasLabel {
+					continue
+				}
+			}
+			// Filter by sprint
+			if sprintBeadIDs != nil && !sprintBeadIDs[iss.ID] {
+				continue
+			}
+			targetIssues = append(targetIssues, iss)
+		}
+
+		now := time.Now()
+		agents := *forecastAgents
+		if agents <= 0 {
+			agents = 1
+		}
+
+		type ForecastSummary struct {
+			TotalMinutes  int       `json:"total_minutes"`
+			TotalDays     float64   `json:"total_days"`
+			AvgConfidence float64   `json:"avg_confidence"`
+			EarliestETA   time.Time `json:"earliest_eta"`
+			LatestETA     time.Time `json:"latest_eta"`
+		}
+		type ForecastOutput struct {
+			GeneratedAt   time.Time              `json:"generated_at"`
+			Agents        int                    `json:"agents"`
+			Filters       map[string]string      `json:"filters,omitempty"`
+			ForecastCount int                    `json:"forecast_count"`
+			Forecasts     []analysis.ETAEstimate `json:"forecasts"`
+			Summary       *ForecastSummary       `json:"summary,omitempty"`
+		}
+
+		var forecasts []analysis.ETAEstimate
+		var outputErr error
+
+		if *robotForecast == "all" {
+			// Forecast all open issues
+			for _, iss := range targetIssues {
+				if iss.Status == model.StatusClosed {
+					continue
+				}
+				eta, err := analysis.EstimateETAForIssue(issues, &graphStats, iss.ID, agents, now)
+				if err != nil {
+					continue
+				}
+				forecasts = append(forecasts, eta)
+			}
+		} else {
+			// Single issue forecast
+			eta, err := analysis.EstimateETAForIssue(issues, &graphStats, *robotForecast, agents, now)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(1)
+			}
+			forecasts = append(forecasts, eta)
+		}
+
+		// Build summary if multiple forecasts
+		var summary *ForecastSummary
+		if len(forecasts) > 1 {
+			totalMin := 0
+			totalConf := 0.0
+			earliest := forecasts[0].ETADate
+			latest := forecasts[0].ETADate
+			for _, f := range forecasts {
+				totalMin += f.EstimatedMinutes
+				totalConf += f.Confidence
+				if f.ETADate.Before(earliest) {
+					earliest = f.ETADate
+				}
+				if f.ETADate.After(latest) {
+					latest = f.ETADate
+				}
+			}
+			summary = &ForecastSummary{
+				TotalMinutes:  totalMin,
+				TotalDays:     float64(totalMin) / (60.0 * 8.0), // 8hr workday
+				AvgConfidence: totalConf / float64(len(forecasts)),
+				EarliestETA:   earliest,
+				LatestETA:     latest,
+			}
+		}
+
+		// Build output
+		filters := make(map[string]string)
+		if *forecastLabel != "" {
+			filters["label"] = *forecastLabel
+		}
+		if *forecastSprint != "" {
+			filters["sprint"] = *forecastSprint
+		}
+
+		output := ForecastOutput{
+			GeneratedAt:   now.UTC(),
+			Agents:        agents,
+			ForecastCount: len(forecasts),
+			Forecasts:     forecasts,
+			Summary:       summary,
+		}
+		if len(filters) > 0 {
+			output.Filters = filters
+		}
+
+		encoder := json.NewEncoder(os.Stdout)
+		encoder.SetIndent("", "  ")
+		if outputErr = encoder.Encode(output); outputErr != nil {
+			fmt.Fprintf(os.Stderr, "Error encoding forecast: %v\n", outputErr)
+			os.Exit(1)
 		}
 		os.Exit(0)
 	}
