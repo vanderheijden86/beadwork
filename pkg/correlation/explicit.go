@@ -341,6 +341,7 @@ func (m *ExplicitMatcher) CreateCorrelatedCommit(match ExplicitMatch, coCommitte
 	reason := fmt.Sprintf("Commit message explicitly references %s (%s)", match.BeadID, match.MatchType)
 
 	return CorrelatedCommit{
+		BeadID:      match.BeadID,
 		SHA:         match.CommitSHA,
 		ShortSHA:    shortSHA(match.CommitSHA),
 		Message:     match.Message,

@@ -156,11 +156,11 @@ func (e *Extractor) parseGitLogOutput(data []byte, filterBeadID string) ([]BeadE
 	return events, nil
 }
 
+// commitPattern matches the start of a commit in our custom log format
+var commitPattern = regexp.MustCompile(`(?m)^[0-9a-f]{40}\|`)
+
 // splitByCommits splits git log output into individual commits
 func splitByCommits(data []byte) [][]byte {
-	// Commits start with a line matching our format: SHA|timestamp|author|email|message
-	commitPattern := regexp.MustCompile(`(?m)^[0-9a-f]{40}\|`)
-
 	indices := commitPattern.FindAllIndex(data, -1)
 	if len(indices) == 0 {
 		return nil

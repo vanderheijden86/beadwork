@@ -336,7 +336,7 @@ func TestBuildHistories_WithCommits(t *testing.T) {
 	}
 
 	commits := []CorrelatedCommit{
-		{SHA: "abc123", Author: "Test Author"},
+		{SHA: "abc123", Author: "Test Author", BeadID: "bv-1"},
 	}
 
 	histories := c.buildHistories(beads, events, commits)

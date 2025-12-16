@@ -43,6 +43,7 @@ const (
 	focusDetail
 	focusBoard
 	focusGraph
+	focusLabelDashboard
 	focusInsights
 	focusActionable
 	focusRecipePicker
@@ -50,7 +51,6 @@ const (
 	focusQuitConfirm
 	focusTimeTravelInput
 	focusHistory
-	focusLabelDashboard
 )
 
 // UpdateMsg is sent when a new version is available
@@ -139,13 +139,14 @@ type Model struct {
 	watcher   *watcher.Watcher // File watcher for live reload
 
 	// UI Components
-	list          list.Model
-	viewport      viewport.Model
-	renderer      *glamour.TermRenderer
-	board         BoardModel
-	graphView     GraphModel
-	insightsPanel InsightsModel
-	theme         Theme
+	list           list.Model
+	viewport       viewport.Model
+	renderer       *glamour.TermRenderer
+	board          BoardModel
+	labelDashboard LabelDashboardModel
+	graphView      GraphModel
+	insightsPanel  InsightsModel
+	theme          Theme
 
 	// Update State
 	updateAvailable bool
@@ -355,6 +356,7 @@ func NewModel(issues []model.Issue, activeRecipe *recipe.Recipe, beadsPath strin
 
 	// Initialize sub-components
 	board := NewBoardModel(issues, theme)
+	labelDashboard := NewLabelDashboardModel(theme)
 	ins := graphStats.GenerateInsights(len(issues)) // allow UI to show as many as fit
 	insightsPanel := NewInsightsModel(ins, issueMap, theme)
 	graphView := NewGraphModel(issues, &ins, theme)
@@ -411,6 +413,7 @@ func NewModel(issues []model.Issue, activeRecipe *recipe.Recipe, beadsPath strin
 		list:              l,
 		renderer:          renderer,
 		board:             board,
+		labelDashboard:    labelDashboard,
 		graphView:         graphView,
 		insightsPanel:     insightsPanel,
 		theme:             theme,
@@ -848,6 +851,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.isGraphView = false
 					m.isBoardView = false
 					m.isActionableView = false
+					m.focused = focusInsights
 					// Refresh insights using latest analysis snapshot
 					if m.analysis != nil {
 						ins := m.analysis.GenerateInsights(len(m.issues))
@@ -892,6 +896,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return m, nil
 
+			case "L":
+				// Open label dashboard (phase 1: table view)
+				m.isGraphView = false
+				m.isBoardView = false
+				m.isActionableView = false
+				m.focused = focusLabelDashboard
+				// Compute label health (fast; phase1 metrics only needed)
+				cfg := analysis.DefaultLabelHealthConfig()
+				health := analysis.ComputeAllLabelHealth(m.issues, cfg, time.Now().UTC())
+				m.labelDashboard.SetData(health.Labels)
+				m.labelDashboard.SetSize(m.width, m.height-1)
+				return m, nil
+
 			case "R":
 				// Toggle recipe picker overlay
 				m.showRecipePicker = !m.showRecipePicker
@@ -919,6 +936,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			case focusBoard:
 				m = m.handleBoardKeys(msg)
+
+			case focusLabelDashboard:
+				if selectedLabel, cmd := m.labelDashboard.Update(msg); selectedLabel != "" {
+					// Filter list by selected label and jump back to list view
+					m.currentFilter = "label:" + selectedLabel
+					m.applyFilter()
+					m.focused = focusList
+					return m, cmd
+				}
 
 			case focusGraph:
 				m = m.handleGraphKeys(msg)
@@ -1052,6 +1078,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			PriorityHints:     m.priorityHints,
 			WorkspaceMode:     m.workspaceMode,
 		})
+
+		// Resize label dashboard table
+		m.labelDashboard.SetSize(m.width, bodyHeight)
 
 		m.insightsPanel.SetSize(m.width, bodyHeight)
 		m.updateViewportContent()
@@ -1456,6 +1485,9 @@ func (m Model) View() string {
 		body = m.historyView.View()
 	} else if m.isSplitView {
 		body = m.renderSplitView()
+	} else if m.focused == focusLabelDashboard {
+		m.labelDashboard.SetSize(m.width, m.height-1)
+		body = m.labelDashboard.View()
 	} else {
 		// Mobile view
 		if m.showDetails {

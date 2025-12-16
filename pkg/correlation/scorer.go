@@ -197,20 +197,25 @@ func (s *Scorer) FilterHistoriesByConfidence(histories map[string]BeadHistory, m
 	return filtered
 }
 
-// MergeCommits combines commits from multiple sources, deduplicating by SHA
+// MergeCommits combines commits from multiple sources, deduplicating by SHA+BeadID
 // and combining signals when the same commit is found via multiple methods.
 func (s *Scorer) MergeCommits(sources ...[]CorrelatedCommit) []CorrelatedCommit {
-	// Group by SHA
-	bySHA := make(map[string][]CorrelatedCommit)
+	// Group by SHA + BeadID
+	type key struct {
+		SHA    string
+		BeadID string
+	}
+	byKey := make(map[key][]CorrelatedCommit)
 	for _, commits := range sources {
 		for _, c := range commits {
-			bySHA[c.SHA] = append(bySHA[c.SHA], c)
+			k := key{SHA: c.SHA, BeadID: c.BeadID}
+			byKey[k] = append(byKey[k], c)
 		}
 	}
 
 	// Merge duplicates
 	var merged []CorrelatedCommit
-	for _, commits := range bySHA {
+	for _, commits := range byKey {
 		if len(commits) == 1 {
 			merged = append(merged, commits[0])
 			continue

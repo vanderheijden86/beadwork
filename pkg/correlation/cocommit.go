@@ -114,6 +114,7 @@ func (c *CoCommitExtractor) CreateCorrelatedCommit(event BeadEvent, files []File
 	reason := c.generateReason(event, files, confidence)
 
 	return CorrelatedCommit{
+		BeadID:      event.BeadID,
 		SHA:         event.CommitSHA,
 		ShortSHA:    shortSHA(event.CommitSHA),
 		Message:     event.CommitMsg,
@@ -359,7 +360,7 @@ func shortSHA(sha string) string {
 // ExtractAllCoCommits extracts co-committed files for all events with status changes
 func (c *CoCommitExtractor) ExtractAllCoCommits(events []BeadEvent) ([]CorrelatedCommit, error) {
 	var commits []CorrelatedCommit
-	seen := make(map[string]bool) // Avoid processing same commit twice
+	fileCache := make(map[string][]FileChange) // Cache file lookups by SHA
 
 	for _, event := range events {
 		// Only process status change events
@@ -367,16 +368,16 @@ func (c *CoCommitExtractor) ExtractAllCoCommits(events []BeadEvent) ([]Correlate
 			continue
 		}
 
-		// Skip if we've already processed this commit
-		if seen[event.CommitSHA] {
-			continue
-		}
-		seen[event.CommitSHA] = true
-
-		files, err := c.ExtractCoCommittedFiles(event)
-		if err != nil {
-			// Non-fatal: skip this commit
-			continue
+		// Use cached files if available, otherwise fetch from git
+		files, cached := fileCache[event.CommitSHA]
+		if !cached {
+			var err error
+			files, err = c.ExtractCoCommittedFiles(event)
+			if err != nil {
+				// Non-fatal: skip this commit
+				continue
+			}
+			fileCache[event.CommitSHA] = files
 		}
 
 		// Only create correlation if there are code files
