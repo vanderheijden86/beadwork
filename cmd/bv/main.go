@@ -1900,6 +1900,15 @@ func main() {
 		}
 		triage := analysis.ComputeTriageWithOptions(issues, opts)
 
+		// bv-90: Load feedback data for output
+		var feedbackInfo *analysis.FeedbackJSON
+		if robotTriageBeadsDir, err := loader.GetBeadsDir(""); err == nil {
+			if feedbackData, err := analysis.LoadFeedback(robotTriageBeadsDir); err == nil && len(feedbackData.Events) > 0 {
+				info := feedbackData.ToJSON()
+				feedbackInfo = &info
+			}
+		}
+
 		if *robotNext {
 			// Minimal output: just the top pick
 			if len(triage.QuickRef.TopPicks) == 0 {
@@ -1951,14 +1960,16 @@ func main() {
 
 		// Full triage output with usage hints
 		output := struct {
-			GeneratedAt string                `json:"generated_at"`
-			DataHash    string                `json:"data_hash"`
-			Triage      analysis.TriageResult `json:"triage"`
-			UsageHints  []string              `json:"usage_hints"` // bv-84: Agent-friendly hints
+			GeneratedAt string                 `json:"generated_at"`
+			DataHash    string                 `json:"data_hash"`
+			Triage      analysis.TriageResult  `json:"triage"`
+			Feedback    *analysis.FeedbackJSON `json:"feedback,omitempty"` // bv-90: Feedback loop state
+			UsageHints  []string               `json:"usage_hints"`        // bv-84: Agent-friendly hints
 		}{
 			GeneratedAt: time.Now().UTC().Format(time.RFC3339),
 			DataHash:    dataHash,
 			Triage:      triage,
+			Feedback:    feedbackInfo,
 			UsageHints: []string{
 				"jq '.triage.quick_ref.top_picks[:3]' - Top 3 picks for immediate work",
 				"jq '.triage.quick_ref.next_up' - Secondary candidates after top picks",
@@ -1970,6 +1981,7 @@ func main() {
 				"--robot-triage-by-label - Group by label for area-focused agents",
 				"jq '.triage.recommendations_by_track[].top_pick' - Top pick per track",
 				"jq '.triage.recommendations_by_label[].claim_command' - Claim commands per label",
+				"jq '.feedback.weight_adjustments' - View feedback-adjusted weights (bv-90)",
 			},
 		}
 		encoder := json.NewEncoder(os.Stdout)
@@ -2011,7 +2023,6 @@ func main() {
 		fmt.Printf("Done! Priority brief saved to %s\n", *priorityBrief)
 		os.Exit(0)
 	}
-
 
 	// Handle --agent-brief flag (bv-131)
 	if *agentBrief != "" {
