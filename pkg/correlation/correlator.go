@@ -80,14 +80,42 @@ func (c *Correlator) GenerateReport(beads []BeadInfo, opts CorrelatorOptions) (*
 	// Calculate data hash
 	dataHash := c.calculateDataHash(beads)
 
+	// Get latest commit SHA for incremental updates
+	latestCommitSHA := c.findLatestCommitSHA(events, commits)
+
 	return &HistoryReport{
-		GeneratedAt: time.Now().UTC(),
-		DataHash:    dataHash,
-		GitRange:    gitRange,
-		Stats:       stats,
-		Histories:   histories,
-		CommitIndex: commitIndex,
+		GeneratedAt:     time.Now().UTC(),
+		DataHash:        dataHash,
+		GitRange:        gitRange,
+		LatestCommitSHA: latestCommitSHA,
+		Stats:           stats,
+		Histories:       histories,
+		CommitIndex:     commitIndex,
 	}, nil
+}
+
+// findLatestCommitSHA finds the most recent commit SHA from events and commits
+func (c *Correlator) findLatestCommitSHA(events []BeadEvent, commits []CorrelatedCommit) string {
+	var latest time.Time
+	var latestSHA string
+
+	// Check events
+	for _, e := range events {
+		if e.Timestamp.After(latest) {
+			latest = e.Timestamp
+			latestSHA = e.CommitSHA
+		}
+	}
+
+	// Check commits
+	for _, commit := range commits {
+		if commit.Timestamp.After(latest) {
+			latest = commit.Timestamp
+			latestSHA = commit.SHA
+		}
+	}
+
+	return latestSHA
 }
 
 // BeadInfo is minimal bead information needed for correlation

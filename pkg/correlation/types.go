@@ -138,12 +138,13 @@ type HistoryStats struct {
 
 // HistoryReport is the top-level output structure for --robot-history
 type HistoryReport struct {
-	GeneratedAt time.Time              `json:"generated_at"`
-	DataHash    string                 `json:"data_hash"`    // Hash of source beads.jsonl for consistency checks
-	GitRange    string                 `json:"git_range"`    // e.g., "HEAD~100..HEAD" or "2024-01-01..2024-12-15"
-	Stats       HistoryStats           `json:"stats"`        // Aggregate statistics
-	Histories   map[string]BeadHistory `json:"histories"`    // BeadID -> BeadHistory
-	CommitIndex CommitIndex            `json:"commit_index"` // SHA -> []BeadID for reverse lookup
+	GeneratedAt     time.Time              `json:"generated_at"`
+	DataHash        string                 `json:"data_hash"`                   // Hash of source beads.jsonl for consistency checks
+	GitRange        string                 `json:"git_range"`                   // e.g., "HEAD~100..HEAD" or "2024-01-01..2024-12-15"
+	LatestCommitSHA string                 `json:"latest_commit_sha,omitempty"` // Most recent commit SHA for incremental updates
+	Stats           HistoryStats           `json:"stats"`                       // Aggregate statistics
+	Histories       map[string]BeadHistory `json:"histories"`                   // BeadID -> BeadHistory
+	CommitIndex     CommitIndex            `json:"commit_index"`                // SHA -> []BeadID for reverse lookup
 }
 
 // FilterOptions controls which beads to include in the history report
