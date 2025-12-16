@@ -439,16 +439,35 @@ func exp(x float64) float64 {
 	return result
 }
 
+// WhatIfDelta shows the impact of completing an issue
+type WhatIfDelta struct {
+	// DirectUnblocks is the count of issues directly unblocked by completing this
+	DirectUnblocks int `json:"direct_unblocks"`
+	// TransitiveUnblocks is the total count including downstream cascades
+	TransitiveUnblocks int `json:"transitive_unblocks"`
+	// BlockedReduction is how many fewer issues would be blocked
+	BlockedReduction int `json:"blocked_reduction"`
+	// DepthReduction estimates the critical path depth reduction
+	DepthReduction float64 `json:"depth_reduction"`
+	// EstimatedDaysSaved estimates days saved based on unblocked work
+	EstimatedDaysSaved float64 `json:"estimated_days_saved,omitempty"`
+	// UnblockedIssueIDs lists the IDs that would be unblocked (capped at 10)
+	UnblockedIssueIDs []string `json:"unblocked_issue_ids,omitempty"`
+	// Explanation summarizes the what-if impact
+	Explanation string `json:"explanation"`
+}
+
 // PriorityRecommendation represents a suggested priority change
 type PriorityRecommendation struct {
-	IssueID           string   `json:"issue_id"`
-	Title             string   `json:"title"`
-	CurrentPriority   int      `json:"current_priority"`
-	SuggestedPriority int      `json:"suggested_priority"`
-	ImpactScore       float64  `json:"impact_score"`
-	Confidence        float64  `json:"confidence"` // 0-1, higher when evidence is strong
-	Reasoning         []string `json:"reasoning"`  // Human-readable explanations
-	Direction         string   `json:"direction"`  // "increase" or "decrease"
+	IssueID           string      `json:"issue_id"`
+	Title             string      `json:"title"`
+	CurrentPriority   int         `json:"current_priority"`
+	SuggestedPriority int         `json:"suggested_priority"`
+	ImpactScore       float64     `json:"impact_score"`
+	Confidence        float64     `json:"confidence"` // 0-1, higher when evidence is strong
+	Reasoning         []string    `json:"reasoning"`  // Human-readable explanations (top 3)
+	Direction         string      `json:"direction"`  // "increase" or "decrease"
+	WhatIf            *WhatIfDelta `json:"what_if,omitempty"` // Impact of completing this issue
 }
 
 // RecommendationThresholds configure when to suggest priority changes
@@ -496,17 +515,22 @@ func (a *Analyzer) GenerateRecommendationsWithThresholds(thresholds Recommendati
 		rec := generateRecommendation(score, unblocksMap[score.IssueID], thresholds)
 		if rec != nil {
 			if rec.Confidence >= thresholds.MinConfidence {
+				// Compute what-if delta for this recommendation (bv-83)
+				rec.WhatIf = a.computeWhatIfDelta(score.IssueID)
 				recommendations = append(recommendations, *rec)
 			}
 		}
 	}
 
-	// Sort by confidence descending
+	// Sort by confidence descending, then by impact score, then by ID for determinism (bv-83)
 	sort.Slice(recommendations, func(i, j int) bool {
-		if recommendations[i].Confidence == recommendations[j].Confidence {
-			return recommendations[i].IssueID < recommendations[j].IssueID
+		if recommendations[i].Confidence != recommendations[j].Confidence {
+			return recommendations[i].Confidence > recommendations[j].Confidence
 		}
-		return recommendations[i].Confidence > recommendations[j].Confidence
+		if recommendations[i].ImpactScore != recommendations[j].ImpactScore {
+			return recommendations[i].ImpactScore > recommendations[j].ImpactScore
+		}
+		return recommendations[i].IssueID < recommendations[j].IssueID
 	})
 
 	return recommendations
@@ -610,6 +634,11 @@ func generateRecommendation(score ImpactScore, unblocksCount int, thresholds Rec
 		direction = "decrease"
 	}
 
+	// Cap reasoning at top 3 for conciseness (bv-83)
+	if len(reasoning) > 3 {
+		reasoning = reasoning[:3]
+	}
+
 	return &PriorityRecommendation{
 		IssueID:           score.IssueID,
 		Title:             score.Title,
@@ -688,4 +717,136 @@ func abs(x float64) float64 {
 		return -x
 	}
 	return x
+}
+
+// MaxUnblockedIDsShown caps the number of unblocked issue IDs shown in what-if
+const MaxUnblockedIDsShown = 10
+
+// computeWhatIfDelta calculates the impact of completing an issue (bv-83)
+func (a *Analyzer) computeWhatIfDelta(issueID string) *WhatIfDelta {
+	stats := a.Analyze()
+	criticalPath := stats.CriticalPathScore()
+
+	// Get direct unblocks using existing method
+	directUnblocks := a.computeUnblocks(issueID)
+	directCount := len(directUnblocks)
+
+	// Compute transitive unblocks (cascade effect)
+	visited := make(map[string]bool)
+	visited[issueID] = true
+	transitiveCount := a.countTransitiveUnblocks(issueID, visited)
+
+	// Compute blocked reduction (how many items in blocked status would become unblocked)
+	blockedReduction := 0
+	for _, unblockID := range directUnblocks {
+		if issue, ok := a.issueMap[unblockID]; ok {
+			if issue.Status == model.StatusBlocked {
+				blockedReduction++
+			}
+		}
+	}
+
+	// Compute depth reduction based on critical path
+	depthReduction := 0.0
+	currentDepth := criticalPath[issueID]
+	if currentDepth > 0 {
+		// Estimate depth reduction as a fraction of current depth
+		depthReduction = currentDepth / MaxCriticalPathDepth
+		if depthReduction > 1.0 {
+			depthReduction = 1.0
+		}
+	}
+
+	// Estimate days saved based on unblocked work
+	estimatedDaysSaved := estimateDaysSaved(directUnblocks, a.issueMap)
+
+	// Cap unblocked IDs for output
+	unblockedIDs := directUnblocks
+	if len(unblockedIDs) > MaxUnblockedIDsShown {
+		unblockedIDs = unblockedIDs[:MaxUnblockedIDsShown]
+	}
+
+	// Generate explanation
+	explanation := generateWhatIfExplanation(directCount, transitiveCount, blockedReduction, estimatedDaysSaved)
+
+	return &WhatIfDelta{
+		DirectUnblocks:     directCount,
+		TransitiveUnblocks: transitiveCount,
+		BlockedReduction:   blockedReduction,
+		DepthReduction:     depthReduction,
+		EstimatedDaysSaved: estimatedDaysSaved,
+		UnblockedIssueIDs:  unblockedIDs,
+		Explanation:        explanation,
+	}
+}
+
+// countTransitiveUnblocks recursively counts issues unblocked downstream
+func (a *Analyzer) countTransitiveUnblocks(issueID string, visited map[string]bool) int {
+	directUnblocks := a.computeUnblocks(issueID)
+	count := len(directUnblocks)
+
+	for _, unblockID := range directUnblocks {
+		if !visited[unblockID] {
+			visited[unblockID] = true
+			count += a.countTransitiveUnblocks(unblockID, visited)
+		}
+	}
+
+	return count
+}
+
+// estimateDaysSaved estimates work-days saved by unblocking issues
+func estimateDaysSaved(unblockedIDs []string, issueMap map[string]model.Issue) float64 {
+	if len(unblockedIDs) == 0 {
+		return 0
+	}
+
+	totalMinutes := 0
+	counted := 0
+
+	for _, id := range unblockedIDs {
+		if issue, ok := issueMap[id]; ok {
+			if issue.EstimatedMinutes != nil && *issue.EstimatedMinutes > 0 {
+				totalMinutes += *issue.EstimatedMinutes
+				counted++
+			} else {
+				// Use default estimate for unestimated work
+				totalMinutes += DefaultEstimatedMinutes
+				counted++
+			}
+		}
+	}
+
+	if counted == 0 {
+		return 0
+	}
+
+	// Convert to days (8-hour workday = 480 minutes)
+	return float64(totalMinutes) / 480.0
+}
+
+// generateWhatIfExplanation creates a human-readable what-if summary
+func generateWhatIfExplanation(direct, transitive, blockedReduction int, daysSaved float64) string {
+	if direct == 0 {
+		return "No immediate downstream impact"
+	}
+
+	explanation := fmt.Sprintf("Completing this directly unblocks %d item", direct)
+	if direct != 1 {
+		explanation += "s"
+	}
+
+	if transitive > direct {
+		explanation += fmt.Sprintf(" (%d total including cascades)", transitive)
+	}
+
+	if blockedReduction > 0 {
+		explanation += fmt.Sprintf(", clears %d blocked", blockedReduction)
+	}
+
+	if daysSaved >= 0.5 {
+		explanation += fmt.Sprintf(", enabling ~%.1f days of work", daysSaved)
+	}
+
+	return explanation
 }

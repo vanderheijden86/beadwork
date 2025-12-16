@@ -572,3 +572,192 @@ func TestMedianEstimatedMinutes(t *testing.T) {
 		}
 	}
 }
+
+// Tests for what-if delta computation (bv-83)
+
+func TestWhatIfDeltaDirectUnblocks(t *testing.T) {
+	// Create a chain: A blocks B, B blocks C
+	// Completing A should unblock B directly
+	issues := []model.Issue{
+		{ID: "A", Title: "Root Blocker", Status: model.StatusOpen, Priority: 0},
+		{
+			ID: "B", Title: "Middle", Status: model.StatusBlocked, Priority: 1,
+			Dependencies: []*model.Dependency{{IssueID: "B", DependsOnID: "A", Type: model.DepBlocks}},
+		},
+		{
+			ID: "C", Title: "Leaf", Status: model.StatusBlocked, Priority: 2,
+			Dependencies: []*model.Dependency{{IssueID: "C", DependsOnID: "B", Type: model.DepBlocks}},
+		},
+	}
+
+	an := analysis.NewAnalyzer(issues)
+	recs := an.GenerateRecommendations()
+
+	// Find recommendation for A
+	var recA *analysis.PriorityRecommendation
+	for i := range recs {
+		if recs[i].IssueID == "A" {
+			recA = &recs[i]
+			break
+		}
+	}
+
+	if recA == nil || recA.WhatIf == nil {
+		t.Fatal("Expected recommendation with WhatIf for A")
+	}
+
+	if recA.WhatIf.DirectUnblocks != 1 {
+		t.Errorf("A should directly unblock 1 item (B), got %d", recA.WhatIf.DirectUnblocks)
+	}
+
+	// Transitive should include C too
+	if recA.WhatIf.TransitiveUnblocks < 2 {
+		t.Errorf("A should transitively unblock >= 2 items (B and C), got %d", recA.WhatIf.TransitiveUnblocks)
+	}
+
+	// B is blocked, so completing A should reduce blocked count
+	if recA.WhatIf.BlockedReduction < 1 {
+		t.Errorf("Completing A should reduce blocked count, got %d", recA.WhatIf.BlockedReduction)
+	}
+}
+
+func TestWhatIfDeltaNoDownstream(t *testing.T) {
+	// Single issue with no dependencies - should have no what-if impact
+	issues := []model.Issue{
+		{ID: "A", Title: "Standalone", Status: model.StatusOpen, Priority: 0},
+	}
+
+	an := analysis.NewAnalyzer(issues)
+	recs := an.GenerateRecommendations()
+
+	for _, rec := range recs {
+		if rec.IssueID == "A" && rec.WhatIf != nil {
+			if rec.WhatIf.DirectUnblocks != 0 {
+				t.Errorf("Standalone issue should have 0 direct unblocks, got %d", rec.WhatIf.DirectUnblocks)
+			}
+			if rec.WhatIf.TransitiveUnblocks != 0 {
+				t.Errorf("Standalone issue should have 0 transitive unblocks, got %d", rec.WhatIf.TransitiveUnblocks)
+			}
+		}
+	}
+}
+
+func TestWhatIfDeltaEstimatedDays(t *testing.T) {
+	// Issue B has estimated 480 minutes (1 day), A blocks B
+	est := 480
+	issues := []model.Issue{
+		{ID: "A", Title: "Blocker", Status: model.StatusOpen, Priority: 0},
+		{
+			ID: "B", Title: "Blocked", Status: model.StatusBlocked, Priority: 1,
+			EstimatedMinutes: &est,
+			Dependencies:     []*model.Dependency{{IssueID: "B", DependsOnID: "A", Type: model.DepBlocks}},
+		},
+	}
+
+	an := analysis.NewAnalyzer(issues)
+	recs := an.GenerateRecommendations()
+
+	var recA *analysis.PriorityRecommendation
+	for i := range recs {
+		if recs[i].IssueID == "A" {
+			recA = &recs[i]
+			break
+		}
+	}
+
+	if recA == nil || recA.WhatIf == nil {
+		t.Fatal("Expected recommendation with WhatIf for A")
+	}
+
+	// Should estimate ~1 day saved
+	if recA.WhatIf.EstimatedDaysSaved < 0.9 || recA.WhatIf.EstimatedDaysSaved > 1.1 {
+		t.Errorf("Expected ~1 day saved, got %.2f", recA.WhatIf.EstimatedDaysSaved)
+	}
+}
+
+func TestReasoningCapAtThree(t *testing.T) {
+	// Create an issue that triggers many signals
+	now := time.Now()
+	issues := []model.Issue{
+		{
+			ID:        "A",
+			Title:     "Multi-signal",
+			Status:    model.StatusOpen,
+			Priority:  4, // Low priority but high signals will trigger recommendation
+			Labels:    []string{"urgent", "critical"},
+			UpdatedAt: now.AddDate(0, 0, -30), // Stale
+			Dependencies: []*model.Dependency{
+				{IssueID: "A", DependsOnID: "B", Type: model.DepBlocks},
+			},
+		},
+		{ID: "B", Title: "Dep", Status: model.StatusOpen, Priority: 2},
+		{
+			ID: "C", Title: "Blocked", Status: model.StatusBlocked, Priority: 2,
+			Dependencies: []*model.Dependency{{IssueID: "C", DependsOnID: "A", Type: model.DepBlocks}},
+		},
+		{
+			ID: "D", Title: "Also Blocked", Status: model.StatusBlocked, Priority: 2,
+			Dependencies: []*model.Dependency{{IssueID: "D", DependsOnID: "A", Type: model.DepBlocks}},
+		},
+	}
+
+	an := analysis.NewAnalyzer(issues)
+	recs := an.GenerateRecommendations()
+
+	for _, rec := range recs {
+		if len(rec.Reasoning) > 3 {
+			t.Errorf("Reasoning should be capped at 3, issue %s has %d reasons", rec.IssueID, len(rec.Reasoning))
+		}
+	}
+}
+
+func TestRecommendationsSortDeterministic(t *testing.T) {
+	// Create issues that might have same confidence to test deterministic sorting
+	now := time.Now()
+	issues := []model.Issue{
+		{ID: "Z", Title: "Last ID", Status: model.StatusOpen, Priority: 0, UpdatedAt: now},
+		{ID: "A", Title: "First ID", Status: model.StatusOpen, Priority: 0, UpdatedAt: now},
+		{ID: "M", Title: "Middle ID", Status: model.StatusOpen, Priority: 0, UpdatedAt: now},
+	}
+
+	an := analysis.NewAnalyzer(issues)
+
+	// Run twice and verify same order
+	recs1 := an.GenerateRecommendations()
+	recs2 := an.GenerateRecommendations()
+
+	if len(recs1) != len(recs2) {
+		t.Fatalf("Recommendations should be deterministic, got %d vs %d", len(recs1), len(recs2))
+	}
+
+	for i := range recs1 {
+		if recs1[i].IssueID != recs2[i].IssueID {
+			t.Errorf("Order should be deterministic, position %d: %s vs %s", i, recs1[i].IssueID, recs2[i].IssueID)
+		}
+	}
+}
+
+func TestWhatIfExplanationText(t *testing.T) {
+	// Test that explanation is generated correctly
+	issues := []model.Issue{
+		{ID: "A", Title: "Blocker", Status: model.StatusOpen, Priority: 0},
+		{
+			ID: "B", Title: "Blocked", Status: model.StatusBlocked, Priority: 1,
+			Dependencies: []*model.Dependency{{IssueID: "B", DependsOnID: "A", Type: model.DepBlocks}},
+		},
+	}
+
+	an := analysis.NewAnalyzer(issues)
+	recs := an.GenerateRecommendations()
+
+	for _, rec := range recs {
+		if rec.IssueID == "A" && rec.WhatIf != nil {
+			if rec.WhatIf.Explanation == "" {
+				t.Error("WhatIf.Explanation should not be empty for blocker")
+			}
+			if rec.WhatIf.DirectUnblocks > 0 && len(rec.WhatIf.UnblockedIssueIDs) == 0 {
+				t.Error("UnblockedIssueIDs should be populated when DirectUnblocks > 0")
+			}
+		}
+	}
+}
