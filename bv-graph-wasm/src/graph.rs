@@ -196,6 +196,24 @@ impl DiGraph {
         let preds = self.rev_adj.get(node).map_or(&[][..], |v| v.as_slice());
         serde_wasm_bindgen::to_value(preds).unwrap_or(JsValue::NULL)
     }
+
+    /// Topological sort using Kahn's algorithm.
+    /// Returns node indices in topological order, or null if graph has cycles.
+    #[wasm_bindgen(js_name = topologicalSort)]
+    pub fn topological_sort(&self) -> JsValue {
+        use crate::algorithms::topo;
+        match topo::topological_sort(self) {
+            Some(order) => serde_wasm_bindgen::to_value(&order).unwrap_or(JsValue::NULL),
+            None => JsValue::NULL,
+        }
+    }
+
+    /// Check if graph is a DAG (directed acyclic graph).
+    #[wasm_bindgen(js_name = isDag)]
+    pub fn is_dag(&self) -> bool {
+        use crate::algorithms::topo;
+        topo::is_dag(self)
+    }
 }
 
 // Internal methods (not exposed to WASM)
