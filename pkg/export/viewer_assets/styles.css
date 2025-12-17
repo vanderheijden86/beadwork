@@ -19,7 +19,7 @@
     font-style: normal;
     font-weight: 400;
     font-display: swap;
-    src: url('vendor/jetbrains-mono.woff2') format('woff2');
+    src: url('vendor/jetbrains-mono-regular.woff2') format('woff2');
 }
 
 /* CSS Variables - Shared values */
