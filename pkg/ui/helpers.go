@@ -7,6 +7,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/Dicklesworthstone/beads_viewer/pkg/model"
+	"github.com/mattn/go-runewidth"
 )
 
 // FormatTimeRel returns a relative time string (e.g., "2h ago", "3d ago")
@@ -36,28 +37,26 @@ func FormatTimeRel(t time.Time) string {
 	}
 }
 
-// truncateRunesHelper truncates a string to maxRunes runes, adding suffix if needed.
-// This is UTF-8 safe.
-func truncateRunesHelper(s string, maxRunes int, suffix string) string {
-	if maxRunes <= 0 {
+// truncateRunesHelper truncates a string to max visual width (cells), adding suffix if needed.
+// Uses go-runewidth to handle wide characters correctly.
+func truncateRunesHelper(s string, maxWidth int, suffix string) string {
+	if maxWidth <= 0 {
 		return ""
 	}
 
-	runeCount := utf8.RuneCountInString(s)
-	if runeCount <= maxRunes {
+	width := runewidth.StringWidth(s)
+	if width <= maxWidth {
 		return s
 	}
 
-	suffixLen := utf8.RuneCountInString(suffix)
-	if suffixLen > maxRunes {
-		// If suffix implies more characters than allowed, truncate the suffix itself
-		// to strictly obey maxRunes constraint.
-		rSuffix := []rune(suffix)
-		return string(rSuffix[:maxRunes])
+	suffixWidth := runewidth.StringWidth(suffix)
+	if suffixWidth > maxWidth {
+		// Even suffix is too wide, truncate suffix
+		return runewidth.Truncate(suffix, maxWidth, "")
 	}
 
-	runes := []rune(s)
-	return string(runes[:maxRunes-suffixLen]) + suffix
+	targetWidth := maxWidth - suffixWidth
+	return runewidth.Truncate(s, targetWidth, "") + suffix
 }
 
 // padRight pads string s with spaces on the right to length width

@@ -89,7 +89,7 @@ func (d IssueDelegate) Render(w io.Writer, m list.Model, index int, listItem lis
 	// Sparkline (Graph Score) - visualization of importance
 	if width > 120 {
 		spark := RenderSparkline(i.GraphScore, 5)
-		sparkColor := GetHeatmapColor(i.GraphScore)
+		sparkColor := GetHeatmapColor(i.GraphScore, t)
 		sparkStyle := t.Renderer.NewStyle().Foreground(sparkColor)
 		rightParts = append(rightParts, sparkStyle.Render(spark))
 		rightWidth += 6 // 5 + 1 spacing
@@ -151,9 +151,8 @@ func (d IssueDelegate) Render(w io.Writer, m list.Model, index int, listItem lis
 	statusBadgeWidth := lipgloss.Width(statusBadge)
 	leftFixedWidth += statusBadgeWidth + 1
 
-	// ID width - use actual rune length, but cap reasonably
-	idRunes := []rune(idStr)
-	idWidth := len(idRunes)
+	// ID width - use actual visual width, but cap reasonably
+	idWidth := lipgloss.Width(idStr)
 	if idWidth > 35 {
 		idWidth = 35
 		idStr = truncateRunesHelper(idStr, 35, "…")
@@ -172,12 +171,12 @@ func (d IssueDelegate) Render(w io.Writer, m list.Model, index int, listItem lis
 	}
 
 	// Truncate title if needed
-	titleRunes := []rune(title)
-	if len(titleRunes) > titleWidth {
-		title = string(titleRunes[:titleWidth-1]) + "…"
-	} else {
-		// Pad title to fill space
-		title = title + strings.Repeat(" ", titleWidth-len(titleRunes))
+	title = truncateRunesHelper(title, titleWidth, "…")
+	
+	// Pad title to fill space
+	currentWidth := lipgloss.Width(title)
+	if currentWidth < titleWidth {
+		title = title + strings.Repeat(" ", titleWidth-currentWidth)
 	}
 
 	// ══════════════════════════════════════════════════════════════════════════
