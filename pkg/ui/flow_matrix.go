@@ -78,6 +78,18 @@ func (m *FlowMatrixModel) computeStats() {
 	n := len(labels)
 	matrix := m.flow.FlowMatrix
 
+	// Validate matrix dimensions to prevent panics
+	if len(matrix) < n {
+		m.labelStats = nil
+		return
+	}
+	for i := 0; i < n; i++ {
+		if len(matrix[i]) < n {
+			m.labelStats = nil
+			return
+		}
+	}
+
 	// Build index for quick lookup
 	labelIndex := make(map[string]int, n)
 	for i, l := range labels {
@@ -285,14 +297,36 @@ func (m FlowMatrixModel) View() string {
 		return m.renderDrilldown()
 	}
 
-	// Calculate panel widths
+	// Calculate panel widths with safety bounds
 	leftWidth := m.width * 35 / 100 // 35% for labels list
-	if leftWidth < 25 {
-		leftWidth = 25
+	minLeftWidth := 25
+	minRightWidth := 30
+	sepWidth := 3 // border/separator space
+
+	// Ensure we don't exceed total width
+	if leftWidth < minLeftWidth {
+		leftWidth = minLeftWidth
 	}
-	rightWidth := m.width - leftWidth - 3 // 3 for border/separator
-	if rightWidth < 30 {
-		rightWidth = 30
+	rightWidth := m.width - leftWidth - sepWidth
+	if rightWidth < minRightWidth {
+		rightWidth = minRightWidth
+	}
+
+	// If total exceeds width, scale down proportionally
+	totalNeeded := leftWidth + rightWidth + sepWidth
+	if totalNeeded > m.width && m.width > 0 {
+		scale := float64(m.width-sepWidth) / float64(leftWidth+rightWidth)
+		leftWidth = int(float64(leftWidth) * scale)
+		rightWidth = m.width - leftWidth - sepWidth
+		if leftWidth < 10 {
+			leftWidth = 10
+		}
+		if rightWidth < 10 {
+			rightWidth = m.width - leftWidth - sepWidth
+			if rightWidth < 10 {
+				rightWidth = 10
+			}
+		}
 	}
 
 	// Build panels
@@ -430,11 +464,12 @@ func (m FlowMatrixModel) renderLabelsPanel(width int) string {
 }
 
 func (m FlowMatrixModel) renderLabelRow(stat labelFlowStats, selected bool, barWidth, maxOut, totalWidth int) string {
-	// Label name (truncated if needed)
+	// Label name (truncated if needed, using rune count for UTF-8 safety)
 	labelWidth := 12
 	label := stat.Label
-	if len(label) > labelWidth {
-		label = label[:labelWidth-1] + "…"
+	labelRunes := []rune(label)
+	if len(labelRunes) > labelWidth {
+		label = string(labelRunes[:labelWidth-1]) + "…"
 	}
 
 	// Color based on bottleneck status
@@ -641,6 +676,9 @@ func (m FlowMatrixModel) getFlowCounts(sourceLabel string, targetLabels []string
 
 func (m FlowMatrixModel) renderScoreBar(score float64, width int) string {
 	filled := int(score * float64(width))
+	if filled < 0 {
+		filled = 0
+	}
 	if filled > width {
 		filled = width
 	}
@@ -662,11 +700,11 @@ func (m FlowMatrixModel) renderScoreBar(score float64, width int) string {
 }
 
 func (m FlowMatrixModel) miniBar(count, maxWidth int) string {
-	if count == 0 {
+	if count <= 0 {
 		return strings.Repeat("·", maxWidth)
 	}
 
-	// Scale logarithmically for better visualization
+	// Scale linearly for visualization
 	filled := count
 	if filled > maxWidth {
 		filled = maxWidth
@@ -745,8 +783,9 @@ func (m FlowMatrixModel) renderDrilldown() string {
 		if maxTitleLen < 20 {
 			maxTitleLen = 20
 		}
-		if len(title) > maxTitleLen {
-			title = title[:maxTitleLen-1] + "…"
+		titleRunes := []rune(title)
+		if len(titleRunes) > maxTitleLen {
+			title = string(titleRunes[:maxTitleLen-1]) + "…"
 		}
 
 		row := fmt.Sprintf("%s %s %s",
