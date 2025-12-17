@@ -322,6 +322,35 @@ func ComputeTriageWithOptions(issues []model.Issue, opts TriageOptions) TriageRe
 
 // ComputeTriageWithOptionsAndTime generates triage with a deterministic clock (testing).
 func ComputeTriageWithOptionsAndTime(issues []model.Issue, opts TriageOptions, now time.Time) TriageResult {
+	// Build analyzer and stats
+	analyzer := NewAnalyzer(issues)
+	stats := analyzer.AnalyzeAsync(context.Background())
+
+	// Triage requires advanced metrics (PageRank, etc.) for scoring.
+	// If requested, wait for Phase 2 to complete.
+	if opts.WaitForPhase2 {
+		stats.WaitForPhase2()
+	}
+
+	return ComputeTriageFromAnalyzer(analyzer, stats, issues, opts, now)
+}
+
+// ComputeTriageFromAnalyzer generates triage reusing an existing analyzer and stats.
+// This is the canonical implementation used by all triage entrypoints.
+//
+// Use this function when you already have an Analyzer and GraphStats instance
+// (e.g., TUI startup where analysis was already performed). This avoids the
+// O(V+E) cost of rebuilding the dependency graph.
+//
+// Parameters:
+//   - analyzer: Pre-built Analyzer with issue graph loaded
+//   - stats: GraphStats from analyzer.Analyze() or analyzer.AnalyzeAsync()
+//   - issues: The issue slice (needed for counts and iteration)
+//   - opts: Triage configuration options
+//   - now: Reference time for scoring calculations (use fixed value for testing)
+//
+// The outputs match ComputeTriageWithOptionsAndTime given equivalent inputs.
+func ComputeTriageFromAnalyzer(analyzer *Analyzer, stats *GraphStats, issues []model.Issue, opts TriageOptions, now time.Time) TriageResult {
 	start := time.Now()
 
 	// Set defaults
@@ -333,26 +362,6 @@ func ComputeTriageWithOptionsAndTime(issues []model.Issue, opts TriageOptions, n
 	}
 	if opts.BlockerN <= 0 {
 		opts.BlockerN = 5
-	}
-
-	// Build analyzer
-	analyzer := NewAnalyzer(issues)
-	stats := analyzer.AnalyzeAsync(context.Background())
-
-	// Triage requires advanced metrics (PageRank, etc.) for scoring.
-	// If requested, wait for Phase 2 to complete.
-	if opts.WaitForPhase2 {
-		stats.WaitForPhase2()
-	} else {
-		// Even if not strictly waiting, we might want to check if it's already done?
-		// Or just proceed. Note that without Phase 2, PageRank/Betweenness scores will be 0.
-		// For backward compatibility where this was forced, we might default to waiting if not specified?
-		// But opts.WaitForPhase2 default is false.
-		// The previous code FORCED waiting regardless of opts.
-		// To safely refactor without breaking existing callers that rely on the forced wait (like main.go implied),
-		// we should ideally update callers.
-		// However, for this specific function, let's respect the flag.
-		// WARNING: Callers must set WaitForPhase2: true to get graph metrics.
 	}
 
 	// Compute impact scores using the already-computed stats

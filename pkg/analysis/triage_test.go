@@ -1,6 +1,7 @@
 package analysis
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -1171,5 +1172,107 @@ func TestTriageGroupByTrack_TopPickHasHighestScore(t *testing.T) {
 					g.TrackID, rec.ID, rec.Score, g.TopPick.ID, g.TopPick.Score)
 			}
 		}
+	}
+}
+
+// ============================================================================
+// Tests for bv-runn.11 ComputeTriageFromAnalyzer
+// ============================================================================
+
+func TestComputeTriageFromAnalyzer_EquivalentToStandard(t *testing.T) {
+	// Fixed time for determinism
+	now := time.Date(2025, 12, 16, 12, 0, 0, 0, time.UTC)
+
+	issues := []model.Issue{
+		{ID: "blocker", Title: "Blocker", Status: model.StatusOpen, Priority: 0, UpdatedAt: now},
+		{ID: "blocked1", Title: "Blocked 1", Status: model.StatusOpen, Priority: 1, UpdatedAt: now, Dependencies: []*model.Dependency{
+			{DependsOnID: "blocker", Type: model.DepBlocks},
+		}},
+		{ID: "blocked2", Title: "Blocked 2", Status: model.StatusOpen, Priority: 2, UpdatedAt: now, Dependencies: []*model.Dependency{
+			{DependsOnID: "blocker", Type: model.DepBlocks},
+		}},
+		{ID: "standalone", Title: "Standalone", Status: model.StatusOpen, Priority: 2, UpdatedAt: now},
+	}
+
+	opts := TriageOptions{TopN: 5, QuickWinN: 3, BlockerN: 3}
+
+	// Method 1: Standard entrypoint
+	standard := ComputeTriageWithOptionsAndTime(issues, opts, now)
+
+	// Method 2: Using ComputeTriageFromAnalyzer with pre-built analyzer
+	analyzer := NewAnalyzer(issues)
+	stats := analyzer.AnalyzeAsync(context.Background())
+	reused := ComputeTriageFromAnalyzer(analyzer, stats, issues, opts, now)
+
+	// Verify outputs are equivalent (comparing key fields)
+	if standard.QuickRef.OpenCount != reused.QuickRef.OpenCount {
+		t.Errorf("OpenCount mismatch: standard=%d, reused=%d", standard.QuickRef.OpenCount, reused.QuickRef.OpenCount)
+	}
+	if standard.QuickRef.ActionableCount != reused.QuickRef.ActionableCount {
+		t.Errorf("ActionableCount mismatch: standard=%d, reused=%d", standard.QuickRef.ActionableCount, reused.QuickRef.ActionableCount)
+	}
+	if standard.QuickRef.BlockedCount != reused.QuickRef.BlockedCount {
+		t.Errorf("BlockedCount mismatch: standard=%d, reused=%d", standard.QuickRef.BlockedCount, reused.QuickRef.BlockedCount)
+	}
+	if len(standard.Recommendations) != len(reused.Recommendations) {
+		t.Errorf("Recommendations count mismatch: standard=%d, reused=%d", len(standard.Recommendations), len(reused.Recommendations))
+	}
+	// Check recommendation order
+	for i := range standard.Recommendations {
+		if i >= len(reused.Recommendations) {
+			break
+		}
+		if standard.Recommendations[i].ID != reused.Recommendations[i].ID {
+			t.Errorf("Recommendation %d ID mismatch: standard=%s, reused=%s", i, standard.Recommendations[i].ID, reused.Recommendations[i].ID)
+		}
+	}
+	if len(standard.BlockersToClear) != len(reused.BlockersToClear) {
+		t.Errorf("BlockersToClear count mismatch: standard=%d, reused=%d", len(standard.BlockersToClear), len(reused.BlockersToClear))
+	}
+}
+
+func TestComputeTriageFromAnalyzer_WithPhase2(t *testing.T) {
+	now := time.Date(2025, 12, 16, 12, 0, 0, 0, time.UTC)
+
+	issues := []model.Issue{
+		{ID: "a", Title: "A", Status: model.StatusOpen, Priority: 0, UpdatedAt: now},
+		{ID: "b", Title: "B", Status: model.StatusOpen, Priority: 1, UpdatedAt: now, Dependencies: []*model.Dependency{
+			{DependsOnID: "a", Type: model.DepBlocks},
+		}},
+	}
+
+	// Create analyzer and wait for Phase 2
+	analyzer := NewAnalyzer(issues)
+	stats := analyzer.AnalyzeAsync(context.Background())
+	stats.WaitForPhase2()
+
+	opts := TriageOptions{TopN: 3}
+	triage := ComputeTriageFromAnalyzer(analyzer, stats, issues, opts, now)
+
+	// Should have Phase 2 ready
+	if !triage.Meta.Phase2Ready {
+		t.Error("expected Phase2Ready=true after waiting for Phase 2")
+	}
+
+	// Should have recommendations
+	if len(triage.Recommendations) == 0 {
+		t.Error("expected recommendations")
+	}
+}
+
+func TestComputeTriageFromAnalyzer_Empty(t *testing.T) {
+	now := time.Date(2025, 12, 16, 12, 0, 0, 0, time.UTC)
+
+	analyzer := NewAnalyzer(nil)
+	stats := analyzer.AnalyzeAsync(context.Background())
+	stats.WaitForPhase2()
+
+	triage := ComputeTriageFromAnalyzer(analyzer, stats, nil, TriageOptions{}, now)
+
+	if triage.QuickRef.OpenCount != 0 {
+		t.Errorf("expected 0 open count, got %d", triage.QuickRef.OpenCount)
+	}
+	if len(triage.Recommendations) != 0 {
+		t.Errorf("expected 0 recommendations, got %d", len(triage.Recommendations))
 	}
 }
