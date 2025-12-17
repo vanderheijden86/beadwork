@@ -1810,9 +1810,8 @@ func main() {
 		// Generate top 50 lists for summary, but full stats are included in the struct
 		insights := stats.GenerateInsights(50)
 
-		// Add project-level velocity snapshot (reuse triage computation for consistency)
-		if triage := analysis.ComputeTriage(issues); triage.ProjectHealth.Velocity != nil {
-			v := triage.ProjectHealth.Velocity
+		// Add project-level velocity snapshot (using dedicated helper for efficiency)
+		if v := analysis.ComputeProjectVelocity(issues, time.Now(), 8); v != nil {
 			snap := &analysis.VelocitySnapshot{
 				Closed7:   v.ClosedLast7Days,
 				Closed30:  v.ClosedLast30Days,
