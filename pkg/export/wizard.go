@@ -56,6 +56,7 @@ type Wizard struct {
 	config     *WizardConfig
 	beadsPath  string
 	bundlePath string
+	isUpdate   bool // true when updating an existing deployment
 }
 
 // NewWizard creates a new deployment wizard.
@@ -83,9 +84,81 @@ func newForm(groups ...*huh.Group) *huh.Form {
 	return form
 }
 
+// offerSavedConfig asks if the user wants to use previously saved settings
+func (w *Wizard) offerSavedConfig(saved *WizardConfig) (bool, error) {
+	fmt.Println("Found previous deployment configuration:")
+	fmt.Println("────────────────────────────────────────")
+
+	switch saved.DeployTarget {
+	case "github":
+		fmt.Printf("  Target:     GitHub Pages\n")
+		fmt.Printf("  Repository: %s\n", saved.RepoName)
+		if saved.Title != "" {
+			fmt.Printf("  Title:      %s\n", saved.Title)
+		}
+	case "cloudflare":
+		fmt.Printf("  Target:  Cloudflare Pages\n")
+		fmt.Printf("  Project: %s\n", saved.CloudflareProject)
+		if saved.Title != "" {
+			fmt.Printf("  Title:   %s\n", saved.Title)
+		}
+	case "local":
+		fmt.Printf("  Target: Local export\n")
+		fmt.Printf("  Path:   %s\n", saved.OutputPath)
+	}
+	fmt.Println("")
+
+	var useSaved bool = true
+	form := newForm(
+		huh.NewGroup(
+			huh.NewConfirm().
+				Title("Update existing deployment with these settings?").
+				Description("Select No to configure a new deployment").
+				Value(&useSaved).
+				Affirmative("Yes, update").
+				Negative("No, reconfigure"),
+		),
+	)
+
+	if err := form.Run(); err != nil {
+		return false, err
+	}
+
+	fmt.Println("")
+	return useSaved, nil
+}
+
 // Run executes the interactive wizard flow.
 func (w *Wizard) Run() (*WizardResult, error) {
 	w.printBanner()
+
+	// Check for saved configuration first
+	savedConfig, err := LoadWizardConfig()
+	if err == nil && savedConfig != nil && savedConfig.DeployTarget != "" {
+		// Found saved config - ask if user wants to use it
+		useSaved, err := w.offerSavedConfig(savedConfig)
+		if err != nil {
+			return nil, err
+		}
+		if useSaved {
+			// Use saved config and mark as update
+			w.config = savedConfig
+			w.isUpdate = true
+
+			// Skip to prerequisites check
+			fmt.Println("Using saved configuration...")
+			fmt.Println("")
+
+			// Step 4: Prerequisites check
+			if err := w.checkPrerequisites(); err != nil {
+				return nil, err
+			}
+
+			return &WizardResult{
+				DeployTarget: w.config.DeployTarget,
+			}, nil
+		}
+	}
 
 	// Step 1: Export configuration
 	if err := w.collectExportOptions(); err != nil {
@@ -600,8 +673,8 @@ func (w *Wizard) PerformDeploy() (*WizardResult, error) {
 			Private:          w.config.RepoPrivate,
 			Description:      w.config.RepoDescription,
 			BundlePath:       w.bundlePath,
-			SkipConfirmation: true, // Already confirmed in wizard prerequisites
-			ForceOverwrite:   false,
+			SkipConfirmation: true,           // Already confirmed in wizard prerequisites
+			ForceOverwrite:   w.isUpdate,     // Auto-overwrite when updating existing deployment
 		}
 
 		deployResult, err := DeployToGitHubPages(deployConfig)
