@@ -59,12 +59,20 @@ func (s *SemanticSearch) GetLastQueryTime() time.Time {
 	return s.getCache().lastQuery
 }
 
-// SetCachedResults stores semantic filter results and clears pending state
+// SetCachedResults stores semantic filter results and clears pending state if matching
 func (s *SemanticSearch) SetCachedResults(term string, results []list.Rank) {
 	c := s.getCache()
+
+	// Only clear pending if this is the term that was pending
+	// Otherwise preserve the current pending term (user may have typed a new query)
+	newPendingTerm := c.pendingTerm
+	if c.pendingTerm == term {
+		newPendingTerm = ""
+	}
+
 	newCache := &semanticResultCache{
 		results:     make(map[string][]list.Rank),
-		pendingTerm: "",
+		pendingTerm: newPendingTerm,
 		lastQuery:   c.lastQuery,
 	}
 	// Copy existing cache entries (keep a small LRU-like cache)
@@ -77,10 +85,6 @@ func (s *SemanticSearch) SetCachedResults(term string, results []list.Rank) {
 		newCache.results = make(map[string][]list.Rank)
 	}
 	newCache.results[term] = results
-	// Clear pending if this was the pending term
-	if c.pendingTerm == term {
-		newCache.pendingTerm = ""
-	}
 	s.cache.Store(newCache)
 }
 
