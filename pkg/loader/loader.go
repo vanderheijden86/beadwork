@@ -141,8 +141,15 @@ func LoadIssues(repoPath string) ([]model.Issue, error) {
 	return LoadIssuesFromFile(jsonlPath)
 }
 
-// LoadIssuesFromFile reads issues directly from a specific JSONL file path.
-func LoadIssuesFromFile(path string) ([]model.Issue, error) {
+// ParseOptions configures the behavior of ParseIssues.
+type ParseOptions struct {
+	// WarningHandler is called with warning messages (e.g., malformed JSON).
+	// If nil, warnings are printed to os.Stderr.
+	WarningHandler func(string)
+}
+
+// LoadIssuesFromFileWithOptions reads issues from a file with custom options.
+func LoadIssuesFromFileWithOptions(path string, opts ParseOptions) ([]model.Issue, error) {
 	// Check if file exists
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		return nil, fmt.Errorf("no beads issues found at %s", path)
@@ -154,12 +161,22 @@ func LoadIssuesFromFile(path string) ([]model.Issue, error) {
 	}
 	defer file.Close()
 
-	return ParseIssues(file)
+	return ParseIssuesWithOptions(file, opts)
+}
+
+// LoadIssuesFromFile reads issues directly from a specific JSONL file path.
+func LoadIssuesFromFile(path string) ([]model.Issue, error) {
+	return LoadIssuesFromFileWithOptions(path, ParseOptions{})
 }
 
 // ParseIssues parses JSONL content from a reader into issues.
 // Handles UTF-8 BOM stripping, large lines, and validation.
 func ParseIssues(r io.Reader) ([]model.Issue, error) {
+	return ParseIssuesWithOptions(r, ParseOptions{})
+}
+
+// ParseIssuesWithOptions parses JSONL content with custom options.
+func ParseIssuesWithOptions(r io.Reader, opts ParseOptions) ([]model.Issue, error) {
 	var issues []model.Issue
 	scanner := bufio.NewScanner(r)
 	// Increase buffer size for large lines (issues can be large)
@@ -167,6 +184,14 @@ func ParseIssues(r io.Reader) ([]model.Issue, error) {
 	// Start with 64KB buffer, grow up to maxCapacity
 	buf := make([]byte, 64*1024)
 	scanner.Buffer(buf, maxCapacity)
+
+	// Default warning handler prints to stderr
+	warn := opts.WarningHandler
+	if warn == nil {
+		warn = func(msg string) {
+			fmt.Fprintf(os.Stderr, "Warning: %s\n", msg)
+		}
+	}
 
 	lineNum := 0
 	for scanner.Scan() {
@@ -183,15 +208,15 @@ func ParseIssues(r io.Reader) ([]model.Issue, error) {
 
 		var issue model.Issue
 		if err := json.Unmarshal(line, &issue); err != nil {
-			// Skip malformed lines but warn the user
-			fmt.Fprintf(os.Stderr, "Warning: skipping malformed JSON on line %d: %v\n", lineNum, err)
+			// Skip malformed lines but warn
+			warn(fmt.Sprintf("skipping malformed JSON on line %d: %v", lineNum, err))
 			continue
 		}
 
 		// Validate issue
 		if err := issue.Validate(); err != nil {
 			// Skip invalid issues
-			fmt.Fprintf(os.Stderr, "Warning: skipping invalid issue on line %d: %v\n", lineNum, err)
+			warn(fmt.Sprintf("skipping invalid issue on line %d: %v", lineNum, err))
 			continue
 		}
 

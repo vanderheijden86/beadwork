@@ -2,6 +2,7 @@ package analysis
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/Dicklesworthstone/beads_viewer/pkg/model"
@@ -135,6 +136,11 @@ func WouldCreateCycle(issues []model.Issue, fromID, toID string) (bool, []string
 
 	// Add the proposed edge
 	adj[fromID] = append(adj[fromID], toID)
+
+	// Sort adjacency lists for determinism
+	for k := range adj {
+		sort.Strings(adj[k])
+	}
 
 	// DFS from toID to see if we can reach fromID
 	visited := make(map[string]bool)

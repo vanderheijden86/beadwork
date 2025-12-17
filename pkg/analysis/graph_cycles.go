@@ -60,6 +60,24 @@ func findOneCycleInSCC(g graph.Directed, scc []graph.Node) []graph.Node {
 		inSCC[n.ID()] = true
 	}
 
+	// Pre-compute and sort adjacency lists for nodes in SCC
+	// This avoids repeated filtering and sorting during recursion
+	adj := make(map[int64][]graph.Node, len(scc))
+	for _, u := range scc {
+		to := g.To(u.ID())
+		var neighbors []graph.Node
+		for to.Next() {
+			n := to.Node()
+			if inSCC[n.ID()] {
+				neighbors = append(neighbors, n)
+			}
+		}
+		sort.Slice(neighbors, func(i, j int) bool {
+			return neighbors[i].ID() < neighbors[j].ID()
+		})
+		adj[u.ID()] = neighbors
+	}
+
 	// DFS state
 	visited := make(map[int64]bool)
 	stack := make([]graph.Node, 0)
@@ -71,21 +89,8 @@ func findOneCycleInSCC(g graph.Directed, scc []graph.Node) []graph.Node {
 		stack = append(stack, u)
 		onStack[u.ID()] = true
 
-		// Collect and sort neighbors for deterministic DFS order
-		to := g.To(u.ID())
-		var neighbors []graph.Node
-		for to.Next() {
-			neighbors = append(neighbors, to.Node())
-		}
-		sort.Slice(neighbors, func(i, j int) bool {
-			return neighbors[i].ID() < neighbors[j].ID()
-		})
-
-		for _, v := range neighbors {
-			if !inSCC[v.ID()] {
-				continue
-			}
-
+		// Iterate pre-sorted neighbors
+		for _, v := range adj[u.ID()] {
 			if onStack[v.ID()] {
 				// Cycle found! Reconstruct path from v to u then close with v
 				var cycle []graph.Node

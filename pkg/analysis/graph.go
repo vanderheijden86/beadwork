@@ -684,6 +684,7 @@ func (a *Analyzer) computePhase2WithProfile(stats *GraphStats, config AnalysisCo
 	var localCycles [][]string
 
 	betweennessIsApprox := false
+	actualBetweennessSample := 0
 	cyclesTruncated := false
 
 	// PageRank
@@ -750,6 +751,7 @@ func (a *Analyzer) computePhase2WithProfile(stats *GraphStats, config AnalysisCo
 			// Track if approximation was used
 			if result.Mode == BetweennessApproximate {
 				betweennessIsApprox = true
+				actualBetweennessSample = result.SampleSize
 			}
 		case <-timer.C:
 			profile.BetweennessTO = true
@@ -894,7 +896,7 @@ func (a *Analyzer) computePhase2WithProfile(stats *GraphStats, config AnalysisCo
 		Betweenness: statusEntry{
 			State:   stateFromTiming(config.ComputeBetweenness, profile.BetweennessTO),
 			Reason:  betweennessReason(config, betweennessIsApprox),
-			Sample:  config.BetweennessSampleSize,
+			Sample:  actualBetweennessSample,
 			Elapsed: profile.Betweenness,
 		},
 		Eigenvector:  statusEntry{State: stateFromTiming(config.ComputeEigenvector, false), Elapsed: profile.Eigenvector},
@@ -906,7 +908,6 @@ func (a *Analyzer) computePhase2WithProfile(stats *GraphStats, config AnalysisCo
 		Slack:        statusEntry{State: "computed", Elapsed: profile.Slack},        // bv-85: always computed (fast)
 	}
 	stats.mu.Unlock()
-	// record status outside lock to avoid holding while computePhase2WithProfile might be extended
 }
 
 // computePhase1 calculates fast metrics synchronously.

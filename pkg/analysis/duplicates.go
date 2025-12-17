@@ -3,11 +3,34 @@ package analysis
 import (
 	"fmt"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
 	"github.com/Dicklesworthstone/beads_viewer/pkg/model"
 )
+
+// Package-level compiled regex for performance (avoids recompilation on each call)
+var nonWordRegex = regexp.MustCompile(`[^\w\s]`)
+
+// Package-level stop words map for performance (avoids recreation on each call)
+var stopWords = map[string]bool{
+	"the": true, "and": true, "for": true, "with": true,
+	"this": true, "that": true, "from": true, "are": true,
+	"was": true, "were": true, "been": true, "have": true,
+	"has": true, "had": true, "does": true, "did": true,
+	"will": true, "would": true, "could": true, "should": true,
+	"may": true, "might": true, "can": true, "not": true,
+	"all": true, "any": true, "some": true, "each": true,
+	"when": true, "where": true, "what": true, "which": true,
+	"how": true, "why": true, "who": true, "its": true,
+	"also": true, "just": true, "only": true, "more": true,
+	"than": true, "then": true, "now": true, "here": true,
+	"there": true, "these": true, "those": true, "such": true,
+	"into": true, "over": true, "after": true, "before": true,
+	"being": true, "other": true, "about": true, "like": true,
+	"very": true, "most": true, "make": true, "use": true,
+}
 
 // DuplicateConfig configures duplicate detection behavior
 type DuplicateConfig struct {
@@ -135,8 +158,8 @@ func DetectDuplicates(issues []model.Issue, config DuplicateConfig) []Suggestion
 func extractKeywords(title, description string) []string {
 	text := strings.ToLower(title + " " + description)
 
-	// Remove common markdown/code artifacts
-	text = regexp.MustCompile(`[^\w\s]`).ReplaceAllString(text, " ")
+	// Remove common markdown/code artifacts (uses package-level compiled regex)
+	text = nonWordRegex.ReplaceAllString(text, " ")
 
 	words := strings.Fields(text)
 
@@ -150,8 +173,8 @@ func extractKeywords(title, description string) []string {
 			continue
 		}
 
-		// Skip common stop words
-		if isStopWord(word) {
+		// Skip common stop words (uses package-level map)
+		if stopWords[word] {
 			continue
 		}
 
@@ -164,28 +187,6 @@ func extractKeywords(title, description string) []string {
 	}
 
 	return keywords
-}
-
-// isStopWord checks if a word is a common stop word
-func isStopWord(word string) bool {
-	stopWords := map[string]bool{
-		"the": true, "and": true, "for": true, "with": true,
-		"this": true, "that": true, "from": true, "are": true,
-		"was": true, "were": true, "been": true, "have": true,
-		"has": true, "had": true, "does": true, "did": true,
-		"will": true, "would": true, "could": true, "should": true,
-		"may": true, "might": true, "can": true, "not": true,
-		"all": true, "any": true, "some": true, "each": true,
-		"when": true, "where": true, "what": true, "which": true,
-		"how": true, "why": true, "who": true, "its": true,
-		"also": true, "just": true, "only": true, "more": true,
-		"than": true, "then": true, "now": true, "here": true,
-		"there": true, "these": true, "those": true, "such": true,
-		"into": true, "over": true, "after": true, "before": true,
-		"being": true, "other": true, "about": true, "like": true,
-		"very": true, "most": true, "make": true, "use": true,
-	}
-	return stopWords[word]
 }
 
 // jaccardSimilarity computes Jaccard similarity between two keyword sets
@@ -230,14 +231,11 @@ func jaccardSimilarity(set1, set2 []string) (float64, []string) {
 }
 
 // sortPairsBySimilarity sorts duplicate pairs by similarity (highest first)
+// Uses sort.Slice for O(n log n) performance instead of bubble sort O(n²)
 func sortPairsBySimilarity(pairs []DuplicatePair) {
-	for i := 0; i < len(pairs); i++ {
-		for j := i + 1; j < len(pairs); j++ {
-			if pairs[j].Similarity > pairs[i].Similarity {
-				pairs[i], pairs[j] = pairs[j], pairs[i]
-			}
-		}
-	}
+	sort.Slice(pairs, func(i, j int) bool {
+		return pairs[i].Similarity > pairs[j].Similarity
+	})
 }
 
 // truncateStringSlice truncates a string slice to max length

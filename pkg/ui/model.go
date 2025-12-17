@@ -844,7 +844,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		// Reload issues from disk
-		newIssues, err := loader.LoadIssuesFromFile(m.beadsPath)
+		// Use custom warning handler to prevent stderr pollution during TUI render (bv-fix)
+		var reloadWarnings []string
+		newIssues, err := loader.LoadIssuesFromFileWithOptions(m.beadsPath, loader.ParseOptions{
+			WarningHandler: func(msg string) {
+				reloadWarnings = append(reloadWarnings, msg)
+			},
+		})
 		if err != nil {
 			m.statusMsg = fmt.Sprintf("Reload error: %v", err)
 			m.statusIsError = true
@@ -1003,6 +1009,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.statusMsg = fmt.Sprintf("Reloaded %d issues (cached)", len(newIssues))
 		} else {
 			m.statusMsg = fmt.Sprintf("Reloaded %d issues", len(newIssues))
+		}
+		if len(reloadWarnings) > 0 {
+			m.statusMsg += fmt.Sprintf(" (%d warnings)", len(reloadWarnings))
 		}
 		m.statusIsError = false
 		// Invalidate label-derived caches
@@ -3599,7 +3608,7 @@ func (m *Model) applyFilter() {
 		case "closed":
 			include = issue.Status == model.StatusClosed
 		case "ready":
-			// Ready = Open/InProgress AND No Open Blockers
+			// Ready = Open/InProgress AND NO Open Blockers
 			if issue.Status != model.StatusClosed && issue.Status != model.StatusBlocked {
 				isBlocked := false
 				for _, dep := range issue.Dependencies {

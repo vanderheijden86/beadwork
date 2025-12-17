@@ -2,6 +2,7 @@ package analysis
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/Dicklesworthstone/beads_viewer/pkg/model"
@@ -231,14 +232,11 @@ func findSharedKeys(m1, m2 map[string]bool) []string {
 }
 
 // sortMatchesByConfidence sorts matches by confidence (highest first)
+// Uses sort.Slice for O(n log n) performance instead of bubble sort O(n²)
 func sortMatchesByConfidence(matches []DependencyMatch) {
-	for i := 0; i < len(matches); i++ {
-		for j := i + 1; j < len(matches); j++ {
-			if matches[j].Confidence > matches[i].Confidence {
-				matches[i], matches[j] = matches[j], matches[i]
-			}
-		}
-	}
+	sort.Slice(matches, func(i, j int) bool {
+		return matches[i].Confidence > matches[j].Confidence
+	})
 }
 
 // DependencySuggestionDetector provides stateful dependency suggestion detection
