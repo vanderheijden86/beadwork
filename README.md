@@ -2349,6 +2349,23 @@ Navigate to any project initialized with `bd init` and run:
 bv
 ```
 
+### 🎓 Getting Help
+
+bv has a comprehensive built-in help system:
+
+**Quick Reference** (`?`) - Press anywhere to see keyboard shortcuts for your current view. From here, press `Space` to jump directly to the full tutorial.
+
+**Interactive Tutorial** (`` ` `` backtick) - A multi-page walkthrough covering all features:
+- Concepts: beads, dependencies, labels, priorities
+- Views: list, board, graph, insights, history
+- Workflows: AI agent integration, triage, planning
+- Progress is automatically saved—resume where you left off
+
+**Context Help** (`~` tilde) - View-specific quick reference:
+- Compact modal showing only relevant shortcuts
+- Different content for each view (List, Board, Graph, Insights, History)
+- Perfect for quick reminders without leaving your workflow
+
 ### Keyboard Control Map
 
 | Context | Key | Action |
@@ -2390,8 +2407,10 @@ bv
 | **Actions** | `x` | Export to Markdown File |
 | | `C` | Copy Issue to Clipboard |
 | | `O` | Open in Editor |
-| **Global** | `?` | Toggle Help Overlay |
-| | `;` | Toggle Shortcuts Sidebar |
+| **Help & Learning** | `?` | Toggle Help Overlay (keyboard shortcuts) |
+| | `` ` `` | Open Interactive Tutorial (progress saved) |
+| | `~` | Context-Specific Quick Reference |
+| **Global** | `;` | Toggle Shortcuts Sidebar |
 | | `!` | Toggle **Alerts Panel** (proactive warnings) |
 | | `'` | Recipe Picker |
 | | `w` | Repo Picker (workspace mode) |
