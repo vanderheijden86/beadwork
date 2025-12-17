@@ -4358,7 +4358,13 @@ func runPreviewServer(dir string) error {
 }
 
 // openBrowser opens the default browser to the given URL.
+// Set BV_NO_BROWSER=1 to suppress browser opening (useful for tests).
 func openBrowser(url string) {
+	// Skip browser opening in test mode or when explicitly disabled
+	if os.Getenv("BV_NO_BROWSER") != "" || os.Getenv("BV_TEST_MODE") != "" {
+		return
+	}
+
 	var cmd string
 	var args []string
 
