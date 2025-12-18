@@ -241,6 +241,22 @@ Parse: `file:line:col` → location | 💡 → how to fix | Exit 0/1 → pass/fa
 
 ---
 
+### Testing: Never Open Browsers
+
+**Tests must NEVER automatically open a browser.** All browser-opening functions check `BV_NO_BROWSER` and `BV_TEST_MODE` environment variables. These are set globally via `TestMain` in:
+- `tests/e2e/common_test.go`
+- `pkg/export/main_test.go`
+- `pkg/ui/main_test.go`
+
+When adding new browser-opening code, always check these env vars first:
+```go
+if os.Getenv("BV_NO_BROWSER") != "" || os.Getenv("BV_TEST_MODE") != "" {
+    return nil
+}
+```
+
+---
+
 You should try to follow all best practices laid out in the file GOLANG_BEST_PRACTICES.md
 
 
