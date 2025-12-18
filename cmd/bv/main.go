@@ -138,6 +138,8 @@ func main() {
 	// Impact network graph flag (bv-48kr)
 	robotImpactNetwork := flag.String("robot-impact-network", "", "Output bead impact network as JSON (empty for full, or bead ID for subnetwork)")
 	networkDepth := flag.Int("network-depth", 2, "Depth of subnetwork when querying specific bead (1-3)")
+	// Temporal causality analysis flag (bv-j74w)
+	robotCausality := flag.String("robot-causality", "", "Output causal chain analysis for bead ID as JSON")
 	// Sprint flags (bv-156)
 	robotSprintList := flag.Bool("robot-sprint-list", false, "Output sprints as JSON")
 	robotSprintShow := flag.String("robot-sprint-show", "", "Output specific sprint details as JSON")
@@ -221,6 +223,7 @@ func main() {
 		*robotRelatedWork != "" ||
 		*robotBlockerChain != "" ||
 		*robotImpactNetwork != "" ||
+		*robotCausality != "" ||
 		*robotSprintList ||
 		*robotSprintShow != "" ||
 		*robotForecast != "" ||
@@ -3500,6 +3503,80 @@ func main() {
 		encoder.SetIndent("", "  ")
 		if err := encoder.Encode(result); err != nil {
 			fmt.Fprintf(os.Stderr, "Error encoding impact network: %v\n", err)
+			os.Exit(1)
+		}
+		os.Exit(0)
+	}
+
+	// Handle --robot-causality flag (bv-j74w)
+	if *robotCausality != "" {
+		cwd, err := os.Getwd()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error getting current directory: %v\n", err)
+			os.Exit(1)
+		}
+
+		if err := correlation.ValidateRepository(cwd); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+
+		issues, err := loader.LoadIssues(cwd)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error loading beads: %v\n", err)
+			os.Exit(1)
+		}
+
+		beadsDir, err := loader.GetBeadsDir("")
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error getting beads directory: %v\n", err)
+			os.Exit(1)
+		}
+		beadsPath, err := loader.FindJSONLPath(beadsDir)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error finding beads file: %v\n", err)
+			os.Exit(1)
+		}
+
+		beadInfos := make([]correlation.BeadInfo, len(issues))
+		for i, issue := range issues {
+			beadInfos[i] = correlation.BeadInfo{
+				ID:     issue.ID,
+				Title:  issue.Title,
+				Status: string(issue.Status),
+			}
+		}
+
+		correlatorObj := correlation.NewCorrelator(cwd, beadsPath)
+		report, err := correlatorObj.GenerateReport(beadInfos, correlation.CorrelatorOptions{
+			Limit: *historyLimit,
+		})
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error generating history report: %v\n", err)
+			os.Exit(1)
+		}
+
+		// Build blocker titles map for better descriptions
+		blockerTitles := make(map[string]string)
+		for _, issue := range issues {
+			blockerTitles[issue.ID] = issue.Title
+		}
+
+		opts := correlation.CausalityOptions{
+			IncludeCommits: true,
+			BlockerTitles:  blockerTitles,
+		}
+
+		result := report.BuildCausalityChain(*robotCausality, opts)
+		if result == nil {
+			fmt.Fprintf(os.Stderr, "Bead not found: %s\n", *robotCausality)
+			os.Exit(1)
+		}
+
+		encoder := json.NewEncoder(os.Stdout)
+		encoder.SetIndent("", "  ")
+		if err := encoder.Encode(result); err != nil {
+			fmt.Fprintf(os.Stderr, "Error encoding causality result: %v\n", err)
 			os.Exit(1)
 		}
 		os.Exit(0)
