@@ -1309,6 +1309,164 @@ function getTopByCriticalPath(limit = 10) {
 }
 
 /**
+ * Get top issues by HITS hub score (nodes that point to many authorities)
+ * Hub nodes are connectors that reference many important items.
+ */
+function getTopByHITSHub(limit = 10) {
+  if (!GRAPH_STATE.ready) return [];
+
+  try {
+    const hitsResult = GRAPH_STATE.graph.hitsDefault();
+    if (!hitsResult || !hitsResult.hub) return [];
+
+    const hubScores = Array.from(hitsResult.hub);
+    const indexed = hubScores.map((val, idx) => ({ idx, val }));
+    indexed.sort((a, b) => b.val - a.val);
+    const topNodes = indexed.slice(0, limit);
+
+    return topNodes.map(node => {
+      const id = GRAPH_STATE.graph.nodeId(node.idx);
+      const issue = getIssue(id);
+      if (issue) {
+        issue.hits_hub = node.val;
+      }
+      return issue;
+    }).filter(Boolean);
+  } catch (e) {
+    console.warn('[viewer] getTopByHITSHub failed:', e);
+    return [];
+  }
+}
+
+/**
+ * Get top issues by HITS authority score (nodes pointed to by many hubs)
+ * Authority nodes are important endpoints that many connectors reference.
+ */
+function getTopByHITSAuth(limit = 10) {
+  if (!GRAPH_STATE.ready) return [];
+
+  try {
+    const hitsResult = GRAPH_STATE.graph.hitsDefault();
+    if (!hitsResult || !hitsResult.authority) return [];
+
+    const authScores = Array.from(hitsResult.authority);
+    const indexed = authScores.map((val, idx) => ({ idx, val }));
+    indexed.sort((a, b) => b.val - a.val);
+    const topNodes = indexed.slice(0, limit);
+
+    return topNodes.map(node => {
+      const id = GRAPH_STATE.graph.nodeId(node.idx);
+      const issue = getIssue(id);
+      if (issue) {
+        issue.hits_auth = node.val;
+      }
+      return issue;
+    }).filter(Boolean);
+  } catch (e) {
+    console.warn('[viewer] getTopByHITSAuth failed:', e);
+    return [];
+  }
+}
+
+/**
+ * Get top issues by k-core number (densely connected groups)
+ * Higher k-core = more tightly coupled with other issues.
+ */
+function getTopByKCore(limit = 10) {
+  if (!GRAPH_STATE.ready) return [];
+
+  try {
+    const kcoreValues = GRAPH_STATE.graph.kcore();
+    if (!kcoreValues || kcoreValues.length === 0) return [];
+
+    const indexed = Array.from(kcoreValues).map((val, idx) => ({ idx, val }));
+    indexed.sort((a, b) => b.val - a.val);
+    const topNodes = indexed.slice(0, limit);
+
+    return topNodes.map(node => {
+      const id = GRAPH_STATE.graph.nodeId(node.idx);
+      const issue = getIssue(id);
+      if (issue) {
+        issue.kcore = node.val;
+      }
+      return issue;
+    }).filter(Boolean);
+  } catch (e) {
+    console.warn('[viewer] getTopByKCore failed:', e);
+    return [];
+  }
+}
+
+/**
+ * Get articulation points (cut vertices) - removing these disconnects the graph.
+ * Critical structural nodes whose removal would fragment the project.
+ */
+function getArticulationPoints() {
+  if (!GRAPH_STATE.ready) return [];
+
+  try {
+    const artPoints = GRAPH_STATE.graph.articulationPoints();
+    if (!artPoints || artPoints.length === 0) return [];
+
+    return Array.from(artPoints).map(idx => {
+      const id = GRAPH_STATE.graph.nodeId(idx);
+      const issue = getIssue(id);
+      if (issue) {
+        issue.is_articulation = true;
+      }
+      return issue;
+    }).filter(Boolean);
+  } catch (e) {
+    console.warn('[viewer] getArticulationPoints failed:', e);
+    return [];
+  }
+}
+
+/**
+ * Get issues sorted by slack (schedule flexibility)
+ * Issues with 0 slack are on the critical path (no room for delay).
+ */
+function getIssuesBySlack(limit = 10, showZeroSlack = true) {
+  if (!GRAPH_STATE.ready) return [];
+
+  try {
+    const slackValues = GRAPH_STATE.graph.slack();
+    if (!slackValues || slackValues.length === 0) return [];
+
+    const indexed = Array.from(slackValues).map((val, idx) => ({ idx, val }));
+
+    if (showZeroSlack) {
+      // Show critical path items (zero slack)
+      const criticalPath = indexed.filter(item => item.val === 0);
+      return criticalPath.slice(0, limit).map(node => {
+        const id = GRAPH_STATE.graph.nodeId(node.idx);
+        const issue = getIssue(id);
+        if (issue) {
+          issue.slack = 0;
+          issue.on_critical_path = true;
+        }
+        return issue;
+      }).filter(Boolean);
+    } else {
+      // Show items with most slack (most flexible scheduling)
+      indexed.sort((a, b) => b.val - a.val);
+      return indexed.slice(0, limit).map(node => {
+        const id = GRAPH_STATE.graph.nodeId(node.idx);
+        const issue = getIssue(id);
+        if (issue) {
+          issue.slack = node.val;
+          issue.on_critical_path = node.val === 0;
+        }
+        return issue;
+      }).filter(Boolean);
+    }
+  } catch (e) {
+    console.warn('[viewer] getIssuesBySlack failed:', e);
+    return [];
+  }
+}
+
+/**
  * Get cycle information from graph
  */
 function getCycleInfo() {
@@ -1684,6 +1842,59 @@ function formatDate(isoString) {
 }
 
 /**
+ * Calculate score breakdown as percentages for visualization
+ * Returns array of { name, value, percent, color, weight } sorted by contribution
+ */
+function getScoreBreakdownBars(breakdown) {
+  if (!breakdown) return [];
+
+  const components = [
+    { name: 'PageRank', key: 'pagerank', color: '#3b82f6', weight: 0.22 },
+    { name: 'Betweenness', key: 'betweenness', color: '#f97316', weight: 0.20 },
+    { name: 'Blocker Ratio', key: 'blocker_ratio', color: '#ef4444', weight: 0.13 },
+    { name: 'Priority', key: 'priority_boost', color: '#8b5cf6', weight: 0.10 },
+    { name: 'Time Impact', key: 'time_to_impact', color: '#06b6d4', weight: 0.10 },
+    { name: 'Urgency', key: 'urgency', color: '#ec4899', weight: 0.10 },
+    { name: 'Risk', key: 'risk', color: '#f59e0b', weight: 0.10 },
+    { name: 'Staleness', key: 'staleness', color: '#6b7280', weight: 0.05 },
+  ];
+
+  const total = components.reduce((sum, c) => sum + (breakdown[c.key] || 0), 0);
+
+  return components
+    .map(c => ({
+      name: c.name,
+      value: breakdown[c.key] || 0,
+      percent: total > 0 ? ((breakdown[c.key] || 0) / total * 100) : 0,
+      color: c.color,
+      weight: c.weight,
+      // Normalized value for bar width (0-100)
+      normalized: (breakdown[c.key + '_norm'] || 0) * 100
+    }))
+    .filter(c => c.value > 0)
+    .sort((a, b) => b.value - a.value);
+}
+
+/**
+ * Format JSON with syntax highlighting for display
+ */
+function formatJsonWithHighlight(obj) {
+  if (!obj) return '';
+  try {
+    const json = JSON.stringify(obj, null, 2);
+    // Add syntax highlighting classes
+    return json
+      .replace(/"([^"]+)":/g, '<span class="text-purple-600 dark:text-purple-400">"$1"</span>:')
+      .replace(/: "([^"]*)"/g, ': <span class="text-green-600 dark:text-green-400">"$1"</span>')
+      .replace(/: (\d+\.?\d*)/g, ': <span class="text-blue-600 dark:text-blue-400">$1</span>')
+      .replace(/: (true|false)/g, ': <span class="text-amber-600 dark:text-amber-400">$1</span>')
+      .replace(/: (null)/g, ': <span class="text-gray-500 dark:text-gray-400">$1</span>');
+  } catch {
+    return String(obj);
+  }
+}
+
+/**
  * Render markdown safely
  */
 function renderMarkdown(text) {
@@ -1693,6 +1904,58 @@ function renderMarkdown(text) {
     return DOMPurify.sanitize(html);
   } catch {
     return DOMPurify.sanitize(text);
+  }
+}
+
+/**
+ * Render markdown as inline HTML (no block elements) for excerpts
+ * Converts markdown to HTML but wraps in a span to work with line-clamp
+ */
+function renderMarkdownInline(text) {
+  if (!text) return '';
+  try {
+    // Use marked's parseInline to avoid block elements like <p>
+    const html = marked.parseInline(text);
+    return DOMPurify.sanitize(html);
+  } catch {
+    return DOMPurify.sanitize(text);
+  }
+}
+
+/**
+ * Strip markdown formatting to plain text for excerpts
+ * Preserves readable text content without markdown syntax
+ */
+function stripMarkdownToText(text) {
+  if (!text) return '';
+  try {
+    // Remove common markdown syntax while preserving text
+    return text
+      // Remove code blocks (```...```)
+      .replace(/```[\s\S]*?```/g, ' ')
+      // Remove inline code (`...`)
+      .replace(/`([^`]+)`/g, '$1')
+      // Remove images ![alt](url)
+      .replace(/!\[([^\]]*)\]\([^)]+\)/g, '$1')
+      // Convert links [text](url) to just text
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+      // Remove bold/italic (**, *, __, _)
+      .replace(/(\*\*|__)(.*?)\1/g, '$2')
+      .replace(/(\*|_)(.*?)\1/g, '$2')
+      // Remove headers (# ## ###)
+      .replace(/^#{1,6}\s+/gm, '')
+      // Remove blockquotes
+      .replace(/^>\s+/gm, '')
+      // Remove horizontal rules
+      .replace(/^[-*_]{3,}\s*$/gm, '')
+      // Remove list markers
+      .replace(/^[\s]*[-*+]\s+/gm, '')
+      .replace(/^[\s]*\d+\.\s+/gm, '')
+      // Collapse multiple whitespace/newlines
+      .replace(/\s+/g, ' ')
+      .trim();
+  } catch {
+    return text;
   }
 }
 
@@ -1781,6 +2044,12 @@ function beadsApp() {
     forceGraphModule: null,
     graphDetailNode: null, // Currently selected node for detail pane
 
+    // Graph loading stages: 'init' | 'loading-data' | 'computing-metrics' | 'simulating' | null
+    graphLoadingStage: null,
+    // Graph simulation progress (0-100, null = not simulating)
+    graphSimulationProgress: null,
+    graphSimulationDone: false,
+
     // Heatmap & metrics mode
     graphHeatmapActive: false,
     graphSizeMetric: 'pagerank', // pagerank | betweenness | critical | indegree
@@ -1793,8 +2062,17 @@ function beadsApp() {
     // Insights view data
     topByBetweenness: [],
     topByCriticalPath: [],
+    topByHITSHub: [],
+    topByHITSAuth: [],
+    topByKCore: [],
+    articulationPoints: [],
+    criticalPathSlack: [], // Issues with 0 slack (on critical path)
     cycleInfo: null,
     topImpactIssues: [],
+
+    // Full triage data from triage.json (robot mode output)
+    triageData: null,
+    showTriageJson: false, // Modal for raw JSON view
 
     /**
      * Initialize the application
@@ -1971,6 +2249,12 @@ function beadsApp() {
           this.topByCriticalPath = getTopByCriticalPath(10);
           this.cycleInfo = getCycleInfo();
           this.topImpactIssues = topWhatIf(10);
+          // Additional TUI-style metrics
+          this.topByHITSHub = getTopByHITSHub(10);
+          this.topByHITSAuth = getTopByHITSAuth(10);
+          this.topByKCore = getTopByKCore(10);
+          this.articulationPoints = getArticulationPoints();
+          this.criticalPathSlack = getIssuesBySlack(10, true); // Zero slack = critical path
         }
 
         // Listen for hash changes (browser back/forward)
@@ -1987,6 +2271,17 @@ function beadsApp() {
           } catch (e) {
             console.warn('[Charts] Init failed:', e);
           }
+        }
+
+        // Load full triage data for insights view
+        try {
+          const triageResp = await fetch('./data/triage.json');
+          if (triageResp.ok) {
+            this.triageData = await triageResp.json();
+            console.log('[Viewer] Triage data loaded:', this.triageData?.meta?.issue_count, 'issues');
+          }
+        } catch (triageErr) {
+          console.log('[Viewer] No triage.json found (optional for insights)');
         }
 
         this.loading = false;
@@ -2089,6 +2384,9 @@ function beadsApp() {
         // Small delay to ensure container is visible after x-show transition
         await new Promise(resolve => setTimeout(resolve, 50));
 
+        // Stage 1: Loading data from database
+        this.graphLoadingStage = 'loading-data';
+
         // Check for empty data BEFORE initializing ForceGraph to avoid wasteful init
         const { issues, dependencies } = getGraphViewData();
 
@@ -2104,8 +2402,12 @@ function beadsApp() {
               <p class="text-sm mt-1">The project has no issues in the database.</p>
             </div>`;
           this.forceGraphLoading = false;
+          this.graphLoadingStage = null;
           return;
         }
+
+        // Stage 2: Initializing graph engine and computing metrics
+        this.graphLoadingStage = 'computing-metrics';
 
         // Best-effort: ensure the graph WASM module is available for graph.js.
         if (typeof window.bvGraphWasm === 'undefined') {
@@ -2121,6 +2423,9 @@ function beadsApp() {
         // Pre-computed positions are still exported but only used for metrics, not positions
         let precomputedLayout = null;
         console.log('[ForceGraph] Using live force simulation for optimal layout');
+
+        // Stage 3: Initializing graph visualization
+        this.graphLoadingStage = 'init';
 
         if (!this.forceGraphReady) {
           await this.forceGraphModule.initGraph('graph-container');
@@ -2152,7 +2457,25 @@ function beadsApp() {
           document.addEventListener('bv-graph:metricChange', (e) => {
             this.graphSizeMetric = e.detail?.metric ?? 'pagerank';
           });
+
+          // Track simulation progress for loading indicator
+          document.addEventListener('bv-graph:simulationProgress', (e) => {
+            this.graphSimulationProgress = e.detail?.progress ?? 0;
+            this.graphSimulationDone = e.detail?.done ?? false;
+            if (e.detail?.done) {
+              // Clear progress and stage after a short delay
+              setTimeout(() => {
+                this.graphSimulationProgress = null;
+                this.graphLoadingStage = null;
+              }, 500);
+            }
+          });
         }
+
+        // Stage 4: Running force simulation
+        this.graphLoadingStage = 'simulating';
+        this.graphSimulationProgress = 0;
+        this.graphSimulationDone = false;
 
         console.log(`[ForceGraph] Loading ${issues.length} issues, ${dependencies.length} dependencies`);
         this.forceGraphModule.loadData(issues, dependencies, precomputedLayout);
@@ -2694,6 +3017,16 @@ function beadsApp() {
      * Render markdown helper
      */
     renderMarkdown,
+
+    /**
+     * Render markdown as inline HTML (for excerpts with line-clamp)
+     */
+    renderMarkdownInline,
+
+    /**
+     * Strip markdown to plain text (for excerpts)
+     */
+    stripMarkdownToText,
 
     /**
      * Get issue by ID (wrapper for templates)

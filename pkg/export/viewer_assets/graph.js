@@ -228,6 +228,9 @@ class GraphStore {
             criticalPath: null,
             eigenvector: null,
             kcore: null,
+            hits: null,           // { hub: Float32Array, authority: Float32Array }
+            slack: null,          // Float32Array of slack values
+            articulationPoints: null, // Set of node IDs (cut vertices)
             cycles: null
         };
 
@@ -685,6 +688,46 @@ function computeMetrics() {
             store.metrics.betweenness = store.wasmGraph.betweenness();
         }
 
+        // HITS (hub and authority scores)
+        try {
+            const hitsResult = store.wasmGraph.hitsDefault();
+            if (hitsResult) {
+                store.metrics.hits = {
+                    hub: hitsResult.hub,
+                    authority: hitsResult.authority
+                };
+            }
+        } catch (e) {
+            console.warn('[bv-graph] HITS computation skipped:', e);
+        }
+
+        // Slack (schedule flexibility - 0 means on critical path)
+        try {
+            store.metrics.slack = store.wasmGraph.slack();
+        } catch (e) {
+            console.warn('[bv-graph] Slack computation skipped:', e);
+        }
+
+        // Articulation points (cut vertices - removing them disconnects the graph)
+        try {
+            const artPoints = store.wasmGraph.articulationPoints();
+            if (artPoints && artPoints.length > 0) {
+                // Convert indices to node IDs
+                store.metrics.articulationPoints = new Set(
+                    Array.from(artPoints).map(idx => {
+                        for (const [id, i] of store.nodeIndexMap.entries()) {
+                            if (i === idx) return id;
+                        }
+                        return null;
+                    }).filter(Boolean)
+                );
+            } else {
+                store.metrics.articulationPoints = new Set();
+            }
+        } catch (e) {
+            console.warn('[bv-graph] Articulation points computation skipped:', e);
+        }
+
         // Cycles
         const cycleResult = store.wasmGraph.enumerateCycles(100);
         store.metrics.cycles = cycleResult;
@@ -763,6 +806,18 @@ export async function initGraph(containerId, options = {}) {
         .onLinkHover(handleLinkHover)
         .onBackgroundClick(handleBackgroundClick)
         .onZoom(handleZoom)
+
+        // Simulation progress tracking
+        .onEngineTick(() => {
+            // Get current simulation alpha (1 = start, 0 = done)
+            // Alpha decays from 1 towards alphaMin (0.001)
+            const alpha = store.graph.d3Alpha?.() ?? 0;
+            const progress = Math.round((1 - alpha) * 100);
+            dispatchEvent('simulationProgress', { alpha, progress, done: false });
+        })
+        .onEngineStop(() => {
+            dispatchEvent('simulationProgress', { alpha: 0, progress: 100, done: true });
+        })
 
         // Background
         .backgroundColor(THEME.bg)

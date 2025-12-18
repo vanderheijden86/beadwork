@@ -1302,6 +1302,12 @@ func main() {
 			os.Exit(1)
 		}
 
+		// Generate README.md with project stats (useful for GitHub Pages deployment)
+		fmt.Println("  → Generating README.md...")
+		if err := generateREADME(*exportPages, *pagesTitle, "", exportIssues, &triage, stats); err != nil {
+			fmt.Printf("  → Warning: failed to generate README: %v\n", err)
+		}
+
 		// Export history data for time-travel feature (bv-z38b)
 		if *pagesIncludeHistory {
 			fmt.Println("  → Generating time-travel history data...")
