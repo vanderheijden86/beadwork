@@ -67,6 +67,24 @@ const (
 	searchModeAuthor                          // Search by author
 )
 
+// TimelineEntryType categorizes timeline entries (bv-1x6o)
+type timelineEntryType int
+
+const (
+	timelineEntryEvent  timelineEntryType = iota // Lifecycle event (created, claimed, closed)
+	timelineEntryCommit                          // Code commit
+)
+
+// TimelineEntry represents a single entry in the timeline visualization (bv-1x6o)
+type TimelineEntry struct {
+	Timestamp  time.Time
+	EntryType  timelineEntryType
+	Label      string  // Event type name or commit SHA
+	Detail     string  // Full message or event detail
+	Confidence float64 // For commits: correlation confidence (0-1)
+	EventType  string  // For events: "created", "claimed", "closed", etc.
+}
+
 // HistoryModel represents the TUI view for bead history and code correlations
 type HistoryModel struct {
 	// Data
@@ -89,6 +107,9 @@ type HistoryModel struct {
 
 	// Three-pane middle panel scroll state (bv-xrfh)
 	middleScrollOffset int // Scroll offset for middle pane content
+
+	// Timeline panel state (bv-1x6o)
+	timelineScrollOffset int // Scroll offset for timeline panel
 
 	// Filters
 	authorFilter  string  // Filter by author (empty = all)
@@ -977,13 +998,35 @@ func (h *HistoryModel) renderTwoPaneView() string {
 }
 
 // renderThreePaneView renders the three-pane layout for wider terminals (bv-xrfh)
+// In wide mode (>150 cols), adds a fourth timeline pane (bv-1x6o)
 func (h *HistoryModel) renderThreePaneView() string {
 	layout := h.determineLayout()
 
-	// Calculate panel widths based on layout
+	// Render header
+	header := h.renderHeader()
+	panelHeight := h.height - 2
+
+	// Wide layout: 4 panes with timeline (bv-1x6o)
+	if layout == layoutWide && h.viewMode != historyModeGit {
+		// Wide bead mode: 20% beads | 22% timeline | 25% commits | 33% details
+		listWidth := int(float64(h.width) * 0.20)
+		timelineWidth := int(float64(h.width) * 0.22)
+		middleWidth := int(float64(h.width) * 0.25)
+		detailWidth := h.width - listWidth - timelineWidth - middleWidth
+
+		listPanel := h.renderListPanel(listWidth, panelHeight)
+		timelinePanel := h.renderTimelinePanel(timelineWidth, panelHeight)
+		middlePanel := h.renderCommitMiddlePanel(middleWidth, panelHeight)
+		detailPanel := h.renderDetailPanel(detailWidth, panelHeight)
+
+		panels := lipgloss.JoinHorizontal(lipgloss.Top, listPanel, timelinePanel, middlePanel, detailPanel)
+		return lipgloss.JoinVertical(lipgloss.Left, header, panels)
+	}
+
+	// Standard 3-pane layout (also used for git mode in wide)
 	var listWidth, middleWidth, detailWidth int
 	if layout == layoutWide {
-		// Wide: 25% | 30% | 45%
+		// Wide git mode: 25% | 30% | 45%
 		listWidth = int(float64(h.width) * 0.25)
 		middleWidth = int(float64(h.width) * 0.30)
 		detailWidth = h.width - listWidth - middleWidth
@@ -994,12 +1037,8 @@ func (h *HistoryModel) renderThreePaneView() string {
 		detailWidth = h.width - listWidth - middleWidth
 	}
 
-	// Render header
-	header := h.renderHeader()
-
 	// Render panels based on view mode
 	var listPanel, middlePanel, detailPanel string
-	panelHeight := h.height - 2
 
 	if h.viewMode == historyModeGit {
 		// Git mode: commits on left, related beads in middle, detail on right
@@ -1017,6 +1056,368 @@ func (h *HistoryModel) renderThreePaneView() string {
 	panels := lipgloss.JoinHorizontal(lipgloss.Top, listPanel, middlePanel, detailPanel)
 
 	return lipgloss.JoinVertical(lipgloss.Left, header, panels)
+}
+
+// buildTimeline creates timeline entries from a bead's history (bv-1x6o)
+func (h *HistoryModel) buildTimeline(hist correlation.BeadHistory) []TimelineEntry {
+	var entries []TimelineEntry
+
+	// Add lifecycle events from milestones (more reliable than Events slice)
+	if hist.Milestones.Created != nil {
+		entries = append(entries, TimelineEntry{
+			Timestamp: hist.Milestones.Created.Timestamp,
+			EntryType: timelineEntryEvent,
+			Label:     "○ Created",
+			Detail:    hist.Title,
+			EventType: "created",
+		})
+	}
+	if hist.Milestones.Claimed != nil {
+		entries = append(entries, TimelineEntry{
+			Timestamp: hist.Milestones.Claimed.Timestamp,
+			EntryType: timelineEntryEvent,
+			Label:     "● Claimed",
+			Detail:    fmt.Sprintf("by %s", hist.Milestones.Claimed.Author),
+			EventType: "claimed",
+		})
+	}
+	if hist.Milestones.Reopened != nil {
+		entries = append(entries, TimelineEntry{
+			Timestamp: hist.Milestones.Reopened.Timestamp,
+			EntryType: timelineEntryEvent,
+			Label:     "↻ Reopened",
+			Detail:    "",
+			EventType: "reopened",
+		})
+	}
+	if hist.Milestones.Closed != nil {
+		entries = append(entries, TimelineEntry{
+			Timestamp: hist.Milestones.Closed.Timestamp,
+			EntryType: timelineEntryEvent,
+			Label:     "✓ Closed",
+			Detail:    "",
+			EventType: "closed",
+		})
+	}
+
+	// Add commits
+	for _, commit := range hist.Commits {
+		entries = append(entries, TimelineEntry{
+			Timestamp:  commit.Timestamp,
+			EntryType:  timelineEntryCommit,
+			Label:      commit.ShortSHA,
+			Detail:     commit.Message,
+			Confidence: commit.Confidence,
+		})
+	}
+
+	// Sort chronologically
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[i].Timestamp.Before(entries[j].Timestamp)
+	})
+
+	return entries
+}
+
+// formatTimelineTimestamp formats a timestamp for the timeline (bv-1x6o)
+func (h *HistoryModel) formatTimelineTimestamp(t time.Time) string {
+	now := time.Now()
+	diff := now.Sub(t)
+
+	switch {
+	case diff < 24*time.Hour:
+		return t.Format("3:04 PM")
+	case diff < 7*24*time.Hour:
+		return t.Format("Mon 3PM")
+	case diff < 365*24*time.Hour:
+		return t.Format("Jan 2")
+	default:
+		return t.Format("Jan '06")
+	}
+}
+
+// renderTimelinePanel renders the timeline visualization panel (bv-1x6o)
+func (h *HistoryModel) renderTimelinePanel(width, height int) string {
+	t := h.theme
+	r := t.Renderer
+
+	// Panel border style
+	borderColor := t.Border
+	panelStyle := r.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(borderColor).
+		Width(width - 2).
+		Height(height - 2)
+
+	// Title style
+	titleStyle := r.NewStyle().
+		Bold(true).
+		Foreground(t.Primary).
+		Width(width - 4).
+		Align(lipgloss.Center)
+
+	// Get selected bead
+	if len(h.beadIDs) == 0 || h.selectedBead >= len(h.beadIDs) {
+		content := titleStyle.Render("TIMELINE") + "\n\n" +
+			r.NewStyle().Foreground(t.Secondary).Render("Select a bead to view timeline")
+		return panelStyle.Render(content)
+	}
+
+	beadID := h.beadIDs[h.selectedBead]
+	hist, ok := h.report.Histories[beadID]
+	if !ok {
+		content := titleStyle.Render("TIMELINE") + "\n\n" +
+			r.NewStyle().Foreground(t.Secondary).Render("No history data")
+		return panelStyle.Render(content)
+	}
+
+	// Build timeline entries
+	entries := h.buildTimeline(hist)
+
+	var b strings.Builder
+	b.WriteString(titleStyle.Render("TIMELINE: " + beadID))
+	b.WriteString("\n")
+
+	if len(entries) == 0 {
+		b.WriteString("\n")
+		b.WriteString(r.NewStyle().Foreground(t.Secondary).Render("No events recorded"))
+	} else {
+		// Render timeline entries
+		maxVisible := height - 6 // Account for title, borders, summary
+		if maxVisible < 3 {
+			maxVisible = 3
+		}
+
+		// Apply scroll offset
+		startIdx := h.timelineScrollOffset
+		if startIdx > len(entries)-maxVisible {
+			startIdx = len(entries) - maxVisible
+		}
+		if startIdx < 0 {
+			startIdx = 0
+		}
+		endIdx := startIdx + maxVisible
+		if endIdx > len(entries) {
+			endIdx = len(entries)
+		}
+
+		// Timeline line style
+		lineColor := t.Border
+
+		for i := startIdx; i < endIdx; i++ {
+			entry := entries[i]
+			b.WriteString("\n")
+
+			// Timestamp on left
+			timestamp := h.formatTimelineTimestamp(entry.Timestamp)
+			timestampStyle := r.NewStyle().
+				Foreground(t.Subtext).
+				Width(8).
+				Align(lipgloss.Right)
+			b.WriteString(timestampStyle.Render(timestamp))
+
+			// Vertical line
+			b.WriteString(r.NewStyle().Foreground(lineColor).Render(" ┃ "))
+
+			// Entry content
+			if entry.EntryType == timelineEntryEvent {
+				// Event marker with appropriate color
+				var eventColor lipgloss.TerminalColor
+				switch entry.EventType {
+				case "created":
+					eventColor = t.Secondary
+				case "claimed":
+					eventColor = t.InProgress
+				case "closed":
+					eventColor = t.Closed
+				case "reopened":
+					eventColor = t.Open
+				default:
+					eventColor = t.Secondary
+				}
+				eventStyle := r.NewStyle().Foreground(eventColor).Bold(true)
+				b.WriteString(eventStyle.Render(entry.Label))
+				if entry.Detail != "" {
+					b.WriteString(" ")
+					detailStyle := r.NewStyle().Foreground(t.Subtext)
+					// Truncate detail if needed
+					maxDetail := width - 22
+					detail := entry.Detail
+					if len(detail) > maxDetail && maxDetail > 3 {
+						detail = detail[:maxDetail-3] + "..."
+					}
+					b.WriteString(detailStyle.Render(detail))
+				}
+			} else {
+				// Commit with confidence coloring
+				var confColor lipgloss.TerminalColor
+				if entry.Confidence >= 0.8 {
+					confColor = t.Closed // Green for high confidence
+				} else if entry.Confidence >= 0.5 {
+					confColor = t.InProgress // Yellow for medium
+				} else {
+					confColor = t.Subtext // Gray for low
+				}
+				shaStyle := r.NewStyle().Foreground(confColor).Bold(true)
+				b.WriteString("├─ ")
+				b.WriteString(shaStyle.Render(entry.Label))
+				b.WriteString(" ")
+
+				// Confidence percentage
+				confPct := int(entry.Confidence * 100)
+				confStyle := r.NewStyle().Foreground(confColor)
+				b.WriteString(confStyle.Render(fmt.Sprintf("%d%%", confPct)))
+
+				// Truncate message
+				maxMsg := width - 28
+				msg := strings.Split(entry.Detail, "\n")[0] // First line only
+				if len(msg) > maxMsg && maxMsg > 3 {
+					msg = msg[:maxMsg-3] + "..."
+				}
+				if msg != "" {
+					b.WriteString("\n")
+					b.WriteString(timestampStyle.Render(""))
+					b.WriteString(r.NewStyle().Foreground(lineColor).Render(" ┃   "))
+					msgStyle := r.NewStyle().Foreground(t.Subtext).Italic(true)
+					b.WriteString(msgStyle.Render(msg))
+				}
+			}
+		}
+
+		// Scroll indicator if needed
+		if len(entries) > maxVisible {
+			b.WriteString("\n")
+			scrollInfo := fmt.Sprintf("↕ %d-%d of %d", startIdx+1, endIdx, len(entries))
+			scrollStyle := r.NewStyle().Foreground(t.Subtext).Italic(true)
+			// Pad for timestamp column alignment
+			b.WriteString(r.NewStyle().Width(8).Render(""))
+			b.WriteString(r.NewStyle().Foreground(lineColor).Render(" ┃ "))
+			b.WriteString(scrollStyle.Render(scrollInfo))
+		}
+	}
+
+	// Add cycle time summary at bottom if available
+	if hist.CycleTime != nil {
+		b.WriteString("\n")
+		b.WriteString(r.NewStyle().Foreground(t.Border).Render(strings.Repeat("─", width-6)))
+		b.WriteString("\n")
+
+		summaryStyle := r.NewStyle().Foreground(t.Subtext)
+		if hist.CycleTime.CreateToClose != nil {
+			b.WriteString(summaryStyle.Render(fmt.Sprintf("Cycle: %s", formatDuration(*hist.CycleTime.CreateToClose))))
+		}
+		if len(hist.Commits) > 0 {
+			avgConf := 0.0
+			for _, c := range hist.Commits {
+				avgConf += c.Confidence
+			}
+			avgConf /= float64(len(hist.Commits))
+			b.WriteString(summaryStyle.Render(fmt.Sprintf(" │ %d commits (avg %d%%)", len(hist.Commits), int(avgConf*100))))
+		}
+	}
+
+	return panelStyle.Render(b.String())
+}
+
+// formatDuration formats a duration in a human-readable way (bv-1x6o)
+func formatDuration(d time.Duration) string {
+	if d < time.Hour {
+		return fmt.Sprintf("%dm", int(d.Minutes()))
+	}
+	if d < 24*time.Hour {
+		return fmt.Sprintf("%dh", int(d.Hours()))
+	}
+	days := int(d.Hours() / 24)
+	if days == 1 {
+		return "1d"
+	}
+	return fmt.Sprintf("%dd", days)
+}
+
+// renderCompactTimeline generates a single-line timeline visualization (bv-1x6o)
+// Example: ○──●──├──├──├──✓  5d cycle, 3 commits
+func (h *HistoryModel) renderCompactTimeline(hist correlation.BeadHistory, maxWidth int) string {
+	t := h.theme
+	r := t.Renderer
+
+	var markers []string
+	var startTime, endTime time.Time
+
+	// Add event markers
+	if hist.Milestones.Created != nil {
+		markers = append(markers, "○")
+		startTime = hist.Milestones.Created.Timestamp
+	}
+	if hist.Milestones.Claimed != nil {
+		markers = append(markers, "●")
+		if startTime.IsZero() {
+			startTime = hist.Milestones.Claimed.Timestamp
+		}
+	}
+
+	// Add commit markers (limited to avoid overflow)
+	commitCount := len(hist.Commits)
+	maxCommitMarkers := 5
+	if commitCount > maxCommitMarkers {
+		// Show first few + ellipsis indicator
+		for i := 0; i < maxCommitMarkers-1; i++ {
+			markers = append(markers, "├")
+		}
+		markers = append(markers, "…")
+	} else {
+		for i := 0; i < commitCount; i++ {
+			markers = append(markers, "├")
+		}
+	}
+
+	// Add close marker
+	if hist.Milestones.Closed != nil {
+		markers = append(markers, "✓")
+		endTime = hist.Milestones.Closed.Timestamp
+	}
+
+	if len(markers) == 0 {
+		return r.NewStyle().Foreground(t.Subtext).Render("(no timeline data)")
+	}
+
+	// Build the timeline string
+	timeline := strings.Join(markers, "──")
+
+	// Add summary info
+	var summary []string
+	if hist.CycleTime != nil && hist.CycleTime.CreateToClose != nil {
+		summary = append(summary, formatDuration(*hist.CycleTime.CreateToClose)+" cycle")
+	}
+	if commitCount > 0 {
+		if commitCount == 1 {
+			summary = append(summary, "1 commit")
+		} else {
+			summary = append(summary, fmt.Sprintf("%d commits", commitCount))
+		}
+	}
+
+	result := timeline
+	if len(summary) > 0 {
+		result += "  " + strings.Join(summary, ", ")
+	}
+
+	// Add date range if we have both
+	if !startTime.IsZero() && !endTime.IsZero() {
+		dateRange := fmt.Sprintf("%s ─ %s",
+			startTime.Format("Jan 2"),
+			endTime.Format("Jan 2"))
+		// Only add date range if we have room
+		if len(result)+len(dateRange)+4 < maxWidth {
+			result += "\n" + r.NewStyle().Foreground(t.Subtext).Render(dateRange)
+		}
+	}
+
+	// Truncate if needed
+	if len(result) > maxWidth && maxWidth > 3 {
+		result = result[:maxWidth-3] + "..."
+	}
+
+	return result
 }
 
 // renderEmpty renders an empty state message
