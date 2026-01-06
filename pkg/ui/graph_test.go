@@ -885,3 +885,199 @@ func TestGraphModelReferenceToSelf(t *testing.T) {
 		t.Error("Expected non-empty view")
 	}
 }
+
+// TestGraphModelSelectByID verifies SelectByID navigates to the correct issue (bv-8a4r)
+func TestGraphModelSelectByID(t *testing.T) {
+	theme := createTheme()
+
+	issues := []model.Issue{
+		{ID: "alpha", Title: "Alpha Issue"},
+		{ID: "beta", Title: "Beta Issue"},
+		{ID: "gamma", Title: "Gamma Issue"},
+	}
+
+	g := ui.NewGraphModel(issues, nil, theme)
+
+	// Select by existing ID
+	found := g.SelectByID("beta")
+	if !found {
+		t.Error("SelectByID should return true for existing ID 'beta'")
+	}
+
+	sel := g.SelectedIssue()
+	if sel == nil || sel.ID != "beta" {
+		t.Errorf("Expected 'beta' selected, got %v", sel)
+	}
+
+	// Select another ID
+	found = g.SelectByID("gamma")
+	if !found {
+		t.Error("SelectByID should return true for existing ID 'gamma'")
+	}
+
+	sel = g.SelectedIssue()
+	if sel == nil || sel.ID != "gamma" {
+		t.Errorf("Expected 'gamma' selected, got %v", sel)
+	}
+
+	// Select first ID
+	found = g.SelectByID("alpha")
+	if !found {
+		t.Error("SelectByID should return true for existing ID 'alpha'")
+	}
+
+	sel = g.SelectedIssue()
+	if sel == nil || sel.ID != "alpha" {
+		t.Errorf("Expected 'alpha' selected, got %v", sel)
+	}
+}
+
+// TestGraphModelSelectByIDNotFound verifies SelectByID returns false for non-existent IDs (bv-8a4r)
+func TestGraphModelSelectByIDNotFound(t *testing.T) {
+	theme := createTheme()
+
+	issues := []model.Issue{
+		{ID: "A", Title: "Issue A"},
+		{ID: "B", Title: "Issue B"},
+	}
+
+	g := ui.NewGraphModel(issues, nil, theme)
+
+	// Get initial selection
+	initial := g.SelectedIssue()
+	if initial == nil {
+		t.Fatal("Expected initial selection")
+	}
+	initialID := initial.ID
+
+	// Try to select non-existent ID
+	found := g.SelectByID("nonexistent")
+	if found {
+		t.Error("SelectByID should return false for non-existent ID")
+	}
+
+	// Selection should be unchanged
+	sel := g.SelectedIssue()
+	if sel == nil || sel.ID != initialID {
+		t.Errorf("Selection should be unchanged after failed SelectByID; expected %q, got %v", initialID, sel)
+	}
+}
+
+// TestGraphModelSelectByIDEmpty verifies SelectByID handles empty graph (bv-8a4r)
+func TestGraphModelSelectByIDEmpty(t *testing.T) {
+	theme := createTheme()
+
+	g := ui.NewGraphModel([]model.Issue{}, nil, theme)
+
+	// Should return false and not panic
+	found := g.SelectByID("any")
+	if found {
+		t.Error("SelectByID should return false for empty graph")
+	}
+}
+
+// TestGraphModelDiamondPattern verifies diamond dependency pattern (A→B, A→C, B→D, C→D) (bv-8a4r)
+func TestGraphModelDiamondPattern(t *testing.T) {
+	theme := createTheme()
+
+	// Diamond: D depends on B and C, B and C both depend on A
+	//     A
+	//    / \
+	//   B   C
+	//    \ /
+	//     D
+	issues := []model.Issue{
+		{ID: "A", Title: "Root"},
+		{ID: "B", Title: "Left branch", Dependencies: []*model.Dependency{
+			{DependsOnID: "A", Type: model.DepBlocks},
+		}},
+		{ID: "C", Title: "Right branch", Dependencies: []*model.Dependency{
+			{DependsOnID: "A", Type: model.DepBlocks},
+		}},
+		{ID: "D", Title: "Leaf", Dependencies: []*model.Dependency{
+			{DependsOnID: "B", Type: model.DepBlocks},
+			{DependsOnID: "C", Type: model.DepBlocks},
+		}},
+	}
+
+	g := ui.NewGraphModel(issues, nil, theme)
+
+	if g.TotalCount() != 4 {
+		t.Errorf("Expected 4 nodes in diamond, got %d", g.TotalCount())
+	}
+
+	// Verify all nodes are navigable
+	seen := make(map[string]bool)
+	for i := 0; i < 6; i++ {
+		sel := g.SelectedIssue()
+		if sel != nil {
+			seen[sel.ID] = true
+		}
+		g.MoveDown()
+	}
+
+	for _, id := range []string{"A", "B", "C", "D"} {
+		if !seen[id] {
+			t.Errorf("Expected to see node %s in diamond pattern", id)
+		}
+	}
+
+	// View should render without panic
+	output := g.View(100, 30)
+	if output == "" {
+		t.Error("Expected non-empty view for diamond pattern")
+	}
+}
+
+// TestGraphModelSelectByIDWithDependencies verifies SelectByID works in complex graph (bv-8a4r)
+func TestGraphModelSelectByIDWithDependencies(t *testing.T) {
+	theme := createTheme()
+
+	// Create chain with dependencies
+	issues := []model.Issue{
+		{ID: "root", Title: "Root"},
+		{ID: "child-1", Title: "Child 1", Dependencies: []*model.Dependency{
+			{DependsOnID: "root", Type: model.DepBlocks},
+		}},
+		{ID: "child-2", Title: "Child 2", Dependencies: []*model.Dependency{
+			{DependsOnID: "root", Type: model.DepBlocks},
+		}},
+		{ID: "grandchild", Title: "Grandchild", Dependencies: []*model.Dependency{
+			{DependsOnID: "child-1", Type: model.DepBlocks},
+		}},
+	}
+
+	an := analysis.NewAnalyzer(issues)
+	stats := an.Analyze()
+	insights := stats.GenerateInsights(5)
+
+	g := ui.NewGraphModel(issues, &insights, theme)
+
+	// Select grandchild (likely sorted differently due to critical path)
+	found := g.SelectByID("grandchild")
+	if !found {
+		t.Error("SelectByID should find 'grandchild'")
+	}
+
+	sel := g.SelectedIssue()
+	if sel == nil || sel.ID != "grandchild" {
+		t.Errorf("Expected 'grandchild' selected, got %v", sel)
+	}
+
+	// Render with selection
+	output := g.View(100, 30)
+	if output == "" {
+		t.Error("Expected non-empty view")
+	}
+
+	// Now select root
+	found = g.SelectByID("root")
+	if !found {
+		t.Error("SelectByID should find 'root'")
+	}
+
+	sel = g.SelectedIssue()
+	if sel == nil || sel.ID != "root" {
+		t.Errorf("Expected 'root' selected, got %v", sel)
+	}
+}
