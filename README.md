@@ -244,6 +244,7 @@ graph TD
         E["Bubble Tea Model"]:::ui
         F["List View"]:::ui
         G["Graph View"]:::ui
+        G2["Tree View"]:::ui
         H["Insights Dashboard"]:::ui
     end
 
@@ -260,11 +261,12 @@ graph TD
     D --> J
     E --> F
     E --> G
+    E --> G2
     E --> H
 
     linkStyle 0,1,2 stroke:#90caf9,stroke-width:2px
     linkStyle 3,4,5 stroke:#ffcc80,stroke-width:2px
-    linkStyle 6,7,8 stroke:#ce93d8,stroke-width:2px
+    linkStyle 6,7,8,9 stroke:#ce93d8,stroke-width:2px
 ```
 
 ### Key Metrics & Algorithms
