@@ -133,14 +133,17 @@ func (w *Wizard) Run() (*WizardResult, error) {
 	// Always print banner first (tests and users expect to see it)
 	w.printBanner()
 
-	// Early exit if stdin is not a terminal and is empty (e.g., piped empty input)
-	// This prevents hanging when the wizard is called non-interactively with no input
+	// Early exit if stdin is not a terminal and is an empty regular file.
+	// Note: We only check regular files because stat.Size() is always 0 for pipes,
+	// even when they have data available to read. For pipes, we let huh handle the
+	// empty input case (it will return an error or timeout).
 	if !isTerminal() {
-		// Check if stdin has any data by checking if it's a pipe with content
 		stat, err := os.Stdin.Stat()
 		if err == nil {
-			// If stdin is a pipe or regular file with no data, exit early
-			if (stat.Mode()&os.ModeCharDevice) == 0 && stat.Size() == 0 {
+			mode := stat.Mode()
+			// Only check size for regular files, not pipes or devices
+			isRegularFile := mode.IsRegular()
+			if isRegularFile && stat.Size() == 0 {
 				return nil, fmt.Errorf("wizard requires interactive input; stdin is empty")
 			}
 		}
