@@ -6,59 +6,153 @@ This document captures a rigorous performance analysis of beads_viewer following
 
 **Key Finding**: Buffer pooling for `singleSourceBetweenness` can eliminate **60-80%** of allocations from the dominant hotspot, with potential for 90%+ when combined with additional caching.
 
+**Epsilon Relaxation**: Floating-point outputs are considered "equal" within epsilon tolerances (user-approved).
+
 ---
 
-## Methodology
+## 0) Hard Constraints
 
-The analysis followed these requirements:
+### Repo Invariants (Absolute)
+- **Do not delete any file or directory** unless explicitly requested with exact command.
+- Avoid broad refactors; prefer **one performance lever per change**.
 
-- **A) Baseline First**: Run benchmarks with `-benchmem -count=3`
+### Methodology Invariants (A→G)
+- **A) Baseline First**: Run benchmarks with `-benchmem -count=3`; record p50/p95/p99 latency, throughput, peak memory
 - **B) Profile Before Proposing**: Capture CPU + allocation profiles; identify top 3-5 hotspots
-- **C) Equivalence Oracle**: Define golden outputs + invariants
+- **C) Equivalence Oracle**: Define golden outputs + invariants; use property tests for large input spaces
 - **D) Isomorphism Proof**: Every proposed change includes proof that outputs cannot change
 - **E) Opportunity Matrix**: Rank by (Impact × Confidence) / Effort
-- **F) Minimal Diffs**: One performance lever per change
-- **G) Regression Guardrails**: Add benchmark thresholds
+- **F) Minimal Diffs**: One performance lever per change; include rollback guidance
+- **G) Regression Guardrails**: Add benchmark thresholds and CI hooks
 
 ---
 
-## Phase A: Baseline Metrics
+## 1) Architecture Snapshot
 
-### Environment
+### 1A) Data Plane (robot + TUI share the same engine)
+
+1. **Load issues** from `.beads/issues.jsonl` (preferred) or `.beads/beads.jsonl` fallback:
+   - `pkg/loader/loader.go` (`GetBeadsDir`, `FindJSONLPath`, `LoadIssues`)
+
+2. **Build graph** + compute metrics via Analyzer:
+   - `pkg/analysis/graph.go` (`NewAnalyzer`, `AnalyzeAsync` / `AnalyzeWithProfile`)
+
+3. **Derive higher-level outputs**:
+   - Unified triage: `pkg/analysis/triage.go` (`ComputeTriageFromAnalyzer`)
+   - Priority tuning: `pkg/analysis/priority.go`, `pkg/analysis/feedback.go`
+
+4. **Presentation**:
+   - Robot JSON: `cmd/bv/main.go` (`--robot-*`)
+   - TUI snapshot: `pkg/ui/background_worker.go` → `pkg/ui/snapshot.go`
+
+### 1B) Two-Phase Analysis Contract
+
+- **Phase 1 (sync, "instant")**: Degree centrality, topological sort, density — enough for initial render
+- **Phase 2 (async)**: PageRank, Betweenness, Eigenvector, HITS, Critical Path, Cycles, k-core, slack, articulation
+- **Size-aware config**: `pkg/analysis/config.go` (`ConfigForSize`)
+- **Status tracking**: Robot outputs include `status` so consumers know computed vs approx vs timeout vs skipped
+
+---
+
+## 2) Baseline Metrics
+
+### 2A) Environment
 
 ```
 go version go1.25.5 linux/amd64
 cpu: AMD Ryzen Threadripper PRO 5975WX 32-Cores
+nproc: 64
+RAM: 499Gi
 ```
 
-### Complete Benchmark Results
+### 2B) Representative Workloads
+
+| Dataset | Issues | Size | Description |
+|---------|--------|------|-------------|
+| `.beads/issues.jsonl` | 570 | 1.5MB | Real project data |
+| `benchmark/medium.jsonl` | 1,000 | 3.4MB | Synthetic medium |
+| `benchmark/large.jsonl` | 5,000 | 32MB | Synthetic large |
+
+### 2C) Latency Distribution (p50/p95/p99)
+
+Measurement harness:
+```python
+import math, os, statistics, subprocess, time
+
+cmd = ['/tmp/bv_round1', '--robot-triage']
+env = os.environ.copy()
+env.update({'BV_ROBOT': '1', 'BV_NO_BROWSER': '1', 'BV_TEST_MODE': '1'})
+
+warmup, runs = 5, 50
+for _ in range(warmup):
+    subprocess.run(cmd, cwd='/data/projects/beads_viewer', env=env,
+                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+
+samples = []
+for _ in range(runs):
+    t0 = time.perf_counter()
+    subprocess.run(cmd, cwd='/data/projects/beads_viewer', env=env,
+                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+    samples.append(time.perf_counter() - t0)
+
+samples.sort()
+def pct(p):
+    k = (len(samples) - 1) * p / 100.0
+    f, c = math.floor(k), math.ceil(k)
+    return samples[int(k)] if f == c else samples[f] * (1 - (k - f)) + samples[c] * (k - f)
+
+print(f'p50={pct(50)*1000:.1f}ms p95={pct(95)*1000:.1f}ms p99={pct(99)*1000:.1f}ms')
+print(f'throughput={runs / sum(samples):.2f} runs/s')
+```
+
+| Dataset | p50 | p95 | p99 | Throughput |
+|---------|----:|----:|----:|----------:|
+| 570 issues | 52.6ms | 56.7ms | 59.2ms | 18.88 runs/s |
+| 1,000 issues | 153.6ms | 158.7ms | 163.7ms | 6.53 runs/s |
+| 5,000 issues | 1.457s | 1.518s | 1.540s | 0.68 runs/s |
+
+### 2D) Peak Memory (RSS)
+
+```bash
+/usr/bin/time -v env BV_ROBOT=1 BV_NO_BROWSER=1 BV_TEST_MODE=1 /tmp/bv_round1 --robot-triage >/dev/null
+```
+
+| Dataset | Peak RSS |
+|---------|----------|
+| 570 issues | 38 MB |
+| 1,000 issues | 42 MB |
+| 5,000 issues | **429 MB** |
+
+**Interpretation**: Typical repos are fast (p50 ~53ms). Scaling to 5k issues shows major memory spike and >1s latency — significant headroom for optimization.
+
+### 2E) Startup Breakdown (`--profile-startup`)
+
+| Phase | 570 issues | 5,000 issues |
+|-------|------------|--------------|
+| load_jsonl | 12.0ms | 347.5ms |
+| betweenness | 9.1ms (63% of Phase 2) | 178.7ms |
+| k-core | — | 262.7ms |
+| slack | — | 96.4ms |
+| eigenvector | — | 78.0ms |
+| PageRank | — | 48.3ms |
+| **total_with_load** | 27.1ms | 1.123s |
+
+### 2F) Benchmark Results
 
 | Benchmark | ns/op | allocs/op | B/op |
-|-----------|-------|-----------|------|
+|-----------|------:|----------:|-----:|
 | **ApproxBetweenness_500nodes_Exact** | 70,263,842 | **499,557** | 34,110,194 |
 | ApproxBetweenness_500nodes_Sample100 | 13,586,671 | 199,548 | 29,574,627 |
 | ApproxBetweenness_500nodes_Sample50 | 5,568,698 | 100,756 | 14,841,955 |
+| RobotTriage_Sparse500 | 21,590,000 | 89,500 | 27,700,000 |
 | FullAnalysis_Sparse500 | 14,232,742 | 82,316 | 26,428,791 |
-| GenerateAllSuggestions_Medium | 6,927,667 | 49,278 | 3,850,163 |
-| Cycles_ManyCycles20 | 149,467,208 | 294,826 | 120,980,422 |
 | Cycles_ManyCycles30 | 500,355,711 | 3,335,574 | 1,824,125,368 |
-| DetectCycleWarnings_Medium | 222,044 | 1,435 | 140,619 |
-| FindCyclesSafe_Large | 141,035 | 1,417 | 103,872 |
-| SuggestLabels_LargeSet | 1,597,699 | 11,341 | 602,962 |
-| Complete_Betweenness15 | 259,190 | 3,867 | 1,621,209 |
-| Complete_PageRank20 | 35,544 | 545 | 205,901 |
-
-### Key Observations
-
-1. **Betweenness computation dominates**: 500K allocations for exact mode
-2. **Linear scaling with sample size**: 100 samples = 200K allocs, 50 samples = 100K allocs
-3. **Pathological cases bounded by timeout**: Cycles_ManyCycles30 hits 500ms timeout
 
 ---
 
-## Phase B: Profiling Results
+## 3) Profiling Results
 
-### CPU Profile (138.02s total sample time)
+### 3A) CPU Profile (138.02s total sample time)
 
 | Hotspot | Time (s) | % | Category |
 |---------|----------|---|----------|
@@ -66,12 +160,11 @@ cpu: AMD Ryzen Threadripper PRO 5975WX 32-Cores
 | runtime.mapassign_fast64 | 39.38 | 28.5% | Map operations |
 | **singleSourceBetweenness** | 68.01 | **49.3%** | Core algorithm |
 | runtime.scanobject | 18.24 | 13.2% | GC scanning |
-| runtime.memclrNoHeapPointers | 9.78 | 7.1% | Memory clearing |
 | internal/runtime/maps.table.grow | 26.31 | 19.1% | Map growth |
 
-**Root Cause**: ~45% GC proper (gcDrain + scanobject) + ~48% map operations. These overlap since map allocations trigger GC.
+**Root Cause**: ~45% GC (gcDrain + scanobject) + ~48% map operations. These overlap since map allocations trigger GC.
 
-### Memory Profile (41.34GB total allocations)
+### 3B) Memory Profile (41.34GB total allocations)
 
 | Allocator | Memory (MB) | % |
 |-----------|-------------|---|
@@ -79,7 +172,7 @@ cpu: AMD Ryzen Threadripper PRO 5975WX 32-Cores
 | gonum iterators (inside singleSourceBetweenness) | ~8,000 | ~19% |
 | Other | ~4,000 | ~10% |
 
-**Note**: The 71.3% represents DIRECT allocations (4 maps). The gonum iterator allocations (~19%) occur during `g.From(v)` calls INSIDE singleSourceBetweenness but are attributed to gonum. Total during singleSourceBetweenness execution: **~90%**.
+**Note**: The 71.3% represents DIRECT allocations (4 maps). The gonum iterator allocations (~19%) occur during `g.From(v)` calls INSIDE singleSourceBetweenness. Total during execution: **~90%**.
 
 **Root Cause**: `singleSourceBetweenness` creates 4 fresh maps per call:
 
@@ -92,77 +185,97 @@ pred := make(map[int64][]int64)   // N entries + dynamic slices
 
 For 500 nodes × 100 samples = 400 maps with 200K+ entries allocated per operation.
 
----
+### 3C) I/O Profile Sanity Check
 
-## Phase C: Equivalence Oracles
-
-### Existing Golden Tests
-
-Location: `pkg/analysis/golden_test.go`
-
-The project has robust golden file validation:
-
-```go
-// Tolerances defined in validateMapFloat64()
-PageRank:          1e-5  // Iterative convergence variance
-Betweenness:       1e-6  // Exact algorithm
-Eigenvector:       1e-6
-Hubs/Authorities:  1e-6
-CriticalPathScore: 1e-6
+```bash
+strace -c -f env BV_ROBOT=1 BV_NO_BROWSER=1 BV_TEST_MODE=1 /tmp/bv_round1 --robot-triage >/dev/null
 ```
 
-### Invariants
+**Observed**: Syscalls dominated by `futex`/`nanosleep`; only ~30 `read` calls. **Not I/O-bound**.
 
-1. **Betweenness bounds**: `0 ≤ BC(v) ≤ (n-1)(n-2)` for directed graphs (note: `/2` for undirected)
+---
+
+## 4) Equivalence Oracle
+
+### 4A) Input Definition
+
+For "same inputs", we require:
+- Same parsed issue set (same JSONL contents after parsing/validation)
+- Same analysis configuration (`ConfigForSize` given node/edge count)
+- Same seed for approximate algorithms (approx betweenness uses a seed)
+- Same "now" when time-based fields are included (triage staleness)
+
+### 4B) Output Definition
+
+**(1) Structural outputs must be exact:**
+- IDs present and counts
+- Membership of sets (actionable, blockers, quick wins)
+- Cycle presence and members (when computed)
+- JSON schema and field names
+- Deterministic tie-breaking (by ID)
+
+**(2) Float outputs are equal within epsilon:**
+- Centralities and composite scores may differ slightly (parallel reduction, iteration order)
+- Differences within epsilon are accepted
+
+### 4C) Epsilon Policy
+
+| Metric | Absolute Tolerance | Notes |
+|--------|-------------------|-------|
+| PageRank | 1e-5 | Iterative convergence variance |
+| Betweenness (exact) | 1e-6 | Exact algorithm |
+| Betweenness (approx) | 1e-6 abs + 1e-12 rel | Compare top-k rank stability |
+| Eigenvector | 1e-6 | |
+| HITS (Hubs/Authorities) | 1e-6 | |
+| CriticalPathScore | 1e-6 | |
+
+### 4D) Ordering Under Epsilon
+
+If two scores differ by less than epsilon, ordering swaps are treated as equivalent **as long as**:
+- The set of items is identical
+- Swapped items were within epsilon of each other
+
+This prevents flaky tests when floats drift in low bits.
+
+### 4E) Existing Guardrails
+
+| Test File | Coverage |
+|-----------|----------|
+| `pkg/analysis/golden_test.go` | Numeric tolerances for all metrics |
+| `pkg/analysis/invariance_test.go` | Metamorphic/invariance properties |
+| `pkg/analysis/betweenness_approx_test.go` | Epsilon stability for approx betweenness |
+| `pkg/loader/fuzz_test.go` | Loader fuzzing |
+| `tests/e2e/*` | Robot contract + perf checks |
+
+### 4F) Invariants
+
+1. **Betweenness bounds**: `0 ≤ BC(v) ≤ (n-1)(n-2)` for directed graphs
 2. **PageRank sum**: `Σ PR(v) = 1.0`
 3. **Deterministic ordering**: Sorted by value descending, then by ID ascending
 4. **Map completeness**: All node IDs present in output maps
 
-### Property-Based Tests (Recommended Addition)
+---
 
-```go
-// Requires: go get pgregory.net/rapid
-func TestBetweennessScoreRange(t *testing.T) {
-    rapid.Check(t, func(t *rapid.T) {
-        n := rapid.IntRange(5, 100).Draw(t, "nodes")
-        issues := generateSparseGraph(n)  // Helper to generate test issues
-        analyzer := NewAnalyzer(issues)
-        stats := analyzer.Analyze()
+## 5) Opportunity Matrix
 
-        // For directed graphs: max BC is (n-1)(n-2), not /2
-        maxBC := float64((n - 1) * (n - 2))
-        for id, score := range stats.Betweenness() {
-            if score < 0 || score > maxBC {
-                t.Errorf("BC[%s] = %f out of bounds [0, %f]", id, score, maxBC)
-            }
-        }
-    })
-}
-```
+Scoring: **(Impact × Confidence) / Effort**
+
+| # | Candidate | Impact | Confidence | Effort | Score | Notes |
+|---|-----------|--------|------------|--------|-------|-------|
+| **1** | **Buffer pooling for Brandes** | **0.70** | **0.95** | **0.40** | **1.66** | Dominant alloc_space (~71%) |
+| 2 | Array-based indexing (no maps) | 0.50 | 0.90 | 0.50 | 0.90 | Cache-friendly |
+| 3 | Remove undirected graph for k-core | 0.25 | 0.85 | 0.35 | 0.61 | On 5k nodes, k-core ~263ms |
+| 4 | Cached adjacency lists | 0.30 | 0.70 | 0.60 | 0.35 | Avoid gonum iterator overhead |
+| 5 | Slack computation reuse | 0.15 | 0.90 | 0.30 | 0.45 | Reuse topo order |
+| 6 | Cross-process cache (robot mode) | 0.15 | 0.60 | 0.70 | 0.13 | Keyed by data_hash + config_hash |
+
+**Round 1 Focus**: #1 (buffer pooling). Re-profile after, then evaluate #2-5.
 
 ---
 
-## Phase D: Opportunity Matrix
+## 6) Proposed Changes
 
-| # | Candidate | Impact | Confidence | Effort | Score (I×C/E) | Risk |
-|---|-----------|--------|------------|--------|---------------|------|
-| **1** | **Buffer pooling for Brandes** | **0.70** | **0.95** | **0.40** | **1.66** | LOW |
-| 2 | Array-based indexing (no maps) | 0.50 | 0.90 | 0.50 | 0.90 | LOW |
-| 3 | Cached adjacency lists | 0.30 | 0.70 | 0.60 | 0.35 | MED |
-| 4 | Avoid gonum iterators | 0.22 | 0.60 | 0.70 | 0.19 | MED |
-
-### Scoring Methodology
-
-- **Impact**: Fraction of total allocation/CPU that would be eliminated
-- **Confidence**: Certainty that the optimization will achieve stated impact
-- **Effort**: Relative implementation complexity (0.1 = trivial, 1.0 = major refactor)
-- **Score**: Higher is better; prioritize items with Score > 0.5
-
----
-
-## Phase E: Proposed Change - Priority #1
-
-### Buffer Pooling for Brandes' Algorithm
+### Change 1 (Primary): Buffer Pooling for Brandes' Algorithm
 
 **Location**: `pkg/analysis/betweenness_approx.go:162-241`
 
@@ -260,8 +373,6 @@ func singleSourceBetweenness(g *simple.DirectedGraph, source graph.Node, bc map[
 
 ### What This Does NOT Address
 
-The proposed optimization addresses the 4 internal maps but does NOT address:
-
 ```go
 // Line 169 - STILL ALLOCATES (not pooled)
 nodes := graph.NodesOf(g.Nodes())
@@ -272,9 +383,11 @@ localBC := make(map[int64]float64)
 // gonum iterator overhead from g.From(v) calls
 ```
 
-To achieve 90%+ reduction, would also need to pool the `nodes` slice and `localBC` maps (requires signature changes or Analyzer-level caching).
+To achieve 90%+ reduction, also pool `nodes` slice and `localBC` maps (requires Analyzer-level caching).
 
-### Isomorphism Proof
+---
+
+## 7) Isomorphism Proof
 
 **Theorem**: Buffer reuse produces identical outputs to fresh allocation.
 
@@ -310,15 +423,97 @@ To achieve 90%+ reduction, would also need to pool the `nodes` slice and `localB
 
 **QED** ∎
 
-### Caveats
+---
 
-1. **sync.Pool eviction**: Pool entries can be evicted during GC. Under memory pressure, gains diminish as buffers are recreated.
-2. **First-call cost**: First call with a fresh buffer allocates N slices for pred entries. Steady-state performance is better.
-3. **Exact path not optimized**: When `sampleSize >= n`, code calls `network.Betweenness(g)` (gonum's implementation). Small graphs (<100 nodes) see no benefit.
+## 8) Follow-Up Changes (Post-#1 Profiling)
+
+### Change 2: Remove Undirected Graph for k-core/Articulation
+
+**Target**: `pkg/analysis/graph.go` (`computeCoreAndArticulation`, `computeKCore`, `findArticulationPoints`)
+
+**Rationale**: On 5k nodes, k-core takes ~263ms and allocates significantly by constructing `simple.UndirectedGraph`.
+
+**Minimal diff**:
+- Build undirected adjacency view directly from directed edges
+- Run k-core and articulation on that adjacency without allocating new graph
+
+**Isomorphism**: Current implementation treats directed edges as undirected by inserting into undirected graph; direct adjacency construction is equivalent.
+
+### Change 3: Linear-Time k-core Algorithm
+
+**Target**: `computeKCore` loops `k=1..maxDeg` and rescans nodes; worst-case O(maxDeg·V).
+
+**Proposed**: Batagelj–Zaveršnik linear-time k-core decomposition using bin-sort peeling.
+
+**Isomorphism**: Computes same core number definition; only algorithmic route changes.
 
 ---
 
-## Phase F: Minimal Diff
+## 9) What We Considered
+
+Explicit mapping of optimization techniques to this codebase:
+
+### Clearly Applicable (Supported by Profiles)
+
+| Technique | Application |
+|-----------|-------------|
+| Index-based lookup | Dense-index arrays for graph algorithms |
+| Zero-copy / buffer reuse | Per-worker scratch buffers for Brandes |
+| Bounded queues + backpressure | Worker pool rather than per-pivot goroutines |
+| Topological sort reuse | Reuse Phase 1 topo order in Phase 2 helpers (slack) |
+| Memory layout (SoA vs AoS) | Array-based sigma/dist/delta improves cache locality |
+| Short-circuiting | Avoid work when metrics skipped by config/timeouts |
+
+### Possibly Useful Later
+
+| Technique | Notes |
+|-----------|-------|
+| Serialization format | JSON encoding may become significant at 20k+ issues |
+| Cross-process caching | Helps repeated `bv --robot-*` on large graphs |
+
+### Not Currently Justified
+
+| Technique | Reason |
+|-----------|--------|
+| DP / convex optimization | No hotspots resemble scheduling/allocation problems |
+| Tries / segment trees | Not the problem shape here |
+| Lock-free data structures | Contention is not the limiter; allocations/GC are |
+
+---
+
+## 10) Expected Gains
+
+### Before Optimization
+
+| Metric | Value |
+|--------|-------|
+| Allocations/op (Sample100) | 199,550 |
+| Bytes/op (Sample100) | 29.5 MB |
+| GC CPU overhead | ~45% |
+
+### After Optimization - Conservative (Buffer Pooling Only)
+
+| Metric | Value | Reduction |
+|--------|-------|-----------|
+| Allocations/op (Sample100) | ~40,000 | **80%** |
+| Bytes/op (Sample100) | ~8 MB | **73%** |
+| GC CPU overhead | ~15% | **67%** |
+| Throughput | 1.5-2x | — |
+
+### After Optimization - With Additional Caching
+
+If combined with node slice caching and localBC pooling:
+
+| Metric | Value | Reduction |
+|--------|-------|-----------|
+| Allocations/op (Sample100) | ~5,000 | **97%** |
+| Bytes/op (Sample100) | ~3 MB | **90%** |
+| GC CPU overhead | ~5% | **89%** |
+| Throughput | 3-5x | — |
+
+---
+
+## 11) Minimal Diff Summary
 
 The change is isolated to a single file:
 
@@ -343,9 +538,15 @@ If issues arise:
 
 ---
 
-## Phase G: Regression Guardrails
+## 12) Regression Guardrails
 
-### 1. Allocation Threshold Benchmark
+### 12A) Benchmarks to Watch
+
+- `pkg/analysis/BenchmarkRobotTriage_Sparse500`
+- `pkg/analysis/BenchmarkApproxBetweenness_500nodes_Sample100`
+- `pkg/analysis/BenchmarkFullAnalysis_Sparse1000`
+
+### 12B) Allocation Threshold Benchmark
 
 ```go
 func BenchmarkBrandesAllocationThreshold(b *testing.B) {
@@ -360,28 +561,17 @@ func BenchmarkBrandesAllocationThreshold(b *testing.B) {
         bc := make(map[int64]float64)
         singleSourceBetweenness(g, nodes[0], bc)
     }
-
     // After optimization: expect < 100 allocs/op (down from ~1000)
 }
 ```
 
-### 2. Golden Test Coverage
-
-Existing `TestValidateGoldenFiles` in `pkg/analysis/golden_test.go` covers:
-- Betweenness scores within 1e-6 tolerance
-- All node IDs present in output
-
-### 3. Property Test (New)
+### 12C) Property Test
 
 ```go
 func TestBetweennessOutputEquivalence(t *testing.T) {
-    // Compare pooled vs fresh allocation outputs
     issues := generateSparseGraph(100)
 
-    // Run with fresh allocation (baseline)
     baseline := computeBetweennessBaseline(issues)
-
-    // Run with pooling (optimized)
     optimized := computeBetweennessOptimized(issues)
 
     for id, baseVal := range baseline {
@@ -393,9 +583,7 @@ func TestBetweennessOutputEquivalence(t *testing.T) {
 }
 ```
 
-### 4. CI Integration
-
-Add to benchmark CI job:
+### 12D) CI Integration
 
 ```yaml
 - name: Check allocation regression
@@ -413,93 +601,17 @@ Add to benchmark CI job:
 
 ---
 
-## Expected Gains
+## 13) Success Criteria
 
-### Before Optimization
+For Change #1 (buffer pooling), "success" is defined as:
 
-| Metric | Value |
-|--------|-------|
-| Allocations/op (Sample100) | 199,550 |
-| Bytes/op (Sample100) | 29.5 MB |
-| GC CPU overhead | ~45% |
-
-### After Optimization - Conservative (Buffer Pooling Only)
-
-| Metric | Value | Reduction |
-|--------|-------|-----------|
-| Allocations/op (Sample100) | ~40,000 | **80%** |
-| Bytes/op (Sample100) | ~8 MB | **73%** |
-| GC CPU overhead | ~15% | **67%** |
-| Throughput | 1.5-2x | - |
-
-### After Optimization - With Additional Caching
-
-If combined with node slice caching and localBC pooling:
-
-| Metric | Value | Reduction |
-|--------|-------|-----------|
-| Allocations/op (Sample100) | ~5,000 | **97%** |
-| Bytes/op (Sample100) | ~3 MB | **90%** |
-| GC CPU overhead | ~5% | **89%** |
-| Throughput | 3-5x | - |
-
----
-
-## Additional Opportunities (Lower Priority)
-
-### Priority #2: Array-Based Indexing
-
-Replace `map[int64]float64` with `[]float64` indexed by node position:
-
-```go
-// Current: O(1) average, but hash overhead + GC pressure
-sigma := make(map[int64]float64)
-sigma[nodeID] = value
-
-// Proposed: O(1) guaranteed, cache-friendly, no GC pressure
-indexOf := buildNodeIndex(nodes)  // map[int64]int, built once
-sigma := make([]float64, len(nodes))
-sigma[indexOf[nodeID]] = value
-```
-
-**Trade-off**: Requires one-time index construction per graph.
-
-### Priority #3: Cached Adjacency Lists
-
-Currently, `g.From(v)` creates a new iterator each call (~19% of allocations). Cache adjacency:
-
-```go
-type cachedGraph struct {
-    *simple.DirectedGraph
-    adj map[int64][]int64  // Pre-built adjacency lists
-}
-
-func (c *cachedGraph) From(id int64) []int64 {
-    return c.adj[id]  // No allocation
-}
-```
-
-### Priority #4: Semiring Generalization
-
-PageRank, betweenness, and transitive closure can all be expressed as matrix operations over a semiring. This enables:
-- SIMD/vectorization via gonum's BLAS
-- Unified caching of matrix structure
-- Potential GPU offload for very large graphs
-
----
-
-## Conclusion
-
-This analysis identified that **~90% of memory allocations** during betweenness computation come from `singleSourceBetweenness` (71% direct + 19% iterator overhead).
-
-The proposed buffer pooling optimization:
-- ✅ Has a proven isomorphism (outputs cannot change)
-- ✅ Is a minimal diff (~65 lines, single file)
-- ✅ Has existing test coverage via golden files
-- ✅ Has clear rollback path
-- ✅ Projects **80% allocation reduction** (conservative), **97%** with additional caching
-
-**Recommendation**: Implement Priority #1 (buffer pooling), re-profile, then evaluate Priorities #2-3 based on updated baseline.
+| Criterion | Target |
+|-----------|--------|
+| alloc_space from betweenness | From ~71% to "not dominant" (<30%) |
+| GC CPU time | runtime.gcDrain no longer dominates |
+| Peak RSS (5k issues) | Drastic reduction from ~429MB |
+| p95 latency (5k issues) | Measurable improvement |
+| All tests | Green under `BV_NO_BROWSER=1 BV_TEST_MODE=1` |
 
 ---
 
@@ -523,11 +635,17 @@ go tool pprof -top cpu.prof | head -40
 # Analyze memory profile
 go tool pprof -top mem.prof | head -40
 
+# I/O profile
+strace -c -f env BV_ROBOT=1 BV_NO_BROWSER=1 BV_TEST_MODE=1 /tmp/bv_round1 --robot-triage >/dev/null
+
 # Interactive profile exploration
 go tool pprof -http=:8080 cpu.prof
+
+# Latency distribution (use Python harness from §2C)
 ```
 
 ---
 
 *Generated: 2026-01-09*
 *Author: Claude Code (performance analysis session)*
+*Hybrid: Best elements from OPUS and GPT plans*
