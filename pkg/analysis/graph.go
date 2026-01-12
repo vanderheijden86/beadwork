@@ -2,6 +2,9 @@ package analysis
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"math"
 	"sort"
@@ -118,7 +121,26 @@ type statusEntry struct {
 	State   string        `json:"state"`            // computed|approx|timeout|skipped
 	Reason  string        `json:"reason,omitempty"` // explanation when skipped/timeout/approx
 	Sample  int           `json:"sample,omitempty"` // sample size when approximate
-	Elapsed time.Duration `json:"ms,omitempty"`     // elapsed time
+	Elapsed time.Duration `json:"-"`                // serialized in ms via MarshalJSON
+}
+
+// MarshalJSON encodes Elapsed as milliseconds to match the JSON field name.
+func (s statusEntry) MarshalJSON() ([]byte, error) {
+	type out struct {
+		State   string  `json:"state"`
+		Reason  string  `json:"reason,omitempty"`
+		Sample  int     `json:"sample,omitempty"`
+		Elapsed float64 `json:"ms,omitempty"`
+	}
+	payload := out{
+		State:  s.State,
+		Reason: s.Reason,
+		Sample: s.Sample,
+	}
+	if s.Elapsed != 0 {
+		payload.Elapsed = float64(s.Elapsed) / float64(time.Millisecond)
+	}
+	return json.Marshal(payload)
 }
 
 // IsPhase2Ready returns true if Phase 2 metrics have been computed.
@@ -225,8 +247,350 @@ func (s *GraphStats) GetCriticalPathScore(id string) float64 {
 	return s.criticalPathScore[id]
 }
 
+// -----------------------------------------------------------------------------
+// Single-Value Accessor Pattern (bv-4jfr)
+//
+// These accessors provide O(1) lookups for individual values without copying
+// the entire map. Use these when you need a single value.
+//
+// Pattern:
+//   - *Value(id) (T, bool) - Returns value and existence flag
+//   - *All(fn) - Iterator over all values (caller decides when to stop)
+//
+// The older map-copy methods (PageRank(), Betweenness(), etc.) are retained
+// for backward compatibility but should be avoided in hot paths.
+// -----------------------------------------------------------------------------
+
+// PageRankValue returns the PageRank score for a single issue.
+// Returns (0, false) if the issue is not found or Phase 2 is not complete.
+// Time complexity: O(1)
+// Thread-safe: Yes (uses RLock)
+func (s *GraphStats) PageRankValue(id string) (float64, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.pageRank == nil {
+		return 0, false
+	}
+	v, ok := s.pageRank[id]
+	return v, ok
+}
+
+// PageRankAll iterates over all PageRank scores.
+// The callback receives each (id, score) pair. Return false to stop iteration.
+// Time complexity: O(n) for full iteration
+// Thread-safe: Yes (holds RLock during iteration)
+func (s *GraphStats) PageRankAll(fn func(id string, score float64) bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.pageRank == nil {
+		return
+	}
+	for id, score := range s.pageRank {
+		if !fn(id, score) {
+			return
+		}
+	}
+}
+
+// BetweennessValue returns the betweenness centrality for a single issue.
+// Returns (0, false) if the issue is not found or Phase 2 is not complete.
+// Time complexity: O(1)
+func (s *GraphStats) BetweennessValue(id string) (float64, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.betweenness == nil {
+		return 0, false
+	}
+	v, ok := s.betweenness[id]
+	return v, ok
+}
+
+// BetweennessAll iterates over all betweenness scores.
+func (s *GraphStats) BetweennessAll(fn func(id string, score float64) bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.betweenness == nil {
+		return
+	}
+	for id, score := range s.betweenness {
+		if !fn(id, score) {
+			return
+		}
+	}
+}
+
+// EigenvectorValue returns the eigenvector centrality for a single issue.
+// Returns (0, false) if the issue is not found or Phase 2 is not complete.
+func (s *GraphStats) EigenvectorValue(id string) (float64, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.eigenvector == nil {
+		return 0, false
+	}
+	v, ok := s.eigenvector[id]
+	return v, ok
+}
+
+// EigenvectorAll iterates over all eigenvector scores.
+func (s *GraphStats) EigenvectorAll(fn func(id string, score float64) bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.eigenvector == nil {
+		return
+	}
+	for id, score := range s.eigenvector {
+		if !fn(id, score) {
+			return
+		}
+	}
+}
+
+// HubValue returns the hub score for a single issue.
+// Returns (0, false) if the issue is not found or Phase 2 is not complete.
+func (s *GraphStats) HubValue(id string) (float64, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.hubs == nil {
+		return 0, false
+	}
+	v, ok := s.hubs[id]
+	return v, ok
+}
+
+// HubsAll iterates over all hub scores.
+func (s *GraphStats) HubsAll(fn func(id string, score float64) bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.hubs == nil {
+		return
+	}
+	for id, score := range s.hubs {
+		if !fn(id, score) {
+			return
+		}
+	}
+}
+
+// AuthorityValue returns the authority score for a single issue.
+// Returns (0, false) if the issue is not found or Phase 2 is not complete.
+func (s *GraphStats) AuthorityValue(id string) (float64, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.authorities == nil {
+		return 0, false
+	}
+	v, ok := s.authorities[id]
+	return v, ok
+}
+
+// AuthoritiesAll iterates over all authority scores.
+func (s *GraphStats) AuthoritiesAll(fn func(id string, score float64) bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.authorities == nil {
+		return
+	}
+	for id, score := range s.authorities {
+		if !fn(id, score) {
+			return
+		}
+	}
+}
+
+// CriticalPathValue returns the critical path score for a single issue.
+// Returns (0, false) if the issue is not found or Phase 2 is not complete.
+func (s *GraphStats) CriticalPathValue(id string) (float64, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.criticalPathScore == nil {
+		return 0, false
+	}
+	v, ok := s.criticalPathScore[id]
+	return v, ok
+}
+
+// CriticalPathAll iterates over all critical path scores.
+func (s *GraphStats) CriticalPathAll(fn func(id string, score float64) bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.criticalPathScore == nil {
+		return
+	}
+	for id, score := range s.criticalPathScore {
+		if !fn(id, score) {
+			return
+		}
+	}
+}
+
+// CoreNumberValue returns the k-core number for a single issue.
+// Returns (0, false) if the issue is not found or Phase 2 is not complete.
+func (s *GraphStats) CoreNumberValue(id string) (int, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.coreNumber == nil {
+		return 0, false
+	}
+	v, ok := s.coreNumber[id]
+	return v, ok
+}
+
+// CoreNumberAll iterates over all k-core numbers.
+func (s *GraphStats) CoreNumberAll(fn func(id string, core int) bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.coreNumber == nil {
+		return
+	}
+	for id, core := range s.coreNumber {
+		if !fn(id, core) {
+			return
+		}
+	}
+}
+
+// SlackValue returns the slack value for a single issue.
+// Returns (0, false) if the issue is not found or Phase 2 is not complete.
+func (s *GraphStats) SlackValue(id string) (float64, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.slack == nil {
+		return 0, false
+	}
+	v, ok := s.slack[id]
+	return v, ok
+}
+
+// SlackAll iterates over all slack values.
+func (s *GraphStats) SlackAll(fn func(id string, slack float64) bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.slack == nil {
+		return
+	}
+	for id, slack := range s.slack {
+		if !fn(id, slack) {
+			return
+		}
+	}
+}
+
+// IsArticulationPoint returns whether the issue is an articulation point.
+// Returns (false, false) if the issue is not found or Phase 2 is not complete.
+func (s *GraphStats) IsArticulationPoint(id string) (bool, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.articulation == nil {
+		return false, false
+	}
+	v, ok := s.articulation[id]
+	return v, ok
+}
+
+// Rank accessor Value methods
+
+// PageRankRankValue returns the PageRank rank (1-based) for a single issue.
+// Returns (0, false) if the issue is not found or Phase 2 is not complete.
+func (s *GraphStats) PageRankRankValue(id string) (int, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.pageRankRank == nil {
+		return 0, false
+	}
+	v, ok := s.pageRankRank[id]
+	return v, ok
+}
+
+// BetweennessRankValue returns the betweenness rank (1-based) for a single issue.
+func (s *GraphStats) BetweennessRankValue(id string) (int, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.betweennessRank == nil {
+		return 0, false
+	}
+	v, ok := s.betweennessRank[id]
+	return v, ok
+}
+
+// EigenvectorRankValue returns the eigenvector rank (1-based) for a single issue.
+func (s *GraphStats) EigenvectorRankValue(id string) (int, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.eigenvectorRank == nil {
+		return 0, false
+	}
+	v, ok := s.eigenvectorRank[id]
+	return v, ok
+}
+
+// HubsRankValue returns the hub rank (1-based) for a single issue.
+func (s *GraphStats) HubsRankValue(id string) (int, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.hubsRank == nil {
+		return 0, false
+	}
+	v, ok := s.hubsRank[id]
+	return v, ok
+}
+
+// AuthoritiesRankValue returns the authority rank (1-based) for a single issue.
+func (s *GraphStats) AuthoritiesRankValue(id string) (int, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.authoritiesRank == nil {
+		return 0, false
+	}
+	v, ok := s.authoritiesRank[id]
+	return v, ok
+}
+
+// CriticalPathRankValue returns the critical path rank (1-based) for a single issue.
+func (s *GraphStats) CriticalPathRankValue(id string) (int, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.criticalPathRank == nil {
+		return 0, false
+	}
+	v, ok := s.criticalPathRank[id]
+	return v, ok
+}
+
+// InDegreeRankValue returns the in-degree rank (1-based) for a single issue.
+func (s *GraphStats) InDegreeRankValue(id string) (int, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.inDegreeRank == nil {
+		return 0, false
+	}
+	v, ok := s.inDegreeRank[id]
+	return v, ok
+}
+
+// OutDegreeRankValue returns the out-degree rank (1-based) for a single issue.
+func (s *GraphStats) OutDegreeRankValue(id string) (int, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.outDegreeRank == nil {
+		return 0, false
+	}
+	v, ok := s.outDegreeRank[id]
+	return v, ok
+}
+
+// -----------------------------------------------------------------------------
+// Map Copy Accessors (Legacy)
+//
+// These methods return full copies of internal maps. They are retained for
+// backward compatibility but should be avoided in hot paths where only a
+// single value is needed. Prefer the *Value() accessors above.
+// -----------------------------------------------------------------------------
+
 // PageRank returns a copy of the PageRank map. Safe for concurrent iteration.
 // Returns an empty map if Phase 2 is not yet complete.
+//
+// Deprecated: For single-value lookups, use PageRankValue() instead.
+// For iteration, use PageRankAll(). This method copies O(n) data.
 func (s *GraphStats) PageRank() map[string]float64 {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -510,6 +874,83 @@ func NewGraphStatsForTest(
 	return stats
 }
 
+const (
+	incrementalGraphStatsCacheTTL        = 5 * time.Minute
+	incrementalGraphStatsCacheMaxEntries = 8
+)
+
+type incrementalGraphStatsCacheEntry struct {
+	stats      *GraphStats
+	insertedAt time.Time
+}
+
+var (
+	incrementalGraphStatsCacheMu sync.Mutex
+	incrementalGraphStatsCache   = make(map[string]incrementalGraphStatsCacheEntry)
+)
+
+func getIncrementalGraphStatsCache(key string) (*GraphStats, bool) {
+	now := time.Now()
+
+	incrementalGraphStatsCacheMu.Lock()
+	defer incrementalGraphStatsCacheMu.Unlock()
+
+	pruneIncrementalGraphStatsCacheLocked(now)
+
+	entry, ok := incrementalGraphStatsCache[key]
+	if !ok || entry.stats == nil {
+		return nil, false
+	}
+	if now.Sub(entry.insertedAt) > incrementalGraphStatsCacheTTL {
+		delete(incrementalGraphStatsCache, key)
+		return nil, false
+	}
+	return entry.stats, true
+}
+
+func putIncrementalGraphStatsCache(key string, stats *GraphStats) {
+	if key == "" || stats == nil {
+		return
+	}
+
+	incrementalGraphStatsCacheMu.Lock()
+	defer incrementalGraphStatsCacheMu.Unlock()
+
+	now := time.Now()
+	incrementalGraphStatsCache[key] = incrementalGraphStatsCacheEntry{
+		stats:      stats,
+		insertedAt: now,
+	}
+	pruneIncrementalGraphStatsCacheLocked(now)
+}
+
+func pruneIncrementalGraphStatsCacheLocked(now time.Time) {
+	for k, entry := range incrementalGraphStatsCache {
+		if entry.stats == nil || now.Sub(entry.insertedAt) > incrementalGraphStatsCacheTTL {
+			delete(incrementalGraphStatsCache, k)
+		}
+	}
+
+	for len(incrementalGraphStatsCache) > incrementalGraphStatsCacheMaxEntries {
+		var (
+			oldestKey string
+			oldestAt  time.Time
+			hasOldest bool
+		)
+		for k, entry := range incrementalGraphStatsCache {
+			if !hasOldest || entry.insertedAt.Before(oldestAt) {
+				oldestKey = k
+				oldestAt = entry.insertedAt
+				hasOldest = true
+			}
+		}
+		if !hasOldest || oldestKey == "" {
+			return
+		}
+		delete(incrementalGraphStatsCache, oldestKey)
+	}
+}
+
 // Analyzer encapsulates the graph logic
 type Analyzer struct {
 	g        *simple.DirectedGraph
@@ -523,6 +964,66 @@ type Analyzer struct {
 // Pass nil to use size-based automatic configuration.
 func (a *Analyzer) SetConfig(config *AnalysisConfig) {
 	a.config = config
+}
+
+func (a *Analyzer) graphStructureHash() string {
+	if a == nil || a.g == nil {
+		return "none"
+	}
+
+	nodesIt := a.g.Nodes()
+	ids := make([]string, 0, nodesIt.Len())
+	for nodesIt.Next() {
+		id, ok := a.nodeToID[nodesIt.Node().ID()]
+		if ok {
+			ids = append(ids, id)
+		}
+	}
+	sort.Strings(ids)
+
+	type edgeKey struct {
+		from string
+		to   string
+	}
+	edgesIt := a.g.Edges()
+	edges := make([]edgeKey, 0, edgesIt.Len())
+	for edgesIt.Next() {
+		e := edgesIt.Edge()
+		from := a.nodeToID[e.From().ID()]
+		to := a.nodeToID[e.To().ID()]
+		if from == "" || to == "" {
+			continue
+		}
+		edges = append(edges, edgeKey{from: from, to: to})
+	}
+	sort.Slice(edges, func(i, j int) bool {
+		if edges[i].from != edges[j].from {
+			return edges[i].from < edges[j].from
+		}
+		return edges[i].to < edges[j].to
+	})
+
+	edgesDedup := edges[:0]
+	for i := range edges {
+		if i == 0 || edges[i] != edges[i-1] {
+			edgesDedup = append(edgesDedup, edges[i])
+		}
+	}
+
+	h := sha256.New()
+	for _, id := range ids {
+		h.Write([]byte(id))
+		h.Write([]byte{0})
+	}
+	h.Write([]byte{1}) // nodes/edges separator
+	for _, e := range edgesDedup {
+		h.Write([]byte(e.from))
+		h.Write([]byte{0})
+		h.Write([]byte(e.to))
+		h.Write([]byte{0})
+	}
+
+	return hex.EncodeToString(h.Sum(nil))[:16]
 }
 
 func NewAnalyzer(issues []model.Issue) *Analyzer {
@@ -603,17 +1104,25 @@ func (a *Analyzer) AnalyzeAsyncWithConfig(ctx context.Context, config AnalysisCo
 	nodeCount := len(a.issueMap)
 	edgeCount := a.g.Edges().Len()
 
-	var cacheKey, dataHash, configHash string
+	configHash := ComputeConfigHash(&config)
+	incCacheKey := ""
+	if !robotDiskCacheEnabled() {
+		incCacheKey = a.graphStructureHash() + "|" + configHash
+		if cached, ok := getIncrementalGraphStatsCache(incCacheKey); ok {
+			return cached
+		}
+	}
+
+	var robotCacheKey, dataHash string
 	if robotDiskCacheEnabled() {
 		issues := make([]model.Issue, 0, len(a.issueMap))
 		for _, issue := range a.issueMap {
 			issues = append(issues, issue)
 		}
 		dataHash = ComputeDataHash(issues)
-		configHash = ComputeConfigHash(&config)
-		cacheKey = dataHash + "|" + configHash
+		robotCacheKey = dataHash + "|" + configHash
 
-		if cached, ok := getRobotDiskCachedStats(cacheKey); ok {
+		if cached, ok := getRobotDiskCachedStats(robotCacheKey); ok {
 			return cached
 		}
 	}
@@ -665,8 +1174,12 @@ func (a *Analyzer) AnalyzeAsyncWithConfig(ctx context.Context, config AnalysisCo
 	// Phase 1: Fast metrics (degree centrality, topo sort, density)
 	a.computePhase1(stats)
 
+	if incCacheKey != "" {
+		putIncrementalGraphStatsCache(incCacheKey, stats)
+	}
+
 	// Phase 2: Expensive metrics in background goroutine
-	go a.computePhase2(ctx, stats, config, cacheKey, dataHash, configHash)
+	go a.computePhase2(ctx, stats, config, robotCacheKey, dataHash, configHash)
 
 	return stats
 }
@@ -1218,17 +1731,22 @@ func (a *Analyzer) computeHeights(sorted []graph.Node) map[string]float64 {
 
 type undirectedAdjacency struct {
 	nodes     []int64
-	neighbors map[int64][]int64
+	neighbors [][]int64
 }
 
 func newUndirectedAdjacency(g *simple.DirectedGraph) undirectedAdjacency {
 	nodesIt := g.Nodes()
 	nodes := make([]int64, 0, nodesIt.Len())
+	var maxID int64
 	for nodesIt.Next() {
-		nodes = append(nodes, nodesIt.Node().ID())
+		id := nodesIt.Node().ID()
+		nodes = append(nodes, id)
+		if id > maxID {
+			maxID = id
+		}
 	}
 
-	neighborSets := make(map[int64]map[int64]struct{}, len(nodes))
+	neighbors := make([][]int64, int(maxID)+1)
 	edges := g.Edges()
 	for edges.Next() {
 		e := edges.Edge()
@@ -1237,27 +1755,28 @@ func newUndirectedAdjacency(g *simple.DirectedGraph) undirectedAdjacency {
 			continue
 		}
 
-		if neighborSets[from] == nil {
-			neighborSets[from] = make(map[int64]struct{})
-		}
-		neighborSets[from][to] = struct{}{}
-
-		if neighborSets[to] == nil {
-			neighborSets[to] = make(map[int64]struct{})
-		}
-		neighborSets[to][from] = struct{}{}
+		neighbors[from] = append(neighbors[from], to)
+		neighbors[to] = append(neighbors[to], from)
 	}
 
-	neighbors := make(map[int64][]int64, len(neighborSets))
-	for id, set := range neighborSets {
-		if len(set) == 0 {
+	// De-dup (two directed edges may map to the same undirected neighbor).
+	for _, id := range nodes {
+		nbrs := neighbors[id]
+		if len(nbrs) < 2 {
 			continue
 		}
-		list := make([]int64, 0, len(set))
-		for nbr := range set {
-			list = append(list, nbr)
+		sort.Slice(nbrs, func(i, j int) bool { return nbrs[i] < nbrs[j] })
+		writeIdx := 1
+		last := nbrs[0]
+		for _, v := range nbrs[1:] {
+			if v == last {
+				continue
+			}
+			nbrs[writeIdx] = v
+			writeIdx++
+			last = v
 		}
-		neighbors[id] = list
+		neighbors[id] = nbrs[:writeIdx]
 	}
 
 	return undirectedAdjacency{
@@ -1267,11 +1786,14 @@ func newUndirectedAdjacency(g *simple.DirectedGraph) undirectedAdjacency {
 }
 
 func (a undirectedAdjacency) neighborsOf(id int64) []int64 {
+	if id < 0 || int(id) >= len(a.neighbors) {
+		return nil
+	}
 	return a.neighbors[id]
 }
 
 func (a undirectedAdjacency) degree(id int64) int {
-	return len(a.neighbors[id])
+	return len(a.neighborsOf(id))
 }
 
 // computeCoreAndArticulation builds an undirected view to derive k-core numbers and articulation points.
@@ -1302,57 +1824,73 @@ func (a *Analyzer) computeSlack(order []string) map[string]float64 {
 		return nil
 	}
 
-	distFromStart := make(map[string]int, len(order))
-	distToEnd := make(map[string]int, len(order))
+	// Node IDs are created via g.NewNode() during analyzer build and are
+	// densely allocated (0..n-1). Use slice-based indexing to avoid per-run map
+	// allocations and repeated prereq slice building.
+	nodeOrder := make([]int, 0, len(order))
+	maxNode := -1
 	for _, id := range order {
-		distFromStart[id] = 0
-		distToEnd[id] = 0
+		nodeID, ok := a.idToNode[id]
+		if !ok {
+			continue
+		}
+		n := int(nodeID)
+		nodeOrder = append(nodeOrder, n)
+		if n > maxNode {
+			maxNode = n
+		}
+	}
+	if len(nodeOrder) == 0 || maxNode < 0 {
+		return nil
 	}
 
-	// Helper for prerequisites (g.From) - items this node depends on
-	prereqDeps := func(id string) []int64 {
-		nID := a.idToNode[id]
-		from := a.g.From(nID)
-		var res []int64
+	size := maxNode + 1
+	prereqs := make([][]int, size)
+	for _, node := range nodeOrder {
+		from := a.g.From(int64(node))
 		for from.Next() {
-			res = append(res, from.Node().ID())
+			prereqs[node] = append(prereqs[node], int(from.Node().ID()))
 		}
-		return res
 	}
+
+	distFromStart := make([]int, size)
+	distToEnd := make([]int, size)
 
 	// Forward pass: longest distance from any start to each node
 	// Propagate from u to v (u -> v): dist[v] = max(dist[v], dist[u] + 1)
-	for i := len(order) - 1; i >= 0; i-- {
-		id := order[i]
-		for _, dep := range prereqDeps(id) {
-			depID := a.nodeToID[dep]
-			if distFromStart[depID] < distFromStart[id]+1 {
-				distFromStart[depID] = distFromStart[id] + 1
+	for i := len(nodeOrder) - 1; i >= 0; i-- {
+		node := nodeOrder[i]
+		for _, dep := range prereqs[node] {
+			if distFromStart[dep] < distFromStart[node]+1 {
+				distFromStart[dep] = distFromStart[node] + 1
 			}
 		}
 	}
 
 	// Reverse pass: longest distance from node to any end
 	// Propagate from v to u (u -> v): dist[u] = max(dist[u], dist[v] + 1)
-	for _, id := range order {
-		for _, dep := range prereqDeps(id) {
-			depID := a.nodeToID[dep]
-			if distToEnd[id] < distToEnd[depID]+1 {
-				distToEnd[id] = distToEnd[depID] + 1
+	for _, node := range nodeOrder {
+		for _, dep := range prereqs[node] {
+			if distToEnd[node] < distToEnd[dep]+1 {
+				distToEnd[node] = distToEnd[dep] + 1
 			}
 		}
 	}
 
 	longest := 0
-	for _, id := range order {
-		if d := distFromStart[id] + distToEnd[id]; d > longest {
+	for _, node := range nodeOrder {
+		if d := distFromStart[node] + distToEnd[node]; d > longest {
 			longest = d
 		}
 	}
 
-	slack := make(map[string]float64, len(order))
-	for _, id := range order {
-		slack[id] = float64(longest - distFromStart[id] - distToEnd[id])
+	slack := make(map[string]float64, len(nodeOrder))
+	for _, node := range nodeOrder {
+		id, ok := a.nodeToID[int64(node)]
+		if !ok {
+			continue
+		}
+		slack[id] = float64(longest - distFromStart[node] - distToEnd[node])
 	}
 	return slack
 }
@@ -1452,11 +1990,15 @@ func computeKCore(adj undirectedAdjacency) map[int64]int {
 
 // findArticulationPoints runs Tarjan to find cut vertices in an undirected graph.
 func findArticulationPoints(adj undirectedAdjacency) map[int64]bool {
+	if len(adj.nodes) == 0 {
+		return nil
+	}
+
 	var timeIdx int
-	disc := make(map[int64]int)
-	low := make(map[int64]int)
-	parent := make(map[int64]int64)
-	ap := make(map[int64]bool)
+	disc := make([]int, len(adj.neighbors))
+	low := make([]int, len(adj.neighbors))
+	parent := make([]int64, len(adj.neighbors))
+	ap := make([]bool, len(adj.neighbors))
 
 	const noParent int64 = -1
 
@@ -1493,13 +2035,20 @@ func findArticulationPoints(adj undirectedAdjacency) map[int64]bool {
 			dfs(id)
 		}
 	}
-	return ap
+
+	out := make(map[int64]bool)
+	for _, id := range adj.nodes {
+		if ap[id] {
+			out[id] = true
+		}
+	}
+	return out
 }
 
 // GetActionableIssues returns issues that can be worked on immediately.
 // An issue is actionable if:
-// 1. It is not closed
-// 2. All its blocking dependencies (type "blocks") are closed
+// 1. It is not closed or tombstone
+// 2. All its blocking dependencies (type "blocks") are closed or tombstone
 // Missing blockers don't block (graceful degradation).
 // Returns list sorted by ID for determinism.
 func (a *Analyzer) GetActionableIssues() []model.Issue {
@@ -1514,7 +2063,7 @@ func (a *Analyzer) GetActionableIssues() []model.Issue {
 
 	for _, id := range ids {
 		issue := a.issueMap[id]
-		if issue.Status == model.StatusClosed {
+		if isClosedLikeStatus(issue.Status) {
 			continue
 		}
 
@@ -1529,7 +2078,7 @@ func (a *Analyzer) GetActionableIssues() []model.Issue {
 				continue
 			}
 
-			if blocker.Status != model.StatusClosed {
+			if !isClosedLikeStatus(blocker.Status) {
 				isBlocked = true
 				break
 			}
@@ -1580,7 +2129,7 @@ func (a *Analyzer) GetOpenBlockers(issueID string) []string {
 	for _, dep := range issue.Dependencies {
 		if dep != nil && dep.Type.IsBlocking() {
 			if blocker, exists := a.issueMap[dep.DependsOnID]; exists {
-				if blocker.Status != model.StatusClosed {
+				if !isClosedLikeStatus(blocker.Status) {
 					openBlockers = append(openBlockers, dep.DependsOnID)
 				}
 			}
@@ -1728,7 +2277,7 @@ func (a *Analyzer) GetBlockerChain(issueID string) *BlockerChainResult {
 func (a *Analyzer) countBlockedBy(issueID string) int {
 	count := 0
 	for _, issue := range a.issueMap {
-		if issue.Status == model.StatusClosed {
+		if isClosedLikeStatus(issue.Status) {
 			continue
 		}
 		for _, dep := range issue.Dependencies {
@@ -1755,9 +2304,28 @@ func computePageRank(g graph.Directed, damp, tol float64) map[int64]float64 {
 		tol = 1e-6
 	}
 
-	indexOf := make(map[int64]int, len(nodes))
-	for i, n := range nodes {
-		indexOf[n.ID()] = i
+	// In this codebase, node IDs are densely allocated by gonum (0..n-1), so we
+	// can avoid map-based indexing. Keep a fallback slice map for safety.
+	dense := nodes[len(nodes)-1].ID() == int64(len(nodes)-1)
+	if dense {
+		for i, n := range nodes {
+			if n.ID() != int64(i) {
+				dense = false
+				break
+			}
+		}
+	}
+
+	var idToIndex []int
+	if !dense {
+		maxID := nodes[len(nodes)-1].ID()
+		idToIndex = make([]int, int(maxID)+1)
+		for i := range idToIndex {
+			idToIndex[i] = -1
+		}
+		for i, n := range nodes {
+			idToIndex[int(n.ID())] = i
+		}
 	}
 
 	out := make([][]int, len(nodes))
@@ -1769,12 +2337,17 @@ func computePageRank(g graph.Directed, damp, tol float64) map[int64]float64 {
 			continue
 		}
 
-		out[j] = make([]int, 0, len(to))
-		for _, v := range to {
-			if idx, ok := indexOf[v.ID()]; ok {
-				out[j] = append(out[j], idx)
+		adj := make([]int, len(to))
+		if dense {
+			for k, v := range to {
+				adj[k] = int(v.ID())
+			}
+		} else {
+			for k, v := range to {
+				adj[k] = idToIndex[int(v.ID())]
 			}
 		}
+		out[j] = adj
 	}
 
 	n := float64(len(nodes))
@@ -1833,48 +2406,64 @@ func computePageRank(g graph.Directed, damp, tol float64) map[int64]float64 {
 
 // computeEigenvector runs a simple power-iteration to estimate eigenvector centrality.
 func computeEigenvector(g graph.Directed) map[int64]float64 {
-	nodes := g.Nodes()
-	var nodeList []graph.Node
-	for nodes.Next() {
-		nodeList = append(nodeList, nodes.Node())
-	}
-	n := len(nodeList)
-	if n == 0 {
-		return nil
-	}
-
-	// Sort nodes by ID for deterministic iteration order
+	nodeList := graph.NodesOf(g.Nodes())
 	sort.Slice(nodeList, func(i, j int) bool {
 		return nodeList[i].ID() < nodeList[j].ID()
 	})
-
-	// Pre-calculate and sort incoming neighbors for every node
-	// This avoids allocating and sorting inside the hot loop
-	incomingMap := make(map[int64][]int, n)
-	index := make(map[int64]int, n)
-	for i, node := range nodeList {
-		index[node.ID()] = i
+	if len(nodeList) == 0 {
+		return nil
 	}
 
-	for _, node := range nodeList {
-		var neighbors []graph.Node
-		incoming := g.To(node.ID())
-		for incoming.Next() {
-			neighbors = append(neighbors, incoming.Node())
+	// In this codebase, node IDs are densely allocated by gonum (0..n-1), so we
+	// can avoid map-based indexing. Keep a fallback slice map for safety.
+	dense := nodeList[len(nodeList)-1].ID() == int64(len(nodeList)-1)
+	if dense {
+		for i, n := range nodeList {
+			if n.ID() != int64(i) {
+				dense = false
+				break
+			}
 		}
-		// Deterministic order for summation
-		sort.Slice(neighbors, func(a, b int) bool {
-			return neighbors[a].ID() < neighbors[b].ID()
+	}
+
+	var idToIndex []int
+	if !dense {
+		maxID := nodeList[len(nodeList)-1].ID()
+		idToIndex = make([]int, int(maxID)+1)
+		for i := range idToIndex {
+			idToIndex[i] = -1
+		}
+		for i, n := range nodeList {
+			idToIndex[int(n.ID())] = i
+		}
+	}
+
+	// Pre-calculate incoming neighbor indices for every node.
+	incomingIdx := make([][]int, len(nodeList))
+	for i, node := range nodeList {
+		incoming := graph.NodesOf(g.To(node.ID()))
+		sort.Slice(incoming, func(a, b int) bool {
+			return incoming[a].ID() < incoming[b].ID()
 		})
 
-		// Store indices directly to avoid map lookups in loop
-		indices := make([]int, len(neighbors))
-		for k, neighbor := range neighbors {
-			indices[k] = index[neighbor.ID()]
+		if len(incoming) == 0 {
+			continue
 		}
-		incomingMap[node.ID()] = indices
+
+		indices := make([]int, len(incoming))
+		if dense {
+			for k, nbr := range incoming {
+				indices[k] = int(nbr.ID())
+			}
+		} else {
+			for k, nbr := range incoming {
+				indices[k] = idToIndex[int(nbr.ID())]
+			}
+		}
+		incomingIdx[i] = indices
 	}
 
+	n := len(nodeList)
 	vec := make([]float64, n)
 	for i := range vec {
 		vec[i] = 1.0 / float64(n)
@@ -1886,9 +2475,8 @@ func computeEigenvector(g graph.Directed) map[int64]float64 {
 		for i := range work {
 			work[i] = 0
 		}
-		for i, node := range nodeList {
-			// Use pre-calculated sorted indices
-			for _, j := range incomingMap[node.ID()] {
+		for i := range nodeList {
+			for _, j := range incomingIdx[i] {
 				work[i] += vec[j]
 			}
 		}
