@@ -286,7 +286,8 @@ func buildStyleFromTheme(theme Theme, isDark bool) ansi.StyleConfig {
 			BlockPrefix: "• ",
 		},
 		Enumeration: ansi.StylePrimitive{
-			Color: stringPtr(inProgressColor),
+			Color:       stringPtr(inProgressColor),
+			BlockPrefix: ". ",
 		},
 		Task: ansi.StyleTask{
 			Ticked:   "[✓] ",

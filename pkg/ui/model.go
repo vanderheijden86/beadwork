@@ -5374,7 +5374,8 @@ func (m *Model) renderFooter() string {
 				Padding(0, 1)
 			text = "⚠ worker unresponsive"
 
-		case state == WorkerProcessing:
+		case state == WorkerProcessing && m.backgroundWorker.ProcessingDuration() >= 250*time.Millisecond:
+			// Only show spinner after grace period to avoid flicker for quick dedup operations
 			style = lipgloss.NewStyle().
 				Background(ColorBgHighlight).
 				Foreground(ColorInfo).

@@ -938,6 +938,17 @@ func (w *BackgroundWorker) State() WorkerState {
 	return w.state
 }
 
+// ProcessingDuration returns how long the worker has been in the processing state.
+// Returns 0 if not currently processing.
+func (w *BackgroundWorker) ProcessingDuration() time.Duration {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	if w.state != WorkerProcessing || w.processingStart.IsZero() {
+		return 0
+	}
+	return time.Since(w.processingStart)
+}
+
 // processLoop watches for file changes and triggers processing.
 func (w *BackgroundWorker) processLoop(loopCtx context.Context, done chan struct{}) {
 	defer close(done)
