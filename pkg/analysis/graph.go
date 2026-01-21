@@ -1166,11 +1166,13 @@ func (it *compactEdges) Reset() {
 
 // Analyzer encapsulates the graph logic
 type Analyzer struct {
-	g        directedGraph
-	idToNode map[string]int64
-	nodeToID map[int64]string
-	issueMap map[string]model.Issue
-	config   *AnalysisConfig // Optional custom config, nil means use size-based defaults
+	g                directedGraph
+	idToNode         map[string]int64
+	nodeToID         map[int64]string
+	issueMap         map[string]model.Issue
+	blockerCounts    []int
+	blockerCountsMax int
+	config           *AnalysisConfig // Optional custom config, nil means use size-based defaults
 }
 
 // SetConfig sets a custom analysis configuration.
@@ -1245,6 +1247,7 @@ func NewAnalyzer(issues []model.Issue) *Analyzer {
 	idToNode := make(map[string]int64, len(issues))
 	nodeToID := make(map[int64]string, len(issues))
 	issueMap := make(map[string]model.Issue, len(issues))
+	blockerCounts := make([]int, len(issues))
 
 	// 1. Add Nodes
 	for idx, issue := range issues {
@@ -1284,6 +1287,10 @@ func NewAnalyzer(issues []model.Issue) *Analyzer {
 			if !exists {
 				continue
 			}
+			// Count all blocking dependencies (including duplicates) for impact scoring.
+			if v >= 0 && int(v) < len(blockerCounts) {
+				blockerCounts[v]++
+			}
 			if seenByBlocker[v] == epoch {
 				continue
 			}
@@ -1294,11 +1301,20 @@ func NewAnalyzer(issues []model.Issue) *Analyzer {
 		}
 	}
 
+	maxBlockers := 0
+	for _, count := range blockerCounts {
+		if count > maxBlockers {
+			maxBlockers = count
+		}
+	}
+
 	return &Analyzer{
-		g:        g,
-		idToNode: idToNode,
-		nodeToID: nodeToID,
-		issueMap: issueMap,
+		g:                g,
+		idToNode:         idToNode,
+		nodeToID:         nodeToID,
+		issueMap:         issueMap,
+		blockerCounts:    blockerCounts,
+		blockerCountsMax: maxBlockers,
 	}
 }
 

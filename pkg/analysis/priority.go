@@ -112,27 +112,13 @@ func (a *Analyzer) ComputeImpactScoresFromStats(stats *GraphStats, now time.Time
 		criticalPath = stats.CriticalPathScore()
 	}
 
-	// Precompute blocker counts directly from dependencies to avoid relying on graph direction nuances.
-	blockerCounts := make(map[string]int)
-	for id := range a.issueMap {
-		blockerCounts[id] = 0
-	}
-	for _, issue := range a.issueMap {
-		for _, dep := range issue.Dependencies {
-			if dep == nil || !dep.Type.IsBlocking() {
-				continue
-			}
-			if _, exists := a.issueMap[dep.DependsOnID]; !exists {
-				continue
-			}
-			blockerCounts[dep.DependsOnID]++
-		}
-	}
+	// Precomputed blocker counts (computed in NewAnalyzer for impact scoring).
+	blockerCounts := a.blockerCounts
+	maxBlockers := a.blockerCountsMax
 
 	// Find max values for normalization
 	maxPR := findMax(pageRank)
 	maxBW := findMax(betweenness)
-	maxBlockers := findMaxInt(blockerCounts)
 
 	// Compute median estimated minutes for issues without estimates
 	medianMinutes := a.computeMedianEstimatedMinutes()
@@ -149,7 +135,12 @@ func (a *Analyzer) ComputeImpactScoresFromStats(stats *GraphStats, now time.Time
 		// Normalize metrics to 0-1
 		prNorm := normalize(pageRank[id], maxPR)
 		bwNorm := normalize(betweenness[id], maxBW)
-		blockerNorm := normalizeInt(blockerCounts[id], maxBlockers)
+		blockerNorm := 0.0
+		if nodeID, ok := a.idToNode[id]; ok {
+			if nodeID >= 0 && int(nodeID) < len(blockerCounts) {
+				blockerNorm = normalizeInt(blockerCounts[nodeID], maxBlockers)
+			}
+		}
 		stalenessNorm := computeStaleness(issue.UpdatedAt, now)
 		priorityNorm := computePriorityBoost(issue.Priority)
 
@@ -310,16 +301,6 @@ func findMax(m map[string]float64) float64 {
 }
 
 // findMaxInt finds the maximum int value in a map
-func findMaxInt(m map[string]int) int {
-	max := 0
-	for _, v := range m {
-		if v > max {
-			max = v
-		}
-	}
-	return max
-}
-
 // computeMedianEstimatedMinutes calculates the median estimated_minutes across all issues
 func (a *Analyzer) computeMedianEstimatedMinutes() int {
 	var estimates []int
