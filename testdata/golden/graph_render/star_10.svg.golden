@@ -8,7 +8,7 @@
 <text x="32" y="44" style="fill:#111111;font-size:16px;font-family:monospace;font-weight:bold" >golden</text>
 <text x="32" y="64" style="fill:#666666;font-size:13px;font-family:monospace" >data_hash: golden</text>
 <text x="32" y="84" style="fill:#666666;font-size:13px;font-family:monospace" >nodes: 10  edges: 9</text>
-<text x="32" y="104" style="fill:#666666;font-size:13px;font-family:monospace" >top bottleneck: n/a</text>
+<text x="32" y="104" style="fill:#666666;font-size:13px;font-family:monospace" >top bottleneck: n0 (0.00)</text>
 <rect x="542" y="24" width="180" height="96" rx="10" ry="10" style="fill:#eeeeee;stroke:#222222;stroke-width:1" />
 <text x="554" y="42" style="fill:#111111;font-size:13px;font-family:monospace;font-weight:bold" >Legend</text>
 <rect x="554" y="52" width="14" height="14" rx="3" ry="3" style="fill:#c8e6c9;stroke:#222222;stroke-width:1" />

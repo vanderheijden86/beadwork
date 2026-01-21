@@ -232,7 +232,12 @@ func buildLayout(opts GraphSnapshotOptions) layoutResult {
 	}
 
 	// summary
-	topBottleneck := topByMetric(opts.Stats.Betweenness())
+	// Collect all node IDs for fallback when betweenness is nil/empty
+	allNodeIDs := make([]string, 0, len(nodes))
+	for _, n := range nodes {
+		allNodeIDs = append(allNodeIDs, n.ID)
+	}
+	topBottleneck := topByMetricWithFallback(opts.Stats.Betweenness(), allNodeIDs)
 	title := opts.Title
 	if strings.TrimSpace(title) == "" {
 		title = "Graph Snapshot"
@@ -269,6 +274,26 @@ func topByMetric(m map[string]float64) string {
 		return "n/a"
 	}
 	return fmt.Sprintf("%s (%.2f)", bestID, bestVal)
+}
+
+// topByMetricWithFallback returns the top entry from the metric map, or if the
+// map is nil/empty, falls back to the alphabetically first node from fallbackIDs
+// with a zero score. This ensures we show a "zero-score leader" instead of "n/a"
+// when all nodes have zero betweenness (e.g., star topology graphs).
+func topByMetricWithFallback(m map[string]float64, fallbackIDs []string) string {
+	result := topByMetric(m)
+	if result != "n/a" {
+		return result
+	}
+
+	// Metric map was nil or empty; use fallback to show zero-score leader
+	if len(fallbackIDs) == 0 {
+		return "n/a"
+	}
+
+	// Find alphabetically first node ID
+	sort.Strings(fallbackIDs)
+	return fmt.Sprintf("%s (0.00)", fallbackIDs[0])
 }
 
 // --- rendering -------------------------------------------------------------
