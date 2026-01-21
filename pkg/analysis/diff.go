@@ -145,14 +145,16 @@ func CompareSnapshots(from, to *Snapshot) *SnapshotDiff {
 		ToRevision:    to.Revision,
 	}
 
-	// Build issue maps for quick lookup
-	fromMap := make(map[string]model.Issue)
-	for _, issue := range from.Issues {
+	// Build issue maps for quick lookup (use pointers to avoid copying structs)
+	fromMap := make(map[string]*model.Issue, len(from.Issues))
+	for i := range from.Issues {
+		issue := &from.Issues[i]
 		fromMap[issue.ID] = issue
 	}
 
-	toMap := make(map[string]model.Issue)
-	for _, issue := range to.Issues {
+	toMap := make(map[string]*model.Issue, len(to.Issues))
+	for i := range to.Issues {
+		issue := &to.Issues[i]
 		toMap[issue.ID] = issue
 	}
 
@@ -160,20 +162,20 @@ func CompareSnapshots(from, to *Snapshot) *SnapshotDiff {
 	for id, toIssue := range toMap {
 		fromIssue, existed := fromMap[id]
 		if !existed {
-			diff.NewIssues = append(diff.NewIssues, toIssue)
+			diff.NewIssues = append(diff.NewIssues, *toIssue)
 			continue
 		}
 
 		// Compute full change set once to reuse below.
-		changes := detectChanges(fromIssue, toIssue)
+		changes := detectChanges(*fromIssue, *toIssue)
 
 		// Check for status changes
 		isStatusChange := false
 		if !isClosedLikeStatus(fromIssue.Status) && isClosedLikeStatus(toIssue.Status) {
-			diff.ClosedIssues = append(diff.ClosedIssues, toIssue)
+			diff.ClosedIssues = append(diff.ClosedIssues, *toIssue)
 			isStatusChange = true
 		} else if isClosedLikeStatus(fromIssue.Status) && !isClosedLikeStatus(toIssue.Status) {
-			diff.ReopenedIssues = append(diff.ReopenedIssues, toIssue)
+			diff.ReopenedIssues = append(diff.ReopenedIssues, *toIssue)
 			isStatusChange = true
 		}
 
@@ -194,8 +196,8 @@ func CompareSnapshots(from, to *Snapshot) *SnapshotDiff {
 					IssueID:  id,
 					Title:    toIssue.Title,
 					Changes:  nonStatusChanges,
-					OldIssue: fromIssue,
-					NewIssue: toIssue,
+					OldIssue: *fromIssue,
+					NewIssue: *toIssue,
 				})
 			}
 		} else if len(changes) > 0 {
@@ -203,8 +205,8 @@ func CompareSnapshots(from, to *Snapshot) *SnapshotDiff {
 				IssueID:  id,
 				Title:    toIssue.Title,
 				Changes:  changes,
-				OldIssue: fromIssue,
-				NewIssue: toIssue,
+				OldIssue: *fromIssue,
+				NewIssue: *toIssue,
 			})
 		}
 	}
@@ -212,7 +214,7 @@ func CompareSnapshots(from, to *Snapshot) *SnapshotDiff {
 	// Find removed issues
 	for id, fromIssue := range fromMap {
 		if _, exists := toMap[id]; !exists {
-			diff.RemovedIssues = append(diff.RemovedIssues, fromIssue)
+			diff.RemovedIssues = append(diff.RemovedIssues, *fromIssue)
 		}
 	}
 
