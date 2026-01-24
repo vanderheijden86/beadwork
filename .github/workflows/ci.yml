@@ -80,7 +80,7 @@ jobs:
             github.com/Dicklesworthstone/beads_viewer/pkg/ui) req=55 ;;
             github.com/Dicklesworthstone/beads_viewer/pkg/loader) req=80 ;;
             github.com/Dicklesworthstone/beads_viewer/pkg/updater) req=55 ;;
-            github.com/Dicklesworthstone/beads_viewer/pkg/watcher) req=80 ;;
+            github.com/Dicklesworthstone/beads_viewer/pkg/watcher) req=60 ;;
             github.com/Dicklesworthstone/beads_viewer/pkg/workspace) req=85 ;;
           esac
           if [ -z "$req" ]; then
