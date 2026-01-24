@@ -290,8 +290,11 @@ func (e *SQLiteExporter) insertComments(db *sql.DB) error {
 			if comment == nil {
 				continue
 			}
+			// Use composite ID (issue_id:comment_id) to avoid UNIQUE constraint
+			// violations when exporting workspaces with multiple repos (bv-76)
+			compositeID := fmt.Sprintf("%s:%d", issue.ID, comment.ID)
 			_, err := stmt.Exec(
-				comment.ID,
+				compositeID,
 				issue.ID,
 				comment.Author,
 				comment.Text,

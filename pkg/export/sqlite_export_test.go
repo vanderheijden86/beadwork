@@ -427,9 +427,9 @@ func TestExport_WithComments(t *testing.T) {
 		t.Errorf("Expected 2 comments, got %d", count)
 	}
 
-	// Verify comment content
+	// Verify comment content (id is now composite: issue_id:comment_id)
 	var author, text string
-	if err := db.QueryRow(`SELECT author, text FROM comments WHERE id = 1`).Scan(&author, &text); err != nil {
+	if err := db.QueryRow(`SELECT author, text FROM comments WHERE id = ?`, "comments-1:1").Scan(&author, &text); err != nil {
 		t.Fatalf("Query comment 1 failed: %v", err)
 	}
 	if author != "alice" || text != "First comment" {
