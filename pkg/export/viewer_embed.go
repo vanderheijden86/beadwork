@@ -3,11 +3,13 @@ package export
 
 import (
 	"embed"
+	"fmt"
 	"html"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 // ViewerAssetsFS embeds the viewer_assets directory for static site export.
@@ -47,9 +49,14 @@ func CopyEmbeddedAssets(outputDir, title string) error {
 			return err
 		}
 
-		// Special handling for index.html to replace the title
-		if relPath == "index.html" && title != "" {
-			contentStr := replaceTitle(string(content), title)
+		// Special handling for index.html to replace the title and add cache-busting
+		if relPath == "index.html" {
+			contentStr := string(content)
+			if title != "" {
+				contentStr = replaceTitle(contentStr, title)
+			}
+			// Always add cache-busting to prevent CDN from serving stale JS files
+			contentStr = AddScriptCacheBusting(contentStr)
 			content = []byte(contentStr)
 		}
 
@@ -79,6 +86,37 @@ func replaceTitle(content, title string) string {
 
 	// Replace title in h1 header
 	content = strings.Replace(content, `<h1 class="text-xl font-semibold">Beads Viewer</h1>`, `<h1 class="text-xl font-semibold">`+safeTitle+`</h1>`, 1)
+
+	return content
+}
+
+// AddScriptCacheBusting adds a cache-busting query parameter to script src attributes.
+// This ensures browsers fetch fresh JS files after deployments, preventing stale code
+// from being served by CDN caches (which was causing the "Test Issue 1/2/3" bug where
+// old cached viewer.js would use OPFS-cached stale data).
+func AddScriptCacheBusting(content string) string {
+	// Generate timestamp for cache-busting
+	cacheBuster := fmt.Sprintf("?v=%d", time.Now().Unix())
+
+	// List of our JS files that need cache-busting (not vendor files which rarely change)
+	jsFiles := []string{
+		"viewer.js",
+		"charts.js",
+		"graph.js",
+		"hybrid_scorer.js",
+		"wasm_loader.js",
+	}
+
+	for _, jsFile := range jsFiles {
+		// Replace both src="file.js" and src='file.js' patterns
+		oldSrc := fmt.Sprintf(`src="%s"`, jsFile)
+		newSrc := fmt.Sprintf(`src="%s%s"`, jsFile, cacheBuster)
+		content = strings.Replace(content, oldSrc, newSrc, -1)
+
+		oldSrcSingle := fmt.Sprintf(`src='%s'`, jsFile)
+		newSrcSingle := fmt.Sprintf(`src='%s%s'`, jsFile, cacheBuster)
+		content = strings.Replace(content, oldSrcSingle, newSrcSingle, -1)
+	}
 
 	return content
 }

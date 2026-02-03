@@ -5528,9 +5528,9 @@ func copyViewerAssets(outputDir, title string) error {
 		src := filepath.Join(assetsDir, file)
 		dst := filepath.Join(outputDir, file)
 
-		// Special handling for index.html to replace title
-		if file == "index.html" && title != "" {
-			if err := copyFileWithTitleReplacement(src, dst, title); err != nil {
+		// Special handling for index.html to replace title and add cache-busting
+		if file == "index.html" {
+			if err := copyFileWithTitleAndCacheBusting(src, dst, title); err != nil {
 				return fmt.Errorf("copy %s: %w", file, err)
 			}
 			continue
@@ -5640,15 +5640,22 @@ func copyFile(src, dst string) error {
 }
 
 // copyFileWithTitleReplacement copies a file while replacing the default title.
-func copyFileWithTitleReplacement(src, dst, title string) error {
+func copyFileWithTitleAndCacheBusting(src, dst, title string) error {
 	content, err := os.ReadFile(src)
 	if err != nil {
 		return err
 	}
 
-	// Replace title in <title> tag and in the h1 header
-	result := strings.Replace(string(content), "<title>Beads Viewer</title>", "<title>"+title+"</title>", 1)
-	result = strings.Replace(result, `<h1 class="text-xl font-semibold">Beads Viewer</h1>`, `<h1 class="text-xl font-semibold">`+title+`</h1>`, 1)
+	result := string(content)
+
+	// Replace title in <title> tag and in the h1 header (if title provided)
+	if title != "" {
+		result = strings.Replace(result, "<title>Beads Viewer</title>", "<title>"+title+"</title>", 1)
+		result = strings.Replace(result, `<h1 class="text-xl font-semibold">Beads Viewer</h1>`, `<h1 class="text-xl font-semibold">`+title+`</h1>`, 1)
+	}
+
+	// Always add cache-busting to script tags to prevent CDN from serving stale JS files
+	result = export.AddScriptCacheBusting(result)
 
 	return os.WriteFile(dst, []byte(result), 0644)
 }
