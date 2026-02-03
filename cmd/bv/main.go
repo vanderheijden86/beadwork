@@ -6268,6 +6268,12 @@ func findBetterPagesSource(config *export.WizardConfig, current pagesSource, bea
 	currentCount := len(current.Issues)
 	currentDiff := absInt(currentCount - expected)
 
+	repoHint := strings.ToLower(strings.TrimSpace(config.RepoName))
+	altHint := repoHint
+	if strings.HasPrefix(altHint, "beads-for-") {
+		altHint = strings.TrimPrefix(altHint, "beads-for-")
+	}
+
 	roots := []string{}
 	seenRoots := map[string]bool{}
 	addRoot := func(root string) {
@@ -6306,6 +6312,9 @@ func findBetterPagesSource(config *export.WizardConfig, current pagesSource, bea
 	bestDir := ""
 	bestCount := 0
 	bestDiff := 0
+	bestHintDir := ""
+	bestHintCount := 0
+	bestHintDiff := 0
 
 	for _, root := range roots {
 		for _, beadsDir := range discoverBeadsDirs(root, 4) {
@@ -6317,6 +6326,9 @@ func findBetterPagesSource(config *export.WizardConfig, current pagesSource, bea
 				continue
 			}
 
+			pathLower := strings.ToLower(beadsDir)
+			hintMatch := repoHint != "" && (strings.Contains(pathLower, repoHint) || strings.Contains(pathLower, altHint))
+
 			if expected > 0 {
 				diff := absInt(count - expected)
 				if bestDir == "" || diff < bestDiff || (diff == bestDiff && count > bestCount) {
@@ -6324,11 +6336,26 @@ func findBetterPagesSource(config *export.WizardConfig, current pagesSource, bea
 					bestCount = count
 					bestDiff = diff
 				}
+				if hintMatch && (bestHintDir == "" || diff < bestHintDiff || (diff == bestHintDiff && count > bestHintCount)) {
+					bestHintDir = beadsDir
+					bestHintCount = count
+					bestHintDiff = diff
+				}
 			} else if count > bestCount {
-				bestDir = beadsDir
-				bestCount = count
+				if hintMatch && count > bestHintCount {
+					bestHintDir = beadsDir
+					bestHintCount = count
+				} else if bestHintDir == "" {
+					bestDir = beadsDir
+					bestCount = count
+				}
 			}
 		}
+	}
+
+	if bestHintDir != "" {
+		bestDir = bestHintDir
+		bestCount = bestHintCount
 	}
 
 	if bestDir == "" {
