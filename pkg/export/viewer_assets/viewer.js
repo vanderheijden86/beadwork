@@ -472,9 +472,11 @@ async function fetchJSON(url) {
 async function loadChunks(config) {
   const chunks = [];
   const totalChunks = config.chunk_count;
+  // Use same cache-buster for all chunks to ensure consistency
+  const cacheBuster = `?_t=${Date.now()}`;
 
   for (let i = 0; i < totalChunks; i++) {
-    const chunkPath = `./chunks/${String(i).padStart(5, '0')}.bin`;
+    const chunkPath = `./chunks/${String(i).padStart(5, '0')}.bin${cacheBuster}`;
     const response = await fetch(chunkPath);
     if (!response.ok) throw new Error(`Failed to load chunk ${i}`);
     const buffer = await response.arrayBuffer();
@@ -503,9 +505,13 @@ async function loadDatabase(updateStatus) {
   updateStatus?.('Checking cache...');
 
   // Load config to get cache key
+  // Use cache-busting query param to ensure we always get the latest config
+  // This prevents CDN caching issues on GitHub Pages where stale config
+  // could cause OPFS to serve an outdated database
   let config = null;
   try {
-    config = await fetchJSON('./beads.sqlite3.config.json');
+    const cacheBuster = `?_t=${Date.now()}`;
+    config = await fetchJSON('./beads.sqlite3.config.json' + cacheBuster);
     DB_STATE.cacheKey = config.hash || null;
   } catch {
     // Config file may not exist for small DBs
@@ -534,7 +540,9 @@ async function loadDatabase(updateStatus) {
       DIAGNOSTICS.dbSource = 'chunks';
     } else {
       // Load single file - try multiple paths
-      const paths = ['./beads.sqlite3', './data/beads.sqlite3'];
+      // Add cache-busting to avoid CDN serving stale database
+      const cacheBuster = `?_t=${Date.now()}`;
+      const paths = ['./beads.sqlite3' + cacheBuster, './data/beads.sqlite3' + cacheBuster];
       let loaded = false;
 
       for (const path of paths) {
@@ -2538,8 +2546,9 @@ function beadsApp() {
         }
 
         // Load full triage data for insights view
+        // Use cache-busting to avoid stale data from CDN
         try {
-          const triageResp = await fetch('./data/triage.json');
+          const triageResp = await fetch(`./data/triage.json?_t=${Date.now()}`);
           if (triageResp.ok) {
             this.triageData = await triageResp.json();
             console.log('[Viewer] Triage data loaded:', this.triageData?.meta?.issue_count, 'issues');
@@ -2745,8 +2754,9 @@ function beadsApp() {
         this.forceGraphModule.loadData(issues, dependencies, precomputedLayout);
 
         // Try to load history data for time-travel feature (bv-z38b)
+        // Use cache-busting to avoid stale data from CDN
         try {
-          const historyResp = await fetch('./data/history.json');
+          const historyResp = await fetch(`./data/history.json?_t=${Date.now()}`);
           if (historyResp.ok) {
             const historyData = await historyResp.json();
             if (this.forceGraphModule.initTimeTravel) {
