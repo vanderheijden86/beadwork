@@ -72,6 +72,7 @@ func TestTreeBuildParentChild(t *testing.T) {
 	}
 
 	tree := NewTreeModel(newTreeTestTheme())
+	tree.SetBeadsDir(filepath.Join(t.TempDir(), ".beads")) // Isolate from CWD state
 	tree.Build(issues)
 
 	// Should have 1 root (epic-1)
@@ -258,6 +259,7 @@ func TestTreeNavigation(t *testing.T) {
 	}
 
 	tree := NewTreeModel(newTreeTestTheme())
+	tree.SetBeadsDir(filepath.Join(t.TempDir(), ".beads")) // Isolate from CWD state
 	tree.Build(issues)
 
 	// Initial selection should be first node (root-1)
@@ -308,6 +310,7 @@ func TestTreeExpandCollapse(t *testing.T) {
 	}
 
 	tree := NewTreeModel(newTreeTestTheme())
+	tree.SetBeadsDir(filepath.Join(t.TempDir(), ".beads")) // Isolate from CWD state
 	tree.Build(issues)
 
 	// Initially auto-expanded (depth < 1)
@@ -412,6 +415,7 @@ func TestTreeViewRendering(t *testing.T) {
 	}
 
 	tree := NewTreeModel(newTreeTestTheme())
+	tree.SetBeadsDir(filepath.Join(t.TempDir(), ".beads")) // Isolate from CWD state
 	tree.Build(issues)
 	tree.SetSize(100, 30)
 
@@ -510,6 +514,7 @@ func TestTreeJumpToParent(t *testing.T) {
 	}
 
 	tree := NewTreeModel(newTreeTestTheme())
+	tree.SetBeadsDir(filepath.Join(t.TempDir(), ".beads")) // Isolate from CWD state
 	tree.Build(issues)
 
 	// Move to child
@@ -543,6 +548,7 @@ func TestTreeExpandOrMoveToChild(t *testing.T) {
 	}
 
 	tree := NewTreeModel(newTreeTestTheme())
+	tree.SetBeadsDir(filepath.Join(t.TempDir(), ".beads")) // Isolate from CWD state
 	tree.Build(issues)
 
 	// Root is initially expanded (auto-expand depth < 1)
@@ -584,6 +590,7 @@ func TestTreeCollapseOrJumpToParent(t *testing.T) {
 	}
 
 	tree := NewTreeModel(newTreeTestTheme())
+	tree.SetBeadsDir(filepath.Join(t.TempDir(), ".beads")) // Isolate from CWD state
 	tree.Build(issues)
 
 	// Root is expanded - CollapseOrJumpToParent should collapse
@@ -1859,6 +1866,7 @@ func TestTreeSetGlobalIssueMap(t *testing.T) {
 	}
 }
 
+
 // =============================================================================
 // SortField/SortDirection type refactor tests (bd-x3l)
 // =============================================================================
@@ -2280,5 +2288,406 @@ func TestSortPopupCursorWrapsAtBottom(t *testing.T) {
 	}
 	if tree.SortPopupCursor() != int(NumSortFields)-1 {
 		t.Errorf("expected cursor at last field (%d), got %d", int(NumSortFields)-1, tree.SortPopupCursor())
+	}
+}
+
+// =============================================================================
+// Flat mode toggle tests (bd-39v)
+// =============================================================================
+
+// newIsolatedTree creates a TreeModel with an isolated beadsDir to prevent
+// stale tree-state.json files from affecting test results.
+func newIsolatedTree(t *testing.T) TreeModel {
+	t.Helper()
+	tree := NewTreeModel(newTreeTestTheme())
+	tree.SetBeadsDir(filepath.Join(t.TempDir(), ".beads"))
+	return tree
+}
+
+// TestFlatModeDefault verifies flat mode is off by default
+func TestFlatModeDefault(t *testing.T) {
+	tree := newIsolatedTree(t)
+	if tree.IsFlatMode() {
+		t.Error("expected flat mode to be off by default")
+	}
+}
+
+// TestToggleFlatMode verifies ToggleFlatMode flips the flag
+func TestToggleFlatMode(t *testing.T) {
+	tree := newIsolatedTree(t)
+	tree.ToggleFlatMode()
+	if !tree.IsFlatMode() {
+		t.Error("expected flat mode to be on after toggle")
+	}
+	tree.ToggleFlatMode()
+	if tree.IsFlatMode() {
+		t.Error("expected flat mode to be off after second toggle")
+	}
+}
+
+// TestFlatModeShowsAllNodesWithoutHierarchy verifies flat mode lists all nodes
+// at depth 0 without parent-child nesting, even when tree has hierarchy
+func TestFlatModeShowsAllNodesWithoutHierarchy(t *testing.T) {
+	now := time.Now()
+	issues := []model.Issue{
+		{ID: "epic-1", Title: "Epic", Priority: 1, IssueType: model.TypeEpic, CreatedAt: now},
+		{
+			ID: "task-1", Title: "Task under Epic", Priority: 2, IssueType: model.TypeTask, CreatedAt: now.Add(time.Hour),
+			Dependencies: []*model.Dependency{
+				{IssueID: "task-1", DependsOnID: "epic-1", Type: model.DepParentChild},
+			},
+		},
+		{
+			ID: "subtask-1", Title: "Subtask", Priority: 3, IssueType: model.TypeTask, CreatedAt: now.Add(2 * time.Hour),
+			Dependencies: []*model.Dependency{
+				{IssueID: "subtask-1", DependsOnID: "task-1", Type: model.DepParentChild},
+			},
+		},
+	}
+
+	tree := newIsolatedTree(t)
+	tree.Build(issues)
+
+	// Expand all so we can see the full hierarchy first
+	tree.ExpandAll()
+	if tree.NodeCount() != 3 {
+		t.Fatalf("expected 3 visible nodes after expand all, got %d", tree.NodeCount())
+	}
+
+	// Now collapse all — only epic-1 visible
+	tree.CollapseAll()
+	if tree.NodeCount() != 1 {
+		t.Fatalf("expected 1 visible node after collapse all, got %d", tree.NodeCount())
+	}
+
+	// Toggle flat mode — all 3 issues should be visible regardless of expand state
+	tree.ToggleFlatMode()
+	if tree.NodeCount() != 3 {
+		t.Errorf("expected 3 visible nodes in flat mode (ignoring hierarchy), got %d", tree.NodeCount())
+	}
+
+	// Verify nodes in flat mode have no tree prefix (depth 0 behavior)
+	for i := 0; i < tree.NodeCount(); i++ {
+		node := tree.flatList[i]
+		if node.Depth != 0 {
+			t.Errorf("flat mode node[%d] %s has depth %d, expected 0", i, node.Issue.ID, node.Depth)
+		}
+	}
+}
+
+// TestFlatModePreservesSortMode verifies flat mode respects the current sort order
+func TestFlatModePreservesSortMode(t *testing.T) {
+	now := time.Now()
+	issues := []model.Issue{
+		{ID: "a", Title: "A", Priority: 3, IssueType: model.TypeTask, CreatedAt: now.Add(2 * time.Hour)},
+		{ID: "b", Title: "B", Priority: 1, IssueType: model.TypeTask, CreatedAt: now},
+		{ID: "c", Title: "C", Priority: 2, IssueType: model.TypeTask, CreatedAt: now.Add(time.Hour)},
+	}
+
+	tree := newIsolatedTree(t)
+	tree.Build(issues)
+
+	// In default sort mode (priority), order should be b(P1), c(P2), a(P3)
+	tree.ToggleFlatMode()
+	if tree.NodeCount() != 3 {
+		t.Fatalf("expected 3 nodes, got %d", tree.NodeCount())
+	}
+
+	expectedOrder := []string{"b", "c", "a"}
+	for i, expected := range expectedOrder {
+		got := tree.flatList[i].Issue.ID
+		if got != expected {
+			t.Errorf("flat mode node[%d]: expected %s, got %s", i, expected, got)
+		}
+	}
+}
+
+// TestFlatModePreservesFilter verifies flat mode respects the current filter
+func TestFlatModePreservesFilter(t *testing.T) {
+	issues := []model.Issue{
+		{ID: "open-1", Title: "Open", Priority: 1, IssueType: model.TypeTask, Status: model.StatusOpen},
+		{ID: "closed-1", Title: "Closed", Priority: 2, IssueType: model.TypeTask, Status: model.StatusClosed},
+	}
+
+	tree := newIsolatedTree(t)
+	tree.Build(issues)
+
+	// Apply "open" filter first, then toggle flat mode
+	tree.ApplyFilter("open")
+	tree.ToggleFlatMode()
+
+	// Should only show open issue
+	if tree.NodeCount() != 1 {
+		t.Errorf("expected 1 node with open filter in flat mode, got %d", tree.NodeCount())
+	}
+	if tree.flatList[0].Issue.ID != "open-1" {
+		t.Errorf("expected open-1, got %s", tree.flatList[0].Issue.ID)
+	}
+}
+
+// TestFlatModeViewIndicator verifies the view shows a [FLAT] or [TREE] indicator
+func TestFlatModeViewIndicator(t *testing.T) {
+	issues := []model.Issue{
+		{ID: "test-1", Title: "Test", Priority: 1, IssueType: model.TypeTask, Status: model.StatusOpen},
+	}
+
+	tree := newIsolatedTree(t)
+	tree.Build(issues)
+	tree.SetSize(100, 20)
+
+	// Tree mode should show TREE indicator
+	view := tree.View()
+	if !strings.Contains(view, "TREE") {
+		t.Errorf("expected TREE indicator in tree mode view")
+	}
+
+	// Flat mode should show FLAT indicator
+	tree.ToggleFlatMode()
+	view = tree.View()
+	if !strings.Contains(view, "FLAT") {
+		t.Errorf("expected FLAT indicator in flat mode view")
+	}
+}
+
+// TestFlatModeToggleBackRestoresTree verifies toggling back restores hierarchy
+func TestFlatModeToggleBackRestoresTree(t *testing.T) {
+	now := time.Now()
+	issues := []model.Issue{
+		{ID: "epic-1", Title: "Epic", Priority: 1, IssueType: model.TypeEpic, CreatedAt: now},
+		{
+			ID: "task-1", Title: "Task", Priority: 2, IssueType: model.TypeTask, CreatedAt: now.Add(time.Hour),
+			Dependencies: []*model.Dependency{
+				{IssueID: "task-1", DependsOnID: "epic-1", Type: model.DepParentChild},
+			},
+		},
+	}
+
+	tree := newIsolatedTree(t)
+	tree.Build(issues)
+
+	// Record tree mode state
+	treeCount := tree.NodeCount()
+
+	// Toggle to flat, then back to tree
+	tree.ToggleFlatMode()
+	tree.ToggleFlatMode()
+
+	// Should restore tree hierarchy
+	if tree.NodeCount() != treeCount {
+		t.Errorf("expected %d nodes after restoring tree mode, got %d", treeCount, tree.NodeCount())
+	}
+
+	// Verify hierarchy is restored (task-1 should have depth > 0)
+	for _, node := range tree.flatList {
+		if node.Issue.ID == "task-1" && node.Depth == 0 {
+			t.Error("expected task-1 to have depth > 0 in restored tree mode")
+		}
+	}
+}
+
+// =============================================================================
+// Sticky scroll tests (bd-2z9)
+// =============================================================================
+
+// TestStickyScrollNoParentOffScreen verifies no sticky header when parent is visible
+func TestStickyScrollNoParentOffScreen(t *testing.T) {
+	now := time.Now()
+	issues := []model.Issue{
+		{ID: "epic-1", Title: "Epic One", Priority: 1, IssueType: model.TypeEpic, CreatedAt: now},
+		{
+			ID: "task-1", Title: "Task One", Priority: 2, IssueType: model.TypeTask, CreatedAt: now.Add(time.Hour),
+			Dependencies: []*model.Dependency{
+				{IssueID: "task-1", DependsOnID: "epic-1", Type: model.DepParentChild},
+			},
+		},
+	}
+
+	tree := newIsolatedTree(t)
+	tree.Build(issues)
+	tree.SetSize(100, 20) // Large viewport - everything visible
+
+	// Select task-1 (child) — parent epic-1 is visible on screen
+	tree.MoveDown()
+	if tree.GetSelectedID() != "task-1" {
+		t.Fatalf("expected task-1 selected, got %s", tree.GetSelectedID())
+	}
+
+	// No sticky lines should be generated since parent is visible
+	lines := tree.StickyScrollLines()
+	if len(lines) != 0 {
+		t.Errorf("expected 0 sticky lines when parent is visible, got %d", len(lines))
+	}
+}
+
+// TestStickyScrollParentOffScreen verifies sticky header appears when parent scrolls off
+func TestStickyScrollParentOffScreen(t *testing.T) {
+	now := time.Now()
+
+	// Create a deep tree with enough nodes to force scrolling
+	issues := []model.Issue{
+		{ID: "epic-1", Title: "Epic One", Priority: 1, IssueType: model.TypeEpic, CreatedAt: now},
+	}
+	// Add 20 children under epic-1 so the parent scrolls off screen
+	for i := 0; i < 20; i++ {
+		issues = append(issues, model.Issue{
+			ID:        fmt.Sprintf("task-%02d", i),
+			Title:     fmt.Sprintf("Task %02d", i),
+			Priority:  2,
+			IssueType: model.TypeTask,
+			CreatedAt: now.Add(time.Duration(i+1) * time.Hour),
+			Dependencies: []*model.Dependency{
+				{IssueID: fmt.Sprintf("task-%02d", i), DependsOnID: "epic-1", Type: model.DepParentChild},
+			},
+		})
+	}
+
+	tree := newIsolatedTree(t)
+	tree.Build(issues)
+	tree.SetSize(100, 10) // Small viewport — will need scrolling
+
+	// Move cursor down until parent scrolls off screen
+	for i := 0; i < 15; i++ {
+		tree.MoveDown()
+	}
+
+	// Parent epic-1 should now be off screen
+	start, _ := tree.visibleRange()
+	if start == 0 {
+		t.Fatal("expected viewport to have scrolled past the parent")
+	}
+
+	// Sticky lines should contain parent info
+	lines := tree.StickyScrollLines()
+	if len(lines) == 0 {
+		t.Error("expected sticky scroll lines when parent is off screen")
+	}
+
+	// The sticky line should reference the parent issue
+	found := false
+	for _, line := range lines {
+		if strings.Contains(line, "Epic One") || strings.Contains(line, "epic-1") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("sticky lines should reference parent 'Epic One', got: %v", lines)
+	}
+}
+
+// TestStickyScrollMaxLines verifies sticky scroll is limited to 2 lines max
+func TestStickyScrollMaxLines(t *testing.T) {
+	now := time.Now()
+
+	// Create a deeply nested tree: epic -> feature -> task -> many subtasks
+	issues := []model.Issue{
+		{ID: "epic", Title: "Epic", Priority: 1, IssueType: model.TypeEpic, CreatedAt: now},
+		{
+			ID: "feature", Title: "Feature", Priority: 1, IssueType: model.TypeFeature, CreatedAt: now.Add(time.Hour),
+			Dependencies: []*model.Dependency{
+				{IssueID: "feature", DependsOnID: "epic", Type: model.DepParentChild},
+			},
+		},
+		{
+			ID: "task", Title: "Task", Priority: 1, IssueType: model.TypeTask, CreatedAt: now.Add(2 * time.Hour),
+			Dependencies: []*model.Dependency{
+				{IssueID: "task", DependsOnID: "feature", Type: model.DepParentChild},
+			},
+		},
+	}
+	// Add subtasks under task
+	for i := 0; i < 20; i++ {
+		issues = append(issues, model.Issue{
+			ID:        fmt.Sprintf("sub-%02d", i),
+			Title:     fmt.Sprintf("Subtask %02d", i),
+			Priority:  2,
+			IssueType: model.TypeTask,
+			CreatedAt: now.Add(time.Duration(i+3) * time.Hour),
+			Dependencies: []*model.Dependency{
+				{IssueID: fmt.Sprintf("sub-%02d", i), DependsOnID: "task", Type: model.DepParentChild},
+			},
+		})
+	}
+
+	tree := newIsolatedTree(t)
+	tree.Build(issues)
+	tree.SetSize(100, 10) // Small viewport
+
+	// Expand all nodes to make subtasks visible
+	tree.ExpandAll()
+
+	// Move cursor far down so all ancestors scroll off
+	for i := 0; i < 18; i++ {
+		tree.MoveDown()
+	}
+
+	lines := tree.StickyScrollLines()
+
+	// Should be at most 2 lines (don't consume too much viewport space)
+	if len(lines) > 2 {
+		t.Errorf("expected at most 2 sticky scroll lines, got %d", len(lines))
+	}
+}
+
+// TestStickyScrollInFlatMode verifies no sticky scroll in flat mode
+func TestStickyScrollInFlatMode(t *testing.T) {
+	now := time.Now()
+	issues := []model.Issue{
+		{ID: "epic-1", Title: "Epic", Priority: 1, IssueType: model.TypeEpic, CreatedAt: now},
+		{
+			ID: "task-1", Title: "Task", Priority: 2, IssueType: model.TypeTask, CreatedAt: now.Add(time.Hour),
+			Dependencies: []*model.Dependency{
+				{IssueID: "task-1", DependsOnID: "epic-1", Type: model.DepParentChild},
+			},
+		},
+	}
+
+	tree := newIsolatedTree(t)
+	tree.Build(issues)
+	tree.SetSize(100, 10)
+
+	// Switch to flat mode
+	tree.ToggleFlatMode()
+
+	lines := tree.StickyScrollLines()
+	if len(lines) != 0 {
+		t.Errorf("expected 0 sticky lines in flat mode, got %d", len(lines))
+	}
+}
+
+// TestStickyScrollRenderedInView verifies sticky scroll appears in the View output
+func TestStickyScrollRenderedInView(t *testing.T) {
+	now := time.Now()
+
+	issues := []model.Issue{
+		{ID: "epic-1", Title: "Epic One", Priority: 1, IssueType: model.TypeEpic, CreatedAt: now},
+	}
+	for i := 0; i < 20; i++ {
+		issues = append(issues, model.Issue{
+			ID:        fmt.Sprintf("task-%02d", i),
+			Title:     fmt.Sprintf("Task %02d", i),
+			Priority:  2,
+			IssueType: model.TypeTask,
+			CreatedAt: now.Add(time.Duration(i+1) * time.Hour),
+			Dependencies: []*model.Dependency{
+				{IssueID: fmt.Sprintf("task-%02d", i), DependsOnID: "epic-1", Type: model.DepParentChild},
+			},
+		})
+	}
+
+	tree := newIsolatedTree(t)
+	tree.Build(issues)
+	tree.SetSize(100, 10)
+
+	// Scroll down past parent
+	for i := 0; i < 15; i++ {
+		tree.MoveDown()
+	}
+
+	view := tree.View()
+	// The view should contain some indicator of the sticky parent
+	// The sticky parent line contains the parent's title in a muted style
+	if !strings.Contains(view, "Epic One") {
+		t.Errorf("expected sticky parent 'Epic One' in view output when parent is scrolled off-screen")
 	}
 }

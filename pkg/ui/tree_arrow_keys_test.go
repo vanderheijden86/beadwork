@@ -553,3 +553,38 @@ func TestTreeViewSortPopupSKeyCloses(t *testing.T) {
 		t.Error("pressing 's' again should close popup")
 	}
 }
+
+// ============================================================================
+// Tests: Backtick key toggles flat/tree mode (bd-39v)
+// ============================================================================
+
+// TestTreeViewBacktickTogglesFlatMode verifies that the backtick key toggles
+// between flat and tree mode within the tree view.
+func TestTreeViewBacktickTogglesFlatMode(t *testing.T) {
+	// Use flat issues (no hierarchy) to avoid stale tree-state.json affecting results
+	issues := createManyTreeIssues(10)
+	m := ui.NewModel(issues, nil, "")
+	m = enterTreeView(t, m)
+
+	initialCount := m.TreeNodeCount()
+	if initialCount == 0 {
+		t.Fatal("expected non-zero initial tree node count")
+	}
+
+	// Press backtick to toggle flat mode
+	m = sendKey(t, m, "`")
+
+	// In flat mode, all issues should be visible
+	flatCount := m.TreeNodeCount()
+	if flatCount != len(issues) {
+		t.Errorf("expected %d nodes in flat mode, got %d", len(issues), flatCount)
+	}
+
+	// Press backtick again to toggle back to tree mode
+	m = sendKey(t, m, "`")
+
+	afterToggleBack := m.TreeNodeCount()
+	if afterToggleBack != initialCount {
+		t.Errorf("expected %d nodes after toggling back to tree, got %d", initialCount, afterToggleBack)
+	}
+}

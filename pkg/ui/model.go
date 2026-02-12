@@ -3834,6 +3834,10 @@ func (m Model) handleTreeKeys(msg tea.KeyMsg) Model {
 		// Previous search match (bd-wf8)
 		m.tree.PrevSearchMatch()
 		m.syncTreeToDetail()
+	case "`":
+		// Toggle flat/tree mode (bd-39v)
+		m.tree.ToggleFlatMode()
+		m.syncTreeToDetail()
 	case "o":
 		// Filter: open issues (bd-5nw)
 		m.tree.ApplyFilter("open")
