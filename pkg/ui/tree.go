@@ -207,6 +207,9 @@ type TreeModel struct {
 	searchMatches    []*IssueTreeNode // Nodes matching search
 	searchMatchIndex int              // Current match index for n/N cycling
 	searchMatchIDs   map[string]bool  // Quick lookup for highlighting
+
+	// Flat mode state (bd-39v)
+	flatMode bool // When true, show all issues in flat list without hierarchy
 }
 
 // NewTreeModel creates an empty tree model
@@ -645,6 +648,13 @@ func (t *TreeModel) View() string {
 	sb.WriteString(t.RenderHeader())
 	sb.WriteString("\n")
 
+	// Render sticky scroll lines if parent is off-screen (bd-2z9)
+	stickyLines := t.StickyScrollLines()
+	for _, stickyLine := range stickyLines {
+		sb.WriteString(stickyLine)
+		sb.WriteString("\n")
+	}
+
 	// Get visible range - O(1) calculation based on viewportOffset and height
 	start, end := t.visibleRange()
 
@@ -780,6 +790,7 @@ func (t *TreeModel) renderEmptyState() string {
 // RenderHeader returns a styled header row for the tree view, matching the main
 // list view's column header style: primary background, bold white/dark foreground.
 // Layout: "  TYPE PRI STATUS      ID                     TITLE"
+// Includes a [TREE]/[FLAT] mode indicator badge (bd-39v).
 func (t *TreeModel) RenderHeader() string {
 	width := t.width
 	if width <= 0 {
@@ -791,7 +802,13 @@ func (t *TreeModel) RenderHeader() string {
 		Bold(true).
 		Width(width)
 
-	return headerStyle.Render("  TYPE PRI STATUS      ID                     TITLE")
+	modeBadge := "TREE"
+	if t.flatMode {
+		modeBadge = "FLAT"
+	}
+
+	headerText := fmt.Sprintf("  [%s] TYPE PRI STATUS      ID                     TITLE", modeBadge)
+	return headerStyle.Render(headerText)
 }
 
 // renderNode renders a single tree node with column-aligned layout matching the
@@ -1319,8 +1336,13 @@ func (t *TreeModel) setExpandedRecursive(node *IssueTreeNode, expanded bool) {
 }
 
 // rebuildFlatList rebuilds the flattened list of visible nodes.
+// When flat mode is active, shows all issues without hierarchy (bd-39v).
 // When a filter is active, dispatches to rebuildFilteredFlatList (bd-e3w).
 func (t *TreeModel) rebuildFlatList() {
+	if t.flatMode {
+		t.rebuildFlatModeList()
+		return
+	}
 	if t.currentFilter != "" && t.currentFilter != "all" && t.filterMatches != nil {
 		t.rebuildFilteredFlatList()
 		return
@@ -1329,6 +1351,33 @@ func (t *TreeModel) rebuildFlatList() {
 	for _, root := range t.roots {
 		t.appendVisible(root)
 	}
+	// Ensure cursor stays in bounds
+	if t.cursor >= len(t.flatList) {
+		t.cursor = len(t.flatList) - 1
+	}
+	if t.cursor < 0 {
+		t.cursor = 0
+	}
+}
+
+// rebuildFlatModeList builds the flat list showing all issues without hierarchy (bd-39v).
+// Respects current filter settings.
+func (t *TreeModel) rebuildFlatModeList() {
+	nodes := t.buildFlatNodes()
+
+	// Apply filter if active
+	if t.currentFilter != "" && t.currentFilter != "all" && t.filterMatches != nil {
+		var filtered []*IssueTreeNode
+		for _, node := range nodes {
+			if node.Issue != nil && t.filterMatches[node.Issue.ID] {
+				filtered = append(filtered, node)
+			}
+		}
+		nodes = filtered
+	}
+
+	t.flatList = nodes
+
 	// Ensure cursor stays in bounds
 	if t.cursor >= len(t.flatList) {
 		t.cursor = len(t.flatList) - 1
@@ -1463,6 +1512,47 @@ func (t *TreeModel) ensureCursorVisible() {
 // GetViewportOffset returns the current viewport offset (for testing/debugging).
 func (t *TreeModel) GetViewportOffset() int {
 	return t.viewportOffset
+}
+
+// ── Flat mode methods (bd-39v) ──
+
+// IsFlatMode returns whether flat mode is active.
+func (t *TreeModel) IsFlatMode() bool {
+	return t.flatMode
+}
+
+// ToggleFlatMode toggles between flat-list and tree-hierarchy view.
+// In flat mode, all issues are shown at depth 0 without parent-child nesting,
+// preserving the current sort and filter settings.
+func (t *TreeModel) ToggleFlatMode() {
+	t.flatMode = !t.flatMode
+	t.rebuildFlatList()
+	t.ensureCursorVisible()
+}
+
+// buildFlatNodes returns all issues from the tree as flat (depth-0) nodes,
+// sorted using the current sort mode. This is used when flat mode is active.
+func (t *TreeModel) buildFlatNodes() []*IssueTreeNode {
+	var nodes []*IssueTreeNode
+	// Collect all nodes from the issue map
+	for _, node := range t.issueMap {
+		if node == nil || node.Issue == nil {
+			continue
+		}
+		// Create a shallow copy with Depth=0 for flat display
+		flatNode := &IssueTreeNode{
+			Issue:    node.Issue,
+			Children: nil, // No children in flat mode
+			Expanded: false,
+			Depth:    0,
+			Parent:   nil, // No parent in flat mode
+		}
+		nodes = append(nodes, flatNode)
+	}
+
+	// Sort using current sort mode
+	t.sortNodesBySortMode(nodes)
+	return nodes
 }
 
 // ── Search methods (bd-uus) ──
@@ -1618,4 +1708,138 @@ func (t *TreeModel) renderSearchBar() string {
 	}
 
 	return searchStyle.Render(fmt.Sprintf("/%s%s", t.searchQuery, matchInfo))
+}
+
+// ── Sticky scroll methods (bd-2z9) ──
+
+// StickyScrollLines returns header lines to pin at the top of the viewport when
+// the parent (or grandparent) of the first visible node has scrolled off-screen.
+// This provides VS Code-style "sticky scroll" context so the user knows where
+// they are in the hierarchy. Returns at most 2 lines. Returns nil in flat mode
+// or when no ancestors are off-screen.
+func (t *TreeModel) StickyScrollLines() []string {
+	if t.flatMode || len(t.flatList) == 0 {
+		return nil
+	}
+
+	start, _ := t.visibleRange()
+
+	// Get the first visible node
+	if start >= len(t.flatList) {
+		return nil
+	}
+	firstVisible := t.flatList[start]
+	if firstVisible == nil || firstVisible.Issue == nil {
+		return nil
+	}
+
+	// Collect ancestors that are off-screen (not in the visible range)
+	var offScreenAncestors []*IssueTreeNode
+	ancestor := firstVisible.Parent
+	for ancestor != nil {
+		// Check if ancestor is visible in the current viewport
+		isVisible := false
+		_, end := t.visibleRange()
+		for i := start; i < end; i++ {
+			if i < len(t.flatList) && t.flatList[i] == ancestor {
+				isVisible = true
+				break
+			}
+		}
+		if !isVisible {
+			offScreenAncestors = append([]*IssueTreeNode{ancestor}, offScreenAncestors...)
+		}
+		ancestor = ancestor.Parent
+	}
+
+	if len(offScreenAncestors) == 0 {
+		return nil
+	}
+
+	// Limit to at most 2 lines
+	if len(offScreenAncestors) > 2 {
+		// Show the two closest ancestors (parent and grandparent of first visible)
+		offScreenAncestors = offScreenAncestors[len(offScreenAncestors)-2:]
+	}
+
+	var lines []string
+	for _, node := range offScreenAncestors {
+		if node.Issue == nil {
+			continue
+		}
+		line := t.renderStickyLine(node)
+		lines = append(lines, line)
+	}
+
+	return lines
+}
+
+// renderStickyLine renders a single sticky scroll header line in muted style.
+func (t *TreeModel) renderStickyLine(node *IssueTreeNode) string {
+	if node == nil || node.Issue == nil {
+		return ""
+	}
+	issue := node.Issue
+	r := t.theme.Renderer
+	mutedStyle := r.NewStyle().Foreground(t.theme.Muted).Faint(true)
+
+	indicator := t.getExpandIndicator(node)
+	icon, _ := t.theme.GetTypeIcon(string(issue.IssueType))
+
+	line := fmt.Sprintf("%s %s %s  %s", indicator, icon, issue.ID, issue.Title)
+	return mutedStyle.Render(line)
+}
+
+// ── Breadcrumb methods (bd-zq0) ──
+
+// Breadcrumb returns the breadcrumb trail from root to the currently selected node.
+// Format: "Epic: Title > Feature: Title > Task: Title"
+// Returns empty string if no node is selected or the node is a root.
+func (t *TreeModel) Breadcrumb() string {
+	node := t.SelectedNode()
+	if node == nil || node.Issue == nil {
+		return ""
+	}
+
+	// Collect path from root to current node
+	var path []*IssueTreeNode
+	current := node
+	for current != nil {
+		path = append([]*IssueTreeNode{current}, path...)
+		current = current.Parent
+	}
+
+	if len(path) <= 1 {
+		return "" // Root node or single node - no breadcrumb needed
+	}
+
+	var parts []string
+	for _, n := range path {
+		if n.Issue == nil {
+			continue
+		}
+		typeName := string(n.Issue.IssueType)
+		if typeName == "" {
+			typeName = "Issue"
+		}
+		// Capitalize type name
+		if len(typeName) > 0 {
+			typeName = strings.ToUpper(typeName[:1]) + typeName[1:]
+		}
+		parts = append(parts, fmt.Sprintf("%s: %s", typeName, n.Issue.Title))
+	}
+
+	result := strings.Join(parts, " > ")
+
+	// Truncate if too long (use width if available, default 80)
+	maxLen := t.width
+	if maxLen <= 0 {
+		maxLen = 80
+	}
+	if len([]rune(result)) > maxLen {
+		runes := []rune(result)
+		result = "..." + string(runes[len(runes)-(maxLen-3):])
+	}
+
+	return result
 }
