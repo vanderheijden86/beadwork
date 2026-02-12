@@ -31,7 +31,7 @@ import (
 //
 // Design notes:
 //   - Only stores explicit user changes; nodes not in the map use default behavior
-//   - Default: expanded for depth < 2, collapsed otherwise
+//   - Default: expanded for depth < 1, collapsed otherwise
 //   - Version field enables future schema migrations
 //   - Corrupted/missing file = use defaults (graceful degradation)
 type TreeState struct {
@@ -87,8 +87,8 @@ func (t *TreeModel) saveState() {
 			return
 		}
 
-		// Default: expanded for depth < 2, collapsed otherwise
-		defaultExpanded := node.Depth < 2
+		// Default: expanded for depth < 1, collapsed otherwise
+		defaultExpanded := node.Depth < 1
 		if node.Expanded != defaultExpanded {
 			state.Expanded[node.Issue.ID] = node.Expanded
 		}
@@ -207,6 +207,10 @@ type TreeModel struct {
 	searchMatches    []*IssueTreeNode // Nodes matching search
 	searchMatchIndex int              // Current match index for n/N cycling
 	searchMatchIDs   map[string]bool  // Quick lookup for highlighting
+
+	// Visibility cycling state (bd-8of)
+	cycleStates      map[string]int // Per-node TAB cycle state: 0=folded, 1=children, 2=subtree
+	globalCycleState int            // Global Shift+TAB cycle: 0=all-folded, 1=top-level, 2=all-expanded
 }
 
 // NewTreeModel creates an empty tree model
@@ -411,7 +415,7 @@ func (t *TreeModel) buildNode(issue *model.Issue, depth int,
 		Issue:    issue,
 		Depth:    depth,
 		Parent:   parent,
-		Expanded: depth < 2, // Auto-expand first 2 levels
+		Expanded: depth < 1, // Auto-expand root level only
 	}
 
 	// Store in lookup map
@@ -1172,6 +1176,252 @@ func (t *TreeModel) JumpToParent() {
 			return
 		}
 	}
+}
+
+// getSiblings returns the sibling slice for a node (parent's children or roots).
+func (t *TreeModel) getSiblings(node *IssueTreeNode) []*IssueTreeNode {
+	if node == nil {
+		return nil
+	}
+	if node.Parent == nil {
+		return t.roots
+	}
+	return node.Parent.Children
+}
+
+// NextSibling moves cursor to the next sibling at the same depth (bd-ryu).
+// If already at the last sibling, does nothing.
+func (t *TreeModel) NextSibling() {
+	node := t.SelectedNode()
+	if node == nil {
+		return
+	}
+
+	siblings := t.getSiblings(node)
+	for i, s := range siblings {
+		if s == node && i < len(siblings)-1 {
+			next := siblings[i+1]
+			// Find next sibling in flatList
+			for j, n := range t.flatList {
+				if n == next {
+					t.cursor = j
+					t.ensureCursorVisible()
+					return
+				}
+			}
+			return
+		}
+	}
+}
+
+// PrevSibling moves cursor to the previous sibling at the same depth (bd-ryu).
+// If already at the first sibling, does nothing.
+func (t *TreeModel) PrevSibling() {
+	node := t.SelectedNode()
+	if node == nil {
+		return
+	}
+
+	siblings := t.getSiblings(node)
+	for i, s := range siblings {
+		if s == node && i > 0 {
+			prev := siblings[i-1]
+			// Find prev sibling in flatList
+			for j, n := range t.flatList {
+				if n == prev {
+					t.cursor = j
+					t.ensureCursorVisible()
+					return
+				}
+			}
+			return
+		}
+	}
+}
+
+// FirstSibling moves cursor to the first sibling at the same depth (bd-ryu).
+func (t *TreeModel) FirstSibling() {
+	node := t.SelectedNode()
+	if node == nil {
+		return
+	}
+
+	siblings := t.getSiblings(node)
+	if len(siblings) == 0 {
+		return
+	}
+	first := siblings[0]
+	for j, n := range t.flatList {
+		if n == first {
+			t.cursor = j
+			t.ensureCursorVisible()
+			return
+		}
+	}
+}
+
+// LastSibling moves cursor to the last sibling at the same depth (bd-ryu).
+func (t *TreeModel) LastSibling() {
+	node := t.SelectedNode()
+	if node == nil {
+		return
+	}
+
+	siblings := t.getSiblings(node)
+	if len(siblings) == 0 {
+		return
+	}
+	last := siblings[len(siblings)-1]
+	for j, n := range t.flatList {
+		if n == last {
+			t.cursor = j
+			t.ensureCursorVisible()
+			return
+		}
+	}
+}
+
+// CycleNodeVisibility implements org-mode TAB cycling on the current node (bd-8of).
+// Cycle: folded -> children visible -> subtree visible -> folded
+// On a leaf node, does nothing.
+func (t *TreeModel) CycleNodeVisibility() {
+	node := t.SelectedNode()
+	if node == nil || node.Issue == nil || len(node.Children) == 0 {
+		return // Leaf or no node
+	}
+
+	if t.cycleStates == nil {
+		t.cycleStates = make(map[string]int)
+	}
+
+	id := node.Issue.ID
+
+	// Detect current state if not explicitly set
+	state, explicit := t.cycleStates[id]
+	if !explicit {
+		state = t.detectNodeCycleState(node)
+	}
+
+	// Advance to next state
+	switch state {
+	case 0: // folded -> children visible
+		node.Expanded = true
+		// Collapse all children (show only direct children)
+		for _, child := range node.Children {
+			t.setExpandedRecursive(child, false)
+		}
+		t.cycleStates[id] = 1
+	case 1: // children -> subtree visible
+		// Expand entire subtree
+		t.setExpandedRecursive(node, true)
+		t.cycleStates[id] = 2
+	case 2: // subtree -> folded
+		node.Expanded = false
+		t.setExpandedRecursive(node, false)
+		t.cycleStates[id] = 0
+	}
+
+	t.rebuildFlatList()
+	t.saveState()
+	t.ensureCursorVisible()
+}
+
+// detectNodeCycleState determines the current visibility state of a node.
+// Returns 0 (folded), 1 (children visible), or 2 (subtree visible).
+func (t *TreeModel) detectNodeCycleState(node *IssueTreeNode) int {
+	if !node.Expanded {
+		return 0 // folded
+	}
+	// Node is expanded - check if all descendants with children are also expanded
+	if t.allDescendantsExpanded(node) {
+		return 2 // subtree fully visible
+	}
+	return 1 // children visible but subtree not fully expanded
+}
+
+// allDescendantsExpanded checks if all descendant nodes with children are expanded.
+func (t *TreeModel) allDescendantsExpanded(node *IssueTreeNode) bool {
+	for _, child := range node.Children {
+		if len(child.Children) > 0 {
+			if !child.Expanded {
+				return false
+			}
+			if !t.allDescendantsExpanded(child) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// CycleGlobalVisibility implements Shift+TAB global visibility cycling (bd-8of).
+// Cycle: all-folded -> top-level children visible -> all-expanded -> all-folded
+func (t *TreeModel) CycleGlobalVisibility() {
+	// Advance global state
+	switch t.globalCycleState {
+	case 0: // -> all folded
+		for _, root := range t.roots {
+			t.setExpandedRecursive(root, false)
+		}
+		t.globalCycleState = 1
+	case 1: // -> top-level children visible (expand roots only)
+		for _, root := range t.roots {
+			root.Expanded = true
+			for _, child := range root.Children {
+				t.setExpandedRecursive(child, false)
+			}
+		}
+		t.globalCycleState = 2
+	case 2: // -> all expanded
+		for _, root := range t.roots {
+			t.setExpandedRecursive(root, true)
+		}
+		t.globalCycleState = 0
+	}
+
+	// Clear per-node cycle states since global cycling overrides them
+	t.cycleStates = nil
+
+	t.rebuildFlatList()
+	t.saveState()
+	t.ensureCursorVisible()
+}
+
+// ExpandToLevel expands the tree to show nodes at depths 0..level-1 (bd-9jr).
+// Pressing '1' shows only roots, '2' shows roots+children, etc.
+// Preserves cursor position (moves to nearest visible ancestor if needed).
+func (t *TreeModel) ExpandToLevel(level int) {
+	// Remember selected ID for cursor preservation
+	selectedID := t.GetSelectedID()
+
+	var setLevel func(node *IssueTreeNode)
+	setLevel = func(node *IssueTreeNode) {
+		if node == nil {
+			return
+		}
+		if len(node.Children) > 0 {
+			node.Expanded = node.Depth < level-1
+		}
+		for _, child := range node.Children {
+			setLevel(child)
+		}
+	}
+
+	for _, root := range t.roots {
+		setLevel(root)
+	}
+
+	// Clear cycle states since level-based expand overrides them
+	t.cycleStates = nil
+
+	t.rebuildFlatList()
+	t.saveState()
+
+	// Restore cursor to same node if still visible, otherwise keep current cursor
+	if selectedID != "" {
+		t.SelectByID(selectedID)
+	}
+	t.ensureCursorVisible()
 }
 
 // ExpandOrMoveToChild handles the → / l key:

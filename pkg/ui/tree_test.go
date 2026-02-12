@@ -79,9 +79,9 @@ func TestTreeBuildParentChild(t *testing.T) {
 		t.Errorf("expected 1 root, got %d", tree.RootCount())
 	}
 
-	// With depth < 2 auto-expand, all 3 should be visible
-	if tree.NodeCount() != 3 {
-		t.Errorf("expected 3 visible nodes (auto-expanded), got %d", tree.NodeCount())
+	// With depth < 1 auto-expand, root + direct children should be visible (2 nodes)
+	if tree.NodeCount() != 2 {
+		t.Errorf("expected 2 visible nodes (auto-expanded), got %d", tree.NodeCount())
 	}
 
 	// Verify hierarchy structure
@@ -310,7 +310,7 @@ func TestTreeExpandCollapse(t *testing.T) {
 	tree := NewTreeModel(newTreeTestTheme())
 	tree.Build(issues)
 
-	// Initially auto-expanded (depth < 2)
+	// Initially auto-expanded (depth < 1)
 	if tree.NodeCount() != 2 {
 		t.Errorf("expected 2 visible nodes (auto-expanded), got %d", tree.NodeCount())
 	}
@@ -545,7 +545,7 @@ func TestTreeExpandOrMoveToChild(t *testing.T) {
 	tree := NewTreeModel(newTreeTestTheme())
 	tree.Build(issues)
 
-	// Root is initially expanded (auto-expand depth < 2)
+	// Root is initially expanded (auto-expand depth < 1)
 	// ExpandOrMoveToChild should move to first child
 	tree.ExpandOrMoveToChild()
 	if tree.GetSelectedID() != "child" {
@@ -858,10 +858,10 @@ func TestSaveState(t *testing.T) {
 	tree.SetBeadsDir(beadsDir)
 	tree.Build(issues)
 
-	// Initially, root-1 (depth=0) and child-1 (depth=1) are expanded by default
-	// grandchild-1 (depth=2) is collapsed by default
+	// Initially, root-1 (depth=0) is expanded by default (depth < 1)
+	// child-1 (depth=1) and grandchild-1 (depth=2) are collapsed by default
 
-	// Collapse child-1 (non-default state)
+	// Expand child-1 (non-default state for depth >= 1)
 	for i, node := range tree.flatList {
 		if node.Issue != nil && node.Issue.ID == "child-1" {
 			tree.cursor = i
@@ -887,10 +887,10 @@ func TestSaveState(t *testing.T) {
 		t.Errorf("State version = %d, want %d", state.Version, TreeStateVersion)
 	}
 
-	// child-1 at depth=1 was expanded by default (depth < 2), now collapsed
-	// So it should be in the Expanded map as false
-	if expanded, ok := state.Expanded["child-1"]; !ok || expanded {
-		t.Errorf("Expected child-1 to be in Expanded map as false, got %v (ok=%v)", expanded, ok)
+	// child-1 at depth=1 was collapsed by default (depth < 1), now expanded
+	// So it should be in the Expanded map as true
+	if expanded, ok := state.Expanded["child-1"]; !ok || !expanded {
+		t.Errorf("Expected child-1 to be in Expanded map as true, got %v (ok=%v)", expanded, ok)
 	}
 }
 
@@ -915,13 +915,13 @@ func TestSaveStateOnlyNonDefault(t *testing.T) {
 	tree.SetBeadsDir(beadsDir)
 	tree.Build(issues)
 
-	// Default state:
-	// - root (depth=0): expanded
-	// - d1 (depth=1): expanded
-	// - d2 (depth=2): collapsed
-	// - d3 (depth=3): collapsed
+	// Default state (depth < 1):
+	// - root (depth=0): expanded (default)
+	// - d1 (depth=1): collapsed (default)
+	// - d2 (depth=2): collapsed (default)
+	// - d3 (depth=3): collapsed (default)
 
-	// Expand all - this makes d2 and d3 non-default (expanded when default is collapsed)
+	// Expand all - this makes d1, d2 and d3 non-default (expanded when default is collapsed)
 	tree.ExpandAll()
 
 	// Read state
@@ -936,15 +936,15 @@ func TestSaveStateOnlyNonDefault(t *testing.T) {
 		t.Fatalf("Failed to parse state file: %v", err)
 	}
 
-	// root and d1 should NOT be in the map (they're in default expanded state)
+	// root should NOT be in the map (it's in default expanded state)
 	if _, ok := state.Expanded["root"]; ok {
 		t.Error("root should not be in Expanded map (already default expanded)")
 	}
-	if _, ok := state.Expanded["d1"]; ok {
-		t.Error("d1 should not be in Expanded map (already default expanded)")
-	}
 
-	// d2 and d3 SHOULD be in the map as true (expanded is non-default for depth >= 2)
+	// d1, d2 and d3 SHOULD be in the map as true (expanded is non-default for depth >= 1)
+	if expanded, ok := state.Expanded["d1"]; !ok || !expanded {
+		t.Errorf("d1 should be in Expanded map as true, got %v (ok=%v)", expanded, ok)
+	}
 	if expanded, ok := state.Expanded["d2"]; !ok || !expanded {
 		t.Errorf("d2 should be in Expanded map as true, got %v (ok=%v)", expanded, ok)
 	}
@@ -967,15 +967,15 @@ func TestSaveStateOnlyNonDefault(t *testing.T) {
 		t.Fatalf("Failed to parse state file after collapse: %v", err)
 	}
 
-	// root and d1 should be in the map as false (collapsed is non-default for depth < 2)
+	// Only root should be in the map as false (collapsed is non-default for depth < 1)
 	if expanded, ok := state.Expanded["root"]; !ok || expanded {
 		t.Errorf("root should be in Expanded map as false after CollapseAll, got %v (ok=%v)", expanded, ok)
 	}
-	if expanded, ok := state.Expanded["d1"]; !ok || expanded {
-		t.Errorf("d1 should be in Expanded map as false after CollapseAll, got %v (ok=%v)", expanded, ok)
-	}
 
-	// d2 and d3 should NOT be in the map (collapsed is default for depth >= 2)
+	// d1, d2 and d3 should NOT be in the map (collapsed is default for depth >= 1)
+	if _, ok := state.Expanded["d1"]; ok {
+		t.Error("d1 should not be in Expanded map after CollapseAll (collapsed is default)")
+	}
 	if _, ok := state.Expanded["d2"]; ok {
 		t.Error("d2 should not be in Expanded map after CollapseAll (collapsed is default)")
 	}
@@ -1092,12 +1092,12 @@ func TestLoadStateNoFile(t *testing.T) {
 		t.Error("Tree should be built even without state file")
 	}
 
-	// Default: root (depth 0) and child (depth 1) should be expanded
+	// Default: root (depth 0) should be expanded, child (depth 1) should be collapsed
 	if !tree.issueMap["root"].Expanded {
 		t.Error("Expected root to be expanded (default for depth 0)")
 	}
-	if !tree.issueMap["child"].Expanded {
-		t.Error("Expected child to be expanded (default for depth 1)")
+	if tree.issueMap["child"].Expanded {
+		t.Error("Expected child to be collapsed (default for depth >= 1)")
 	}
 }
 
