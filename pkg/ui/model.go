@@ -3060,6 +3060,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 
 			case "p":
+				if m.focused == focusTree {
+					break // Let handleTreeKeys handle 'p' for jump-to-parent (bd-ryu)
+				}
 				// Toggle priority hints
 				m.showPriorityHints = !m.showPriorityHints
 				// Update delegate with new state
@@ -3101,6 +3104,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 
 			case "[", "f3":
+				if m.focused == focusTree && msg.String() == "[" {
+					break // Let handleTreeKeys handle '[' for prev-sibling (bd-ryu)
+				}
 				// Open label dashboard (phase 1: table view)
 				m.clearAttentionOverlay()
 				m.isGraphView = false
@@ -3121,6 +3127,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 
 			case "]", "f4":
+				if m.focused == focusTree && msg.String() == "]" {
+					break // Let handleTreeKeys handle ']' for next-sibling (bd-ryu)
+				}
 				// Attention view: compute attention scores (cached) and render as text
 				if !m.attentionCached {
 					cfg := analysis.DefaultLabelHealthConfig()
@@ -3840,6 +3849,39 @@ func (m Model) handleTreeKeys(msg tea.KeyMsg) Model {
 	case "a":
 		// Filter: all issues (bd-5nw)
 		m.tree.ApplyFilter("all")
+		m.syncTreeToDetail()
+	case "p", "P":
+		// Jump to parent node (bd-ryu)
+		m.tree.JumpToParent()
+		m.syncTreeToDetail()
+	case "]":
+		// Next sibling (bd-ryu)
+		m.tree.NextSibling()
+		m.syncTreeToDetail()
+	case "[":
+		// Previous sibling (bd-ryu)
+		m.tree.PrevSibling()
+		m.syncTreeToDetail()
+	case "{":
+		// First sibling (bd-ryu)
+		m.tree.FirstSibling()
+		m.syncTreeToDetail()
+	case "}":
+		// Last sibling (bd-ryu)
+		m.tree.LastSibling()
+		m.syncTreeToDetail()
+	case "tab":
+		// Org-mode TAB cycling on current node (bd-8of)
+		m.tree.CycleNodeVisibility()
+		m.syncTreeToDetail()
+	case "shift+tab":
+		// Global visibility cycling (bd-8of)
+		m.tree.CycleGlobalVisibility()
+		m.syncTreeToDetail()
+	case "1", "2", "3", "4", "5", "6", "7", "8", "9":
+		// Level-based expand (bd-9jr)
+		level := int(msg.String()[0] - '0')
+		m.tree.ExpandToLevel(level)
 		m.syncTreeToDetail()
 	case "esc":
 		// First escape clears tree filter, second exits tree view (bd-kob)
