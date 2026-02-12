@@ -2801,8 +2801,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.isSplitView && !m.isBoardView {
 					if m.focused == focusList {
 						m.focused = focusDetail
-					} else if m.treeViewActive {
-						// Return to tree view instead of list when tree is active (bd-xfd)
+					} else if m.focused == focusTree {
+						// Tree to detail: sync selection before switching
+						m.syncTreeToDetail()
+						m.focused = focusDetail
+					} else if m.focused == focusDetail && m.treeViewActive {
+						// Detail back to tree
 						m.focused = focusTree
 					} else {
 						m.focused = focusList
@@ -3692,14 +3696,6 @@ func (m Model) handleTreeKeys(msg tea.KeyMsg) Model {
 		// Return to list view
 		m.treeViewActive = false
 		m.focused = focusList
-	case "tab":
-		// Toggle to detail panel (sync selection and jump to detail)
-		if m.isSplitView {
-			if selected := m.tree.SelectedIssue(); selected != nil {
-				m.syncTreeToDetail()
-				m.focused = focusDetail
-			}
-		}
 	}
 	return m
 }
