@@ -74,7 +74,12 @@ func (t *TreeModel) SetBeadsDir(dir string) {
 // saveState persists the current expand/collapse state to disk (bv-19vz).
 // Only stores explicit user changes; nodes not in the map use default behavior.
 // Errors are logged but do not interrupt the user experience.
+// If beadsDir has not been set (empty string), persistence is skipped entirely
+// to avoid reading/writing tree-state.json from the process working directory.
 func (t *TreeModel) saveState() {
+	if t.beadsDir == "" {
+		return // No persistence directory configured
+	}
 	state := &TreeState{
 		Version:  TreeStateVersion,
 		Expanded: make(map[string]bool),
@@ -124,7 +129,12 @@ func (t *TreeModel) saveState() {
 
 // loadState restores expand/collapse state from disk (bv-afcm).
 // If the file doesn't exist or is corrupted, defaults are used silently.
+// If beadsDir has not been set (empty string), loading is skipped entirely
+// to avoid picking up tree-state.json from the process working directory.
 func (t *TreeModel) loadState() {
+	if t.beadsDir == "" {
+		return // No persistence directory configured
+	}
 	path := TreeStatePath(t.beadsDir)
 	data, err := os.ReadFile(path)
 	if err != nil {
