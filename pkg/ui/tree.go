@@ -207,6 +207,15 @@ type TreeModel struct {
 	searchMatches    []*IssueTreeNode // Nodes matching search
 	searchMatchIndex int              // Current match index for n/N cycling
 	searchMatchIDs   map[string]bool  // Quick lookup for highlighting
+
+	// Advanced filter state (bd-08h)
+	advancedPredicates []FilterPredicate // Parsed predicates for advanced filtering
+
+	// Mark state (bd-cz0)
+	markedIDs map[string]bool // Issue IDs that are marked/selected for batch ops
+
+	// XRay state (bd-0rc)
+	xrayRoot *IssueTreeNode // When set, only this subtree is shown
 }
 
 // NewTreeModel creates an empty tree model
@@ -645,6 +654,15 @@ func (t *TreeModel) View() string {
 	sb.WriteString(t.RenderHeader())
 	sb.WriteString("\n")
 
+	// Show XRay indicator when in drill-down mode (bd-0rc)
+	if t.xrayRoot != nil && t.xrayRoot.Issue != nil {
+		xrayStyle := t.theme.Renderer.NewStyle().
+			Foreground(t.theme.Highlight).
+			Bold(true)
+		sb.WriteString(xrayStyle.Render(fmt.Sprintf("[XRAY: %s]", t.xrayRoot.Issue.Title)))
+		sb.WriteString("\n")
+	}
+
 	// Get visible range - O(1) calculation based on viewportOffset and height
 	start, end := t.visibleRange()
 
@@ -812,10 +830,18 @@ func (t *TreeModel) renderNode(node *IssueTreeNode, isSelected bool) string {
 
 	var leftSide strings.Builder
 
+	// ── Mark indicator (bd-cz0) ──
+	markWidth := 0
+	if t.IsMarked(issue.ID) {
+		markStyle := r.NewStyle().Foreground(t.theme.Highlight).Bold(true)
+		leftSide.WriteString(markStyle.Render("●"))
+		markWidth = 1
+	}
+
 	// ── Tree prefix (indentation + branch characters) ──
 	prefix := t.buildTreePrefix(node)
 	leftSide.WriteString(prefix)
-	prefixWidth := lipgloss.Width(prefix)
+	prefixWidth := lipgloss.Width(prefix) + markWidth
 
 	// ── Expand/collapse indicator ──
 	indicator := t.getExpandIndicator(node)
@@ -1320,14 +1346,20 @@ func (t *TreeModel) setExpandedRecursive(node *IssueTreeNode, expanded bool) {
 
 // rebuildFlatList rebuilds the flattened list of visible nodes.
 // When a filter is active, dispatches to rebuildFilteredFlatList (bd-e3w).
+// When XRay mode is active (bd-0rc), only shows the xrayRoot subtree.
 func (t *TreeModel) rebuildFlatList() {
 	if t.currentFilter != "" && t.currentFilter != "all" && t.filterMatches != nil {
 		t.rebuildFilteredFlatList()
 		return
 	}
 	t.flatList = t.flatList[:0]
-	for _, root := range t.roots {
-		t.appendVisible(root)
+	if t.xrayRoot != nil {
+		// XRay mode: only show the subtree rooted at xrayRoot (bd-0rc)
+		t.appendVisible(t.xrayRoot)
+	} else {
+		for _, root := range t.roots {
+			t.appendVisible(root)
+		}
 	}
 	// Ensure cursor stays in bounds
 	if t.cursor >= len(t.flatList) {
@@ -1524,8 +1556,15 @@ func (t *TreeModel) SearchBackspace() {
 	t.executeSearch()
 }
 
+// isAdvancedQuery returns true if the query string contains advanced filter syntax (bd-08h).
+func isAdvancedQuery(q string) bool {
+	return strings.Contains(q, ":") || strings.HasPrefix(q, "!")
+}
+
 // executeSearch walks ALL nodes (including collapsed ones) and builds the match list.
 // Auto-expands ancestors of the first match and navigates to it.
+// If the query contains advanced filter syntax (field:value, !negation), uses
+// structured predicate matching instead of plain text (bd-08h).
 func (t *TreeModel) executeSearch() {
 	t.searchMatches = nil
 	t.searchMatchIDs = make(map[string]bool)
@@ -1535,6 +1574,12 @@ func (t *TreeModel) executeSearch() {
 		return
 	}
 
+	// Check if this is an advanced filter query (bd-08h)
+	var preds []FilterPredicate
+	useAdvanced := isAdvancedQuery(t.searchQuery)
+	if useAdvanced {
+		preds = ParseFilterPredicates(t.searchQuery)
+	}
 	query := strings.ToLower(t.searchQuery)
 
 	// Walk ALL nodes (including collapsed ones)
@@ -1543,8 +1588,16 @@ func (t *TreeModel) executeSearch() {
 		if node == nil || node.Issue == nil {
 			return
 		}
-		if strings.Contains(strings.ToLower(node.Issue.Title), query) ||
-			strings.Contains(strings.ToLower(node.Issue.ID), query) {
+
+		var matches bool
+		if useAdvanced {
+			matches = t.nodeMatchesAdvancedFilter(node, preds)
+		} else {
+			matches = strings.Contains(strings.ToLower(node.Issue.Title), query) ||
+				strings.Contains(strings.ToLower(node.Issue.ID), query)
+		}
+
+		if matches {
 			t.searchMatches = append(t.searchMatches, node)
 			t.searchMatchIDs[node.Issue.ID] = true
 		}
@@ -1618,4 +1671,233 @@ func (t *TreeModel) renderSearchBar() string {
 	}
 
 	return searchStyle.Render(fmt.Sprintf("/%s%s", t.searchQuery, matchInfo))
+}
+
+// ── Advanced filter support (bd-08h) ──
+
+// FilterPredicate represents a single parsed filter condition.
+type FilterPredicate struct {
+	Field   string // "" for plain text, "status", "priority", "type" for field filters
+	Value   string // The value to match
+	Negated bool   // True if prefixed with !
+}
+
+// ParseFilterPredicates parses a filter string into structured predicates.
+// Supports: "field:value", "!field:value", "!value", "plain text".
+// Field-specific tokens are split by space; remaining non-field text is
+// combined as a single plain-text fuzzy predicate.
+func ParseFilterPredicates(s string) []FilterPredicate {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return nil
+	}
+
+	tokens := strings.Fields(s)
+	var preds []FilterPredicate
+	var plainParts []string
+
+	for _, tok := range tokens {
+		negated := false
+		t := tok
+
+		if strings.HasPrefix(t, "!") {
+			negated = true
+			t = t[1:]
+		}
+
+		if idx := strings.Index(t, ":"); idx > 0 {
+			// field:value pattern
+			field := strings.ToLower(t[:idx])
+			value := strings.ToLower(t[idx+1:])
+			preds = append(preds, FilterPredicate{
+				Field:   field,
+				Value:   value,
+				Negated: negated,
+			})
+		} else if negated {
+			// !value (negated text match on status shorthand)
+			preds = append(preds, FilterPredicate{
+				Field:   "status",
+				Value:   strings.ToLower(t),
+				Negated: true,
+			})
+		} else {
+			// Plain text token - collect for fuzzy
+			plainParts = append(plainParts, tok)
+		}
+	}
+
+	if len(plainParts) > 0 {
+		preds = append(preds, FilterPredicate{
+			Value: strings.ToLower(strings.Join(plainParts, " ")),
+		})
+	}
+
+	return preds
+}
+
+// ApplyAdvancedFilter parses the filter string and applies structured predicates (bd-08h).
+// Supports: "status:open", "priority:1", "type:epic", "!status:closed", plain text fuzzy.
+// Empty string clears the filter.
+func (t *TreeModel) ApplyAdvancedFilter(filter string) {
+	filter = strings.TrimSpace(filter)
+	if filter == "" {
+		t.currentFilter = "all"
+		t.filterMatches = nil
+		t.contextAncestors = nil
+		t.advancedPredicates = nil
+		t.rebuildFlatList()
+		return
+	}
+
+	preds := ParseFilterPredicates(filter)
+	if len(preds) == 0 {
+		t.ApplyFilter("all")
+		return
+	}
+
+	t.currentFilter = "advanced"
+	t.advancedPredicates = preds
+	t.filterMatches = make(map[string]bool)
+	t.contextAncestors = make(map[string]bool)
+
+	for id, node := range t.issueMap {
+		if t.nodeMatchesAdvancedFilter(node, preds) {
+			t.filterMatches[id] = true
+			// Mark all ancestors as context
+			ancestor := node.Parent
+			for ancestor != nil {
+				if ancestor.Issue != nil {
+					t.contextAncestors[ancestor.Issue.ID] = true
+				}
+				ancestor = ancestor.Parent
+			}
+		}
+	}
+
+	t.rebuildFlatList()
+}
+
+// nodeMatchesAdvancedFilter checks if a node matches all given predicates (AND logic).
+func (t *TreeModel) nodeMatchesAdvancedFilter(node *IssueTreeNode, preds []FilterPredicate) bool {
+	if node == nil || node.Issue == nil {
+		return false
+	}
+	issue := node.Issue
+
+	for _, pred := range preds {
+		match := false
+
+		switch pred.Field {
+		case "status":
+			match = strings.ToLower(string(issue.Status)) == pred.Value
+		case "priority":
+			match = fmt.Sprintf("%d", issue.Priority) == pred.Value
+		case "type":
+			match = strings.ToLower(string(issue.IssueType)) == pred.Value
+		case "": // plain text fuzzy search on title and ID
+			match = strings.Contains(strings.ToLower(issue.Title), pred.Value) ||
+				strings.Contains(strings.ToLower(issue.ID), pred.Value)
+		default:
+			// Unknown field - skip (treat as non-match)
+			match = false
+		}
+
+		if pred.Negated {
+			match = !match
+		}
+
+		if !match {
+			return false // AND logic: all predicates must match
+		}
+	}
+	return true
+}
+
+// ── Mark/multi-select methods (bd-cz0) ──
+
+// ToggleMark marks or unmarks the currently selected node.
+func (t *TreeModel) ToggleMark() {
+	node := t.SelectedNode()
+	if node == nil || node.Issue == nil {
+		return
+	}
+	if t.markedIDs == nil {
+		t.markedIDs = make(map[string]bool)
+	}
+	id := node.Issue.ID
+	if t.markedIDs[id] {
+		delete(t.markedIDs, id)
+	} else {
+		t.markedIDs[id] = true
+	}
+}
+
+// UnmarkAll clears all marks.
+func (t *TreeModel) UnmarkAll() {
+	t.markedIDs = nil
+}
+
+// IsMarked returns true if the given issue ID is marked.
+func (t *TreeModel) IsMarked(id string) bool {
+	return t.markedIDs != nil && t.markedIDs[id]
+}
+
+// TreeMarkedIDs returns a sorted slice of marked issue IDs.
+func (t *TreeModel) TreeMarkedIDs() []string {
+	if len(t.markedIDs) == 0 {
+		return nil
+	}
+	ids := make([]string, 0, len(t.markedIDs))
+	for id := range t.markedIDs {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	return ids
+}
+
+// ── XRay drill-down methods (bd-0rc) ──
+
+// ToggleXRay enters or exits XRay mode. When entering, it narrows the view to
+// the selected node's subtree. When exiting, it restores the full tree.
+func (t *TreeModel) ToggleXRay() {
+	if t.xrayRoot != nil {
+		// Exit XRay mode
+		t.xrayRoot = nil
+		t.rebuildFlatList()
+		t.ensureCursorVisible()
+		return
+	}
+
+	node := t.SelectedNode()
+	if node == nil || len(node.Children) == 0 {
+		return // Only enter XRay on parent nodes
+	}
+
+	t.xrayRoot = node
+	t.rebuildFlatList()
+	t.cursor = 0
+	t.viewportOffset = 0
+}
+
+// ExitXRay exits XRay mode if active.
+func (t *TreeModel) ExitXRay() {
+	if t.xrayRoot != nil {
+		t.xrayRoot = nil
+		t.rebuildFlatList()
+		t.ensureCursorVisible()
+	}
+}
+
+// IsXRayMode returns true if XRay (subtree drill-down) mode is active.
+func (t *TreeModel) IsXRayMode() bool {
+	return t.xrayRoot != nil
+}
+
+// XRayTitle returns the title of the XRay root node, or empty string.
+func (t *TreeModel) XRayTitle() string {
+	if t.xrayRoot != nil && t.xrayRoot.Issue != nil {
+		return t.xrayRoot.Issue.Title
+	}
+	return ""
 }

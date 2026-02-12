@@ -3728,9 +3728,22 @@ func (m Model) handleTreeKeys(msg tea.KeyMsg) Model {
 		// Filter: all issues (bd-5nw)
 		m.tree.ApplyFilter("all")
 		m.syncTreeToDetail()
+	case "m":
+		// Toggle mark on current node (bd-cz0)
+		m.tree.ToggleMark()
+	case "M":
+		// Unmark all (bd-cz0)
+		m.tree.UnmarkAll()
+	case "x":
+		// Toggle XRay drill-down mode (bd-0rc)
+		m.tree.ToggleXRay()
+		m.syncTreeToDetail()
 	case "esc":
-		// First escape clears tree filter, second exits tree view (bd-kob)
-		if m.tree.GetFilter() != "" && m.tree.GetFilter() != "all" {
+		// First escape exits XRay, then clears tree filter, then exits tree view (bd-kob, bd-0rc)
+		if m.tree.IsXRayMode() {
+			m.tree.ExitXRay()
+			m.syncTreeToDetail()
+		} else if m.tree.GetFilter() != "" && m.tree.GetFilter() != "all" {
 			m.tree.ApplyFilter("all")
 			m.syncTreeToDetail()
 		} else {

@@ -1858,3 +1858,562 @@ func TestTreeSetGlobalIssueMap(t *testing.T) {
 		t.Error("expected test-1 in globalIssueMap")
 	}
 }
+
+// =============================================================================
+// Multi-select (mark) tests (bd-cz0)
+// =============================================================================
+
+// TestTreeToggleMark verifies marking and unmarking a node
+func TestTreeToggleMark(t *testing.T) {
+	issues := []model.Issue{
+		{ID: "item-1", Title: "Item 1", Priority: 1, IssueType: model.TypeTask},
+		{ID: "item-2", Title: "Item 2", Priority: 2, IssueType: model.TypeTask},
+		{ID: "item-3", Title: "Item 3", Priority: 3, IssueType: model.TypeTask},
+	}
+
+	tree := NewTreeModel(newTreeTestTheme())
+	tree.Build(issues)
+
+	// Initially no marks
+	if len(tree.TreeMarkedIDs()) != 0 {
+		t.Errorf("expected 0 marked items initially, got %d", len(tree.TreeMarkedIDs()))
+	}
+
+	// Mark first item
+	tree.ToggleMark()
+	marked := tree.TreeMarkedIDs()
+	if len(marked) != 1 || marked[0] != "item-1" {
+		t.Errorf("expected [item-1] marked, got %v", marked)
+	}
+
+	// Move down and mark second item
+	tree.MoveDown()
+	tree.ToggleMark()
+	marked = tree.TreeMarkedIDs()
+	if len(marked) != 2 {
+		t.Errorf("expected 2 marked items, got %d", len(marked))
+	}
+
+	// Toggle mark on first item (unmark it)
+	tree.MoveUp()
+	tree.ToggleMark()
+	marked = tree.TreeMarkedIDs()
+	if len(marked) != 1 || marked[0] != "item-2" {
+		t.Errorf("expected [item-2] marked after unmarking item-1, got %v", marked)
+	}
+}
+
+// TestTreeUnmarkAll verifies clearing all marks
+func TestTreeUnmarkAll(t *testing.T) {
+	issues := []model.Issue{
+		{ID: "item-1", Title: "Item 1", Priority: 1, IssueType: model.TypeTask},
+		{ID: "item-2", Title: "Item 2", Priority: 2, IssueType: model.TypeTask},
+	}
+
+	tree := NewTreeModel(newTreeTestTheme())
+	tree.Build(issues)
+
+	// Mark both items
+	tree.ToggleMark()
+	tree.MoveDown()
+	tree.ToggleMark()
+	if len(tree.TreeMarkedIDs()) != 2 {
+		t.Fatalf("expected 2 marked items, got %d", len(tree.TreeMarkedIDs()))
+	}
+
+	// Unmark all
+	tree.UnmarkAll()
+	if len(tree.TreeMarkedIDs()) != 0 {
+		t.Errorf("expected 0 marked items after UnmarkAll, got %d", len(tree.TreeMarkedIDs()))
+	}
+}
+
+// TestTreeMarkSurvivesExpandCollapse verifies marks persist across expand/collapse
+func TestTreeMarkSurvivesExpandCollapse(t *testing.T) {
+	now := time.Now()
+	issues := []model.Issue{
+		{ID: "epic-1", Title: "Epic", Priority: 1, IssueType: model.TypeEpic, CreatedAt: now},
+		{
+			ID: "task-1", Title: "Task", Priority: 2, IssueType: model.TypeTask, CreatedAt: now.Add(time.Hour),
+			Dependencies: []*model.Dependency{{IssueID: "task-1", DependsOnID: "epic-1", Type: model.DepParentChild}},
+		},
+	}
+
+	tree := NewTreeModel(newTreeTestTheme())
+	tree.SetBeadsDir(t.TempDir()) // isolate from stale tree-state.json
+	tree.Build(issues)
+
+	// Verify initial position
+	if tree.GetSelectedID() != "epic-1" {
+		t.Fatalf("expected initial selection epic-1, got %s", tree.GetSelectedID())
+	}
+
+	// Mark child task
+	tree.MoveDown() // move to task-1
+	if tree.GetSelectedID() != "task-1" {
+		t.Fatalf("expected task-1 after MoveDown, got %s", tree.GetSelectedID())
+	}
+	tree.ToggleMark()
+	if len(tree.TreeMarkedIDs()) != 1 {
+		t.Fatalf("expected 1 marked item, got %d", len(tree.TreeMarkedIDs()))
+	}
+	if tree.TreeMarkedIDs()[0] != "task-1" {
+		t.Fatalf("expected task-1 to be marked, got %v", tree.TreeMarkedIDs())
+	}
+
+	// Collapse root
+	tree.JumpToTop()
+	tree.ToggleExpand()
+
+	// Mark should still be there even though task-1 is hidden
+	if len(tree.TreeMarkedIDs()) != 1 || tree.TreeMarkedIDs()[0] != "task-1" {
+		t.Errorf("marks should survive collapse, got %v", tree.TreeMarkedIDs())
+	}
+
+	// Expand root
+	tree.ToggleExpand()
+	if len(tree.TreeMarkedIDs()) != 1 || tree.TreeMarkedIDs()[0] != "task-1" {
+		t.Errorf("marks should survive expand, got %v", tree.TreeMarkedIDs())
+	}
+}
+
+// TestTreeIsMarked verifies the IsMarked check
+func TestTreeIsMarked(t *testing.T) {
+	issues := []model.Issue{
+		{ID: "item-1", Title: "Item 1", Priority: 1, IssueType: model.TypeTask},
+		{ID: "item-2", Title: "Item 2", Priority: 2, IssueType: model.TypeTask},
+	}
+
+	tree := NewTreeModel(newTreeTestTheme())
+	tree.Build(issues)
+
+	if tree.IsMarked("item-1") {
+		t.Error("item-1 should not be marked initially")
+	}
+
+	tree.ToggleMark() // marks item-1 (cursor at 0)
+	if !tree.IsMarked("item-1") {
+		t.Error("item-1 should be marked after ToggleMark")
+	}
+	if tree.IsMarked("item-2") {
+		t.Error("item-2 should not be marked")
+	}
+}
+
+// =============================================================================
+// XRay drill-down tests (bd-0rc)
+// =============================================================================
+
+// TestTreeXRayEnterExit verifies entering and exiting XRay mode
+func TestTreeXRayEnterExit(t *testing.T) {
+	now := time.Now()
+	issues := []model.Issue{
+		{ID: "epic-1", Title: "Epic 1", Priority: 1, IssueType: model.TypeEpic, CreatedAt: now},
+		{
+			ID: "task-1", Title: "Task 1", Priority: 2, IssueType: model.TypeTask, CreatedAt: now.Add(time.Hour),
+			Dependencies: []*model.Dependency{{IssueID: "task-1", DependsOnID: "epic-1", Type: model.DepParentChild}},
+		},
+		{ID: "epic-2", Title: "Epic 2", Priority: 1, IssueType: model.TypeEpic, CreatedAt: now.Add(2 * time.Hour)},
+	}
+
+	tree := NewTreeModel(newTreeTestTheme())
+	tree.SetBeadsDir(t.TempDir())
+	tree.Build(issues)
+
+	// Initially NOT in XRay mode
+	if tree.IsXRayMode() {
+		t.Error("expected NOT in XRay mode initially")
+	}
+
+	// Full tree should show all 3 nodes (epic-1, task-1, epic-2)
+	if tree.NodeCount() != 3 {
+		t.Errorf("expected 3 visible nodes, got %d", tree.NodeCount())
+	}
+
+	// Enter XRay on epic-1 (cursor at 0)
+	tree.ToggleXRay()
+	if !tree.IsXRayMode() {
+		t.Error("expected IN XRay mode after ToggleXRay")
+	}
+	if tree.XRayTitle() != "Epic 1" {
+		t.Errorf("expected XRay title 'Epic 1', got %q", tree.XRayTitle())
+	}
+
+	// Should only show epic-1 and its child task-1
+	if tree.NodeCount() != 2 {
+		t.Errorf("expected 2 visible nodes in XRay mode, got %d", tree.NodeCount())
+	}
+
+	// epic-2 should NOT be visible
+	found := false
+	for _, node := range tree.flatList {
+		if node.Issue.ID == "epic-2" {
+			found = true
+		}
+	}
+	if found {
+		t.Error("epic-2 should NOT be visible in XRay mode")
+	}
+
+	// Exit XRay
+	tree.ToggleXRay()
+	if tree.IsXRayMode() {
+		t.Error("expected NOT in XRay mode after second ToggleXRay")
+	}
+	if tree.NodeCount() != 3 {
+		t.Errorf("expected 3 visible nodes after exiting XRay, got %d", tree.NodeCount())
+	}
+}
+
+// TestTreeXRayOnLeafNode verifies XRay doesn't activate on leaf nodes
+func TestTreeXRayOnLeafNode(t *testing.T) {
+	issues := []model.Issue{
+		{ID: "leaf-1", Title: "Leaf 1", Priority: 1, IssueType: model.TypeTask},
+	}
+
+	tree := NewTreeModel(newTreeTestTheme())
+	tree.Build(issues)
+
+	// Try to enter XRay on a leaf node
+	tree.ToggleXRay()
+	if tree.IsXRayMode() {
+		t.Error("should NOT enter XRay mode on a leaf node")
+	}
+}
+
+// TestTreeXRayNavigationWorks verifies navigation works within XRay subtree
+func TestTreeXRayNavigationWorks(t *testing.T) {
+	now := time.Now()
+	issues := []model.Issue{
+		{ID: "epic-1", Title: "Epic 1", Priority: 1, IssueType: model.TypeEpic, CreatedAt: now},
+		{
+			ID: "task-1", Title: "Task 1", Priority: 2, IssueType: model.TypeTask, CreatedAt: now.Add(time.Hour),
+			Dependencies: []*model.Dependency{{IssueID: "task-1", DependsOnID: "epic-1", Type: model.DepParentChild}},
+		},
+		{
+			ID: "task-2", Title: "Task 2", Priority: 3, IssueType: model.TypeTask, CreatedAt: now.Add(2 * time.Hour),
+			Dependencies: []*model.Dependency{{IssueID: "task-2", DependsOnID: "epic-1", Type: model.DepParentChild}},
+		},
+	}
+
+	tree := NewTreeModel(newTreeTestTheme())
+	tree.SetBeadsDir(t.TempDir())
+	tree.Build(issues)
+
+	// Enter XRay on epic-1
+	tree.ToggleXRay()
+	if tree.NodeCount() != 3 {
+		t.Fatalf("expected 3 nodes in XRay (epic-1 + 2 children), got %d", tree.NodeCount())
+	}
+
+	// Navigate down
+	tree.MoveDown()
+	if tree.GetSelectedID() != "task-1" {
+		t.Errorf("expected task-1 after MoveDown, got %s", tree.GetSelectedID())
+	}
+	tree.MoveDown()
+	if tree.GetSelectedID() != "task-2" {
+		t.Errorf("expected task-2 after second MoveDown, got %s", tree.GetSelectedID())
+	}
+
+	// Navigate up
+	tree.MoveUp()
+	if tree.GetSelectedID() != "task-1" {
+		t.Errorf("expected task-1 after MoveUp, got %s", tree.GetSelectedID())
+	}
+
+	// Jump to bottom/top
+	tree.JumpToBottom()
+	if tree.GetSelectedID() != "task-2" {
+		t.Errorf("expected task-2 after JumpToBottom, got %s", tree.GetSelectedID())
+	}
+	tree.JumpToTop()
+	if tree.GetSelectedID() != "epic-1" {
+		t.Errorf("expected epic-1 after JumpToTop, got %s", tree.GetSelectedID())
+	}
+}
+
+// TestTreeXRayExitWithEscape verifies ExitXRay works
+func TestTreeXRayExitWithEscape(t *testing.T) {
+	now := time.Now()
+	issues := []model.Issue{
+		{ID: "epic-1", Title: "Epic 1", Priority: 1, IssueType: model.TypeEpic, CreatedAt: now},
+		{
+			ID: "task-1", Title: "Task 1", Priority: 2, IssueType: model.TypeTask, CreatedAt: now.Add(time.Hour),
+			Dependencies: []*model.Dependency{{IssueID: "task-1", DependsOnID: "epic-1", Type: model.DepParentChild}},
+		},
+		{ID: "root-2", Title: "Root 2", Priority: 1, IssueType: model.TypeTask, CreatedAt: now.Add(2 * time.Hour)},
+	}
+
+	tree := NewTreeModel(newTreeTestTheme())
+	tree.SetBeadsDir(t.TempDir())
+	tree.Build(issues)
+
+	tree.ToggleXRay()
+	if tree.NodeCount() != 2 {
+		t.Fatalf("expected 2 nodes in XRay, got %d", tree.NodeCount())
+	}
+
+	tree.ExitXRay()
+	if tree.IsXRayMode() {
+		t.Error("expected NOT in XRay mode after ExitXRay")
+	}
+	if tree.NodeCount() != 3 {
+		t.Errorf("expected 3 nodes after ExitXRay, got %d", tree.NodeCount())
+	}
+}
+
+// TestTreeXRayViewIndicator verifies the View shows XRay indicator
+func TestTreeXRayViewIndicator(t *testing.T) {
+	now := time.Now()
+	issues := []model.Issue{
+		{ID: "epic-1", Title: "My Epic", Priority: 1, IssueType: model.TypeEpic, CreatedAt: now},
+		{
+			ID: "task-1", Title: "Task 1", Priority: 2, IssueType: model.TypeTask, CreatedAt: now.Add(time.Hour),
+			Dependencies: []*model.Dependency{{IssueID: "task-1", DependsOnID: "epic-1", Type: model.DepParentChild}},
+		},
+	}
+
+	tree := NewTreeModel(newTreeTestTheme())
+	tree.SetBeadsDir(t.TempDir())
+	tree.Build(issues)
+	tree.SetSize(100, 20)
+
+	tree.ToggleXRay()
+	view := tree.View()
+
+	// Should show XRay indicator
+	if !strings.Contains(view, "[XRAY:") {
+		t.Errorf("expected [XRAY: ...] indicator in view, got:\n%s", view)
+	}
+	if !strings.Contains(view, "My Epic") {
+		t.Errorf("expected epic title in XRay indicator, got:\n%s", view)
+	}
+}
+
+// =============================================================================
+// Advanced filter tests (bd-08h)
+// =============================================================================
+
+// TestTreeParseFilterPredicates verifies parsing of filter strings
+func TestTreeParseFilterPredicates(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		count int // expected number of predicates
+	}{
+		{"empty", "", 0},
+		{"plain text", "login", 1},
+		{"field:value", "status:open", 1},
+		{"negated", "!closed", 1},
+		{"negated field", "!status:closed", 1},
+		{"combined", "priority:1 !status:closed", 2},
+		{"multiple fields", "type:epic status:open priority:1", 3},
+		{"plain with negation", "login !status:closed", 2},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			preds := ParseFilterPredicates(tt.input)
+			if len(preds) != tt.count {
+				t.Errorf("ParseFilterPredicates(%q) = %d predicates, want %d", tt.input, len(preds), tt.count)
+			}
+		})
+	}
+}
+
+// TestTreeFilterPredicateNegation verifies negated predicate structure
+func TestTreeFilterPredicateNegation(t *testing.T) {
+	preds := ParseFilterPredicates("!status:closed")
+	if len(preds) != 1 {
+		t.Fatalf("expected 1 predicate, got %d", len(preds))
+	}
+	if !preds[0].Negated {
+		t.Error("expected predicate to be negated")
+	}
+	if preds[0].Field != "status" {
+		t.Errorf("expected field 'status', got %q", preds[0].Field)
+	}
+	if preds[0].Value != "closed" {
+		t.Errorf("expected value 'closed', got %q", preds[0].Value)
+	}
+}
+
+// TestTreeFilterPredicatePlainText verifies plain text predicate
+func TestTreeFilterPredicatePlainText(t *testing.T) {
+	preds := ParseFilterPredicates("login page")
+	if len(preds) != 1 {
+		t.Fatalf("expected 1 predicate (plain text is single), got %d", len(preds))
+	}
+	if preds[0].Field != "" {
+		t.Errorf("expected empty field for plain text, got %q", preds[0].Field)
+	}
+	if preds[0].Value != "login page" {
+		t.Errorf("expected value 'login page', got %q", preds[0].Value)
+	}
+}
+
+// TestTreeAdvancedFilterStatusOpen verifies status:open filter
+func TestTreeAdvancedFilterStatusOpen(t *testing.T) {
+	issues := []model.Issue{
+		{ID: "open-1", Title: "Open", Priority: 1, IssueType: model.TypeTask, Status: model.StatusOpen},
+		{ID: "closed-1", Title: "Closed", Priority: 2, IssueType: model.TypeTask, Status: model.StatusClosed},
+		{ID: "wip-1", Title: "WIP", Priority: 1, IssueType: model.TypeTask, Status: model.StatusInProgress},
+	}
+
+	tree := NewTreeModel(newTreeTestTheme())
+	tree.Build(issues)
+
+	tree.ApplyAdvancedFilter("status:open")
+	if tree.NodeCount() != 1 {
+		t.Errorf("expected 1 node with status:open, got %d", tree.NodeCount())
+	}
+	if tree.flatList[0].Issue.ID != "open-1" {
+		t.Errorf("expected open-1, got %s", tree.flatList[0].Issue.ID)
+	}
+}
+
+// TestTreeAdvancedFilterNegation verifies !status:closed filter
+func TestTreeAdvancedFilterNegation(t *testing.T) {
+	issues := []model.Issue{
+		{ID: "open-1", Title: "Open", Priority: 1, IssueType: model.TypeTask, Status: model.StatusOpen},
+		{ID: "closed-1", Title: "Closed", Priority: 2, IssueType: model.TypeTask, Status: model.StatusClosed},
+		{ID: "wip-1", Title: "WIP", Priority: 1, IssueType: model.TypeTask, Status: model.StatusInProgress},
+	}
+
+	tree := NewTreeModel(newTreeTestTheme())
+	tree.Build(issues)
+
+	tree.ApplyAdvancedFilter("!status:closed")
+	if tree.NodeCount() != 2 {
+		t.Errorf("expected 2 nodes with !status:closed, got %d", tree.NodeCount())
+		for i := 0; i < tree.NodeCount(); i++ {
+			t.Logf("  visible[%d]: %s (%s)", i, tree.flatList[i].Issue.ID, tree.flatList[i].Issue.Status)
+		}
+	}
+}
+
+// TestTreeAdvancedFilterPriority verifies priority:N filter
+func TestTreeAdvancedFilterPriority(t *testing.T) {
+	issues := []model.Issue{
+		{ID: "p1", Title: "P1 Item", Priority: 1, IssueType: model.TypeTask, Status: model.StatusOpen},
+		{ID: "p2", Title: "P2 Item", Priority: 2, IssueType: model.TypeTask, Status: model.StatusOpen},
+		{ID: "p3", Title: "P3 Item", Priority: 3, IssueType: model.TypeTask, Status: model.StatusOpen},
+	}
+
+	tree := NewTreeModel(newTreeTestTheme())
+	tree.Build(issues)
+
+	tree.ApplyAdvancedFilter("priority:1")
+	if tree.NodeCount() != 1 {
+		t.Errorf("expected 1 node with priority:1, got %d", tree.NodeCount())
+	}
+	if tree.flatList[0].Issue.ID != "p1" {
+		t.Errorf("expected p1, got %s", tree.flatList[0].Issue.ID)
+	}
+}
+
+// TestTreeAdvancedFilterType verifies type:epic filter
+func TestTreeAdvancedFilterType(t *testing.T) {
+	issues := []model.Issue{
+		{ID: "epic-1", Title: "Epic", Priority: 1, IssueType: model.TypeEpic, Status: model.StatusOpen},
+		{ID: "task-1", Title: "Task", Priority: 2, IssueType: model.TypeTask, Status: model.StatusOpen},
+		{ID: "bug-1", Title: "Bug", Priority: 1, IssueType: model.TypeBug, Status: model.StatusOpen},
+	}
+
+	tree := NewTreeModel(newTreeTestTheme())
+	tree.Build(issues)
+
+	tree.ApplyAdvancedFilter("type:epic")
+	if tree.NodeCount() != 1 {
+		t.Errorf("expected 1 node with type:epic, got %d", tree.NodeCount())
+	}
+	if tree.flatList[0].Issue.ID != "epic-1" {
+		t.Errorf("expected epic-1, got %s", tree.flatList[0].Issue.ID)
+	}
+}
+
+// TestTreeAdvancedFilterCombined verifies combined filters
+func TestTreeAdvancedFilterCombined(t *testing.T) {
+	issues := []model.Issue{
+		{ID: "open-p1", Title: "Open P1", Priority: 1, IssueType: model.TypeTask, Status: model.StatusOpen},
+		{ID: "closed-p1", Title: "Closed P1", Priority: 1, IssueType: model.TypeTask, Status: model.StatusClosed},
+		{ID: "open-p2", Title: "Open P2", Priority: 2, IssueType: model.TypeTask, Status: model.StatusOpen},
+	}
+
+	tree := NewTreeModel(newTreeTestTheme())
+	tree.Build(issues)
+
+	tree.ApplyAdvancedFilter("priority:1 !status:closed")
+	if tree.NodeCount() != 1 {
+		t.Errorf("expected 1 node with priority:1 !status:closed, got %d", tree.NodeCount())
+		for i := 0; i < tree.NodeCount(); i++ {
+			t.Logf("  visible[%d]: %s", i, tree.flatList[i].Issue.ID)
+		}
+	}
+	if tree.NodeCount() > 0 && tree.flatList[0].Issue.ID != "open-p1" {
+		t.Errorf("expected open-p1, got %s", tree.flatList[0].Issue.ID)
+	}
+}
+
+// TestTreeAdvancedFilterPlainTextFuzzy verifies plain text works as fuzzy title search
+func TestTreeAdvancedFilterPlainTextFuzzy(t *testing.T) {
+	issues := []model.Issue{
+		{ID: "login-1", Title: "Fix login page", Priority: 1, IssueType: model.TypeTask, Status: model.StatusOpen},
+		{ID: "signup-1", Title: "Add signup flow", Priority: 2, IssueType: model.TypeTask, Status: model.StatusOpen},
+		{ID: "logout-1", Title: "Logout button broken", Priority: 1, IssueType: model.TypeTask, Status: model.StatusOpen},
+	}
+
+	tree := NewTreeModel(newTreeTestTheme())
+	tree.Build(issues)
+
+	tree.ApplyAdvancedFilter("login")
+	if tree.NodeCount() != 1 {
+		t.Errorf("expected 1 node matching 'login', got %d", tree.NodeCount())
+	}
+	if tree.NodeCount() > 0 && tree.flatList[0].Issue.ID != "login-1" {
+		t.Errorf("expected login-1, got %s", tree.flatList[0].Issue.ID)
+	}
+}
+
+// TestTreeAdvancedFilterClearRestores verifies clearing the filter restores the tree
+func TestTreeAdvancedFilterClearRestores(t *testing.T) {
+	issues := []model.Issue{
+		{ID: "a", Title: "A", Priority: 1, IssueType: model.TypeTask, Status: model.StatusOpen},
+		{ID: "b", Title: "B", Priority: 2, IssueType: model.TypeTask, Status: model.StatusClosed},
+	}
+
+	tree := NewTreeModel(newTreeTestTheme())
+	tree.Build(issues)
+
+	tree.ApplyAdvancedFilter("status:open")
+	if tree.NodeCount() != 1 {
+		t.Fatalf("expected 1 node with filter, got %d", tree.NodeCount())
+	}
+
+	tree.ApplyAdvancedFilter("")
+	if tree.NodeCount() != 2 {
+		t.Errorf("expected 2 nodes after clearing filter, got %d", tree.NodeCount())
+	}
+}
+
+// TestTreeMarkRenderIndicator verifies marked nodes show visual marker in View()
+func TestTreeMarkRenderIndicator(t *testing.T) {
+	issues := []model.Issue{
+		{ID: "item-1", Title: "Item 1", Priority: 1, IssueType: model.TypeTask},
+		{ID: "item-2", Title: "Item 2", Priority: 2, IssueType: model.TypeTask},
+	}
+
+	tree := NewTreeModel(newTreeTestTheme())
+	tree.Build(issues)
+	tree.SetSize(100, 20)
+
+	// Mark first item
+	tree.ToggleMark()
+
+	view := tree.View()
+	// The marked item should have a visual marker (e.g., "●")
+	if !strings.Contains(view, "●") {
+		t.Errorf("expected mark indicator '●' in view for marked item, got:\n%s", view)
+	}
+}
