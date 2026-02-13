@@ -129,6 +129,11 @@ const contextHelpTree = `## Tree View
   X         Expand all nodes
   Z         Collapse all nodes
 
+**Layout**
+  d         Toggle detail panel
+  Enter     Detail-only (tree-only)
+  Esc       Return to tree-only
+
 **Filtering**
   o/c/r/a   Open/closed/ready/all
   Esc       Clear filter (or exit)

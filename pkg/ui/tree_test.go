@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -12,6 +13,11 @@ import (
 	"github.com/Dicklesworthstone/beads_viewer/pkg/model"
 	"github.com/charmbracelet/lipgloss"
 )
+
+// stripANSI removes ANSI escape sequences for plain-text column comparison.
+var ansiRe = regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)
+
+func stripANSI(s string) string { return ansiRe.ReplaceAllString(s, "") }
 
 func newTreeTestTheme() Theme {
 	return DefaultTheme(lipgloss.NewRenderer(nil))
@@ -1603,6 +1609,50 @@ func TestPositionIndicatorAtEnd(t *testing.T) {
 	// height=10, 100 nodes -> effective=8. Last window shows "93-100 of 100" with page info
 	if !strings.Contains(output, "93-100 of 100)") {
 		t.Errorf("position indicator at end not found, got:\n%s", output)
+	}
+}
+
+// TestPositionIndicatorUpdatesOnPageForward verifies page indicator changes after PageForwardFull (bd-apg)
+func TestPositionIndicatorUpdatesOnPageForward(t *testing.T) {
+	var issues []model.Issue
+	for i := 0; i < 100; i++ {
+		issues = append(issues, model.Issue{
+			ID:        fmt.Sprintf("issue-%02d", i),
+			Title:     fmt.Sprintf("Issue %d", i),
+			Priority:  2,
+			IssueType: model.TypeTask,
+		})
+	}
+
+	tree := NewTreeModel(testTheme())
+	tree.Build(issues)
+	tree.SetSize(80, 10) // height=10 -> effective visible = 8
+
+	// Initially at page 1
+	output := tree.View()
+	if !strings.Contains(output, "Page 1/") {
+		t.Fatalf("expected Page 1/ initially, got:\n%s", output)
+	}
+
+	// Page forward with right arrow
+	tree.PageForwardFull()
+	output = tree.View()
+	if !strings.Contains(output, "Page 2/") {
+		t.Errorf("expected Page 2/ after PageForwardFull, got:\n%s", output)
+	}
+
+	// Page forward again
+	tree.PageForwardFull()
+	output = tree.View()
+	if !strings.Contains(output, "Page 3/") {
+		t.Errorf("expected Page 3/ after second PageForwardFull, got:\n%s", output)
+	}
+
+	// Page backward
+	tree.PageBackwardFull()
+	output = tree.View()
+	if !strings.Contains(output, "Page 2/") {
+		t.Errorf("expected Page 2/ after PageBackwardFull, got:\n%s", output)
 	}
 }
 
@@ -3621,3 +3671,75 @@ func TestTreeFollowModeExpandsCollapsedParent(t *testing.T) {
 		t.Errorf("expected at least 3 visible nodes (parent expanded), got %d", tree.NodeCount())
 	}
 }
+
+// TestTreeConnectorAlignmentOnSelectedRow verifies that tree connector characters
+// (│, ├, └) on the selected row align with the same characters on non-selected
+// sibling rows. Regression test for bd-6yz.
+func TestTreeConnectorAlignmentOnSelectedRow(t *testing.T) {
+	now := time.Now()
+	issues := []model.Issue{
+		{ID: "epic-1", Title: "Parent Epic", Priority: 1, IssueType: model.TypeEpic, Status: model.StatusOpen, CreatedAt: now},
+		{
+			ID: "task-1", Title: "First Child", Priority: 2, IssueType: model.TypeTask, Status: model.StatusOpen, CreatedAt: now.Add(time.Hour),
+			Dependencies: []*model.Dependency{{IssueID: "task-1", DependsOnID: "epic-1", Type: model.DepParentChild}},
+		},
+		{
+			ID: "task-2", Title: "Second Child", Priority: 2, IssueType: model.TypeTask, Status: model.StatusOpen, CreatedAt: now.Add(2 * time.Hour),
+			Dependencies: []*model.Dependency{{IssueID: "task-2", DependsOnID: "epic-1", Type: model.DepParentChild}},
+		},
+	}
+
+	tree := NewTreeModel(newTreeTestTheme())
+	tree.SetBeadsDir(filepath.Join(t.TempDir(), ".beads"))
+	tree.Build(issues)
+	tree.SetSize(120, 30)
+
+	// Select the first child (index 1 in flatList: epic=0, task-1=1, task-2=2)
+	tree.MoveDown()
+
+	if tree.GetSelectedID() != "task-1" {
+		t.Fatalf("expected task-1 selected, got %q", tree.GetSelectedID())
+	}
+
+	view := tree.View()
+	lines := strings.Split(view, "\n")
+
+	// Find lines containing task-1 (selected) and task-2 (not selected) by ID
+	var task1Line, task2Line string
+	for _, line := range lines {
+		plain := stripANSI(line)
+		if strings.Contains(plain, "task-1") {
+			task1Line = plain
+		}
+		if strings.Contains(plain, "task-2") {
+			task2Line = plain
+		}
+	}
+
+	if task1Line == "" || task2Line == "" {
+		t.Fatalf("could not find task-1 and task-2 lines in view output:\n%s", view)
+	}
+
+	// Find the column position of the branch connector (├ or └) in each line.
+	// Both siblings should have their connector at the same column.
+	findConnectorCol := func(line string) int {
+		for i, r := range []rune(line) {
+			if r == '├' || r == '└' || r == '│' {
+				return i
+			}
+		}
+		return -1
+	}
+
+	col1 := findConnectorCol(task1Line)
+	col2 := findConnectorCol(task2Line)
+
+	if col1 == -1 || col2 == -1 {
+		t.Fatalf("could not find connector chars: task-1 col=%d, task-2 col=%d\ntask-1: %q\ntask-2: %q", col1, col2, task1Line, task2Line)
+	}
+
+	if col1 != col2 {
+		t.Errorf("tree connectors misaligned: task-1 connector at column %d, task-2 at column %d\ntask-1: %q\ntask-2: %q", col1, col2, task1Line, task2Line)
+	}
+}
+

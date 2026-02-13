@@ -190,6 +190,12 @@ const (
 	TreeModeBlocking                      // blocking deps (future)
 )
 
+// selectionGutterWidth is the width reserved on the left of every tree row
+// so the Selected style's left border (1 char) + PaddingLeft(1) doesn't shift
+// the tree connectors out of alignment. Non-selected rows get equivalent
+// blank padding. Must match theme.Selected border + padding geometry.
+const selectionGutterWidth = 2
+
 // IssueTreeNode represents a node in the hierarchical issue tree
 type IssueTreeNode struct {
 	Issue    *model.Issue     // Reference to the actual issue
@@ -940,7 +946,9 @@ func (t *TreeModel) View() string {
 
 	// Render sticky scroll lines if parent is off-screen (bd-2z9)
 	stickyLines := t.StickyScrollLines()
+	gutterPad := strings.Repeat(" ", selectionGutterWidth)
 	for _, stickyLine := range stickyLines {
+		sb.WriteString(gutterPad)
 		sb.WriteString(stickyLine)
 		sb.WriteString("\n")
 	}
@@ -959,12 +967,18 @@ func (t *TreeModel) View() string {
 		line := t.renderNode(node, isSelected)
 
 		if isSelected {
-			// Highlight selected row using theme's Selected style
+			// Highlight selected row — the Selected style's left border+padding
+			// provides the gutter naturally (bd-6yz)
 			line = t.theme.Selected.Render(line)
-		} else if t.IsFilterDimmed(node) {
-			// Context ancestors shown with muted/faint styling (bd-05v)
-			dimStyle := t.theme.Renderer.NewStyle().Foreground(t.theme.Muted).Faint(true)
-			line = dimStyle.Render(line)
+		} else {
+			// Non-selected rows get blank gutter padding to keep tree
+			// connectors aligned with the selected row (bd-6yz)
+			line = strings.Repeat(" ", selectionGutterWidth) + line
+			if t.IsFilterDimmed(node) {
+				// Context ancestors shown with muted/faint styling (bd-05v)
+				dimStyle := t.theme.Renderer.NewStyle().Foreground(t.theme.Muted).Faint(true)
+				line = dimStyle.Render(line)
+			}
 		}
 
 		sb.WriteString(line)
@@ -1030,11 +1044,20 @@ func (t *TreeModel) PageForwardFull() {
 	}
 	total := len(t.flatList)
 	t.cursor += pageSize
+	t.viewportOffset += pageSize
 	if t.cursor >= total {
 		t.cursor = total - 1
 	}
 	if t.cursor < 0 {
 		t.cursor = 0
+	}
+	// Clamp viewport offset
+	maxOffset := total - pageSize
+	if maxOffset < 0 {
+		maxOffset = 0
+	}
+	if t.viewportOffset > maxOffset {
+		t.viewportOffset = maxOffset
 	}
 	t.ensureCursorVisible()
 }
@@ -1046,8 +1069,12 @@ func (t *TreeModel) PageBackwardFull() {
 		pageSize = 1
 	}
 	t.cursor -= pageSize
+	t.viewportOffset -= pageSize
 	if t.cursor < 0 {
 		t.cursor = 0
+	}
+	if t.viewportOffset < 0 {
+		t.viewportOffset = 0
 	}
 	t.ensureCursorVisible()
 }
@@ -1114,8 +1141,11 @@ func (t *TreeModel) renderNode(node *IssueTreeNode, isSelected bool) string {
 	if width <= 0 {
 		width = 80
 	}
-	// Reduce width by 1 to prevent terminal wrapping on the exact edge
-	width = width - 1
+	// Reduce width by 1 to prevent terminal wrapping on the exact edge,
+	// and by selectionGutterWidth so all rows (selected and non-selected)
+	// render at the same content width — the gutter is filled by the
+	// Selected style's border+padding or by blank padding (bd-6yz).
+	width = width - 1 - selectionGutterWidth
 
 	var leftSide strings.Builder
 

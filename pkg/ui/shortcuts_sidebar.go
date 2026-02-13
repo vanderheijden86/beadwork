@@ -160,6 +160,7 @@ func (s *ShortcutsSidebar) allSections() []shortcutSection {
 				{"l/→", "Expand/child"},
 				{"Enter/^↵", "Toggle expand"},
 				{"X/Z", "Expand/collapse all"},
+				{"d", "Toggle detail"},
 				{"o/c/r/a", "Filter: o/c/r/all"},
 				{"s", "Cycle sort"},
 				{"/", "Search tree"},

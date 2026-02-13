@@ -457,6 +457,7 @@ type Model struct {
 	focused                  focus
 	focusBeforeHelp          focus // Stores focus before opening help overlay
 	treeViewActive           bool  // True when tree view is the active left pane (bd-xfd)
+	treeDetailHidden         bool  // True when detail panel is hidden in tree view (bd-80u)
 	isSplitView              bool
 	splitPaneRatio           float64 // Ratio of list pane width (0.2-0.8), default 0.4
 	isBoardView              bool
@@ -2876,9 +2877,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.focused = focusList
 					return m, nil
 				}
-				// Tree view: sort popup takes precedence over filter/exit (bd-t4e)
-				if (m.treeViewActive || m.focused == focusTree) && m.tree.IsSortPopupOpen() {
-					m.tree.CloseSortPopup()
+				// Tree detail-only mode: ESC returns to tree-only (bd-80u)
+				if m.treeViewActive && m.treeDetailHidden && m.focused == focusDetail {
+					m.focused = focusTree
 					return m, nil
 				}
 				// Tree view: search mode escape (bd-wf8) takes precedence
@@ -2912,9 +2913,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					if m.focused == focusList {
 						m.focused = focusDetail
 					} else if m.focused == focusTree {
-						// Tree to detail: sync selection before switching
-						m.syncTreeToDetail()
-						m.focused = focusDetail
+						// Tree to detail: sync selection before switching (skip when detail hidden, bd-80u)
+						if !m.treeDetailHidden {
+							m.syncTreeToDetail()
+							m.focused = focusDetail
+						}
 					} else if m.focused == focusDetail && m.treeViewActive {
 						// Detail back to tree
 						m.focused = focusTree
@@ -3318,8 +3321,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m, listKeyConsumed = m.handleListKeys(msg)
 
 			case focusDetail:
-				m.viewport, cmd = m.viewport.Update(msg)
-				cmds = append(cmds, cmd)
+				// Toggle detail panel from detail focus in tree view (bd-80u)
+				if m.treeViewActive && msg.String() == "d" {
+					m.treeDetailHidden = !m.treeDetailHidden
+					if m.treeDetailHidden {
+						m.focused = focusTree
+					}
+					if !m.treeDetailHidden {
+						m.syncTreeToDetail()
+					}
+				} else {
+					m.viewport, cmd = m.viewport.Update(msg)
+					cmds = append(cmds, cmd)
+				}
 			}
 		}
 
@@ -3744,22 +3758,6 @@ func (m *Model) syncTreeToDetail() {
 
 // handleTreeKeys handles keyboard input when tree view is focused (bv-gllx)
 func (m Model) handleTreeKeys(msg tea.KeyMsg) Model {
-	// Sort popup mode: forward input to sort popup (bd-t4e)
-	if m.tree.IsSortPopupOpen() {
-		switch msg.String() {
-		case "j", "down":
-			m.tree.SortPopupDown()
-		case "k", "up":
-			m.tree.SortPopupUp()
-		case "enter":
-			m.tree.SortPopupSelect()
-			m.syncTreeToDetail()
-		case "esc", "s":
-			m.tree.CloseSortPopup()
-		}
-		return m
-	}
-
 	// Search mode: forward input to tree search (bd-wf8)
 	if m.tree.IsSearchMode() {
 		switch msg.String() {
@@ -3789,8 +3787,14 @@ func (m Model) handleTreeKeys(msg tea.KeyMsg) Model {
 		m.tree.MoveUp()
 		m.syncTreeToDetail()
 	case "enter", " ":
-		m.tree.ToggleExpand()
-		m.syncTreeToDetail()
+		if msg.String() == "enter" && m.treeDetailHidden {
+			// Enter in tree-only mode shows detail-only view (bd-80u)
+			m.syncTreeToDetail()
+			m.focused = focusDetail
+		} else {
+			m.tree.ToggleExpand()
+			m.syncTreeToDetail()
+		}
 	case "ctrl+a":
 		m.tree.ToggleExpandCollapseAll()
 		m.syncTreeToDetail()
@@ -3824,8 +3828,9 @@ func (m Model) handleTreeKeys(msg tea.KeyMsg) Model {
 		m.tree.PageUp()
 		m.syncTreeToDetail()
 	case "s":
-		// Open sort popup menu (bd-t4e, replaces cycle sort bd-tfn)
-		m.tree.OpenSortPopup()
+		// Cycle sort mode (bd-80u: cycle like list view, no popup)
+		m.tree.CycleSortMode()
+		m.syncTreeToDetail()
 	case "/":
 		// Enter search mode (bd-wf8)
 		m.tree.EnterSearchMode()
@@ -3909,6 +3914,15 @@ func (m Model) handleTreeKeys(msg tea.KeyMsg) Model {
 	case "F":
 		// Toggle follow mode (bd-c0c)
 		m.tree.ToggleFollowMode()
+	case "d":
+		// Toggle detail panel visibility (bd-80u)
+		m.treeDetailHidden = !m.treeDetailHidden
+		if m.treeDetailHidden && m.focused == focusDetail {
+			m.focused = focusTree
+		}
+		if !m.treeDetailHidden {
+			m.syncTreeToDetail()
+		}
 	case "esc":
 		// First escape exits XRay, then clears tree filter, then exits tree view (bd-kob, bd-0rc)
 		if m.tree.IsXRayMode() {
@@ -4810,7 +4824,10 @@ func (m Model) View() string {
 		body = m.flowMatrix.View()
 	} else if m.focused == focusTree || (m.focused == focusDetail && m.treeViewActive) {
 		// Hierarchical tree view (bv-gllx) with split view support (bd-xfd)
-		if m.isSplitView {
+		if m.focused == focusDetail && m.treeDetailHidden {
+			// Detail-only mode: full-screen viewport (bd-80u)
+			body = m.viewport.View()
+		} else if m.isSplitView && !m.treeDetailHidden {
 			body = m.renderTreeSplitView()
 		} else {
 			m.tree.SetSize(m.width, m.height-1)
@@ -7635,11 +7652,6 @@ func (m Model) TreeNodeCount() int {
 	return m.tree.NodeCount()
 }
 
-// TreeSortPopupOpen returns whether the sort popup is open in the tree view (bd-t4e).
-func (m Model) TreeSortPopupOpen() bool {
-	return m.tree.IsSortPopupOpen()
-}
-
 // TreeSortField returns the current sort field of the tree view (bd-x3l).
 func (m Model) TreeSortField() SortField {
 	return m.tree.GetSortField()
@@ -7658,6 +7670,11 @@ func (m Model) TreeBookmarkedIDs() []string {
 // TreeFollowMode returns whether follow mode is active (bd-c0c).
 func (m Model) TreeFollowMode() bool {
 	return m.tree.GetFollowMode()
+}
+
+// TreeDetailHidden returns whether the detail panel is hidden in tree view (bd-80u).
+func (m Model) TreeDetailHidden() bool {
+	return m.treeDetailHidden
 }
 
 // exportToMarkdown exports all issues to a Markdown file with auto-generated filename
