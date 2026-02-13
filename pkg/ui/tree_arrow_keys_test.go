@@ -20,23 +20,25 @@ import (
 //	standalone-1 (P2, task, no parent)
 func createTreeTestIssues() []model.Issue {
 	now := time.Now()
+	// CreatedAt values are set so that default sort (Created desc) produces
+	// the expected display order: epic-1, task-1, task-2, standalone-1 (bd-2ty).
 	return []model.Issue{
-		{ID: "epic-1", Title: "Epic One", Status: model.StatusOpen, Priority: 1, IssueType: model.TypeEpic, CreatedAt: now},
+		{ID: "epic-1", Title: "Epic One", Status: model.StatusOpen, Priority: 1, IssueType: model.TypeEpic, CreatedAt: now.Add(3 * time.Second)},
 		{
 			ID: "task-1", Title: "Task One", Status: model.StatusOpen, Priority: 2, IssueType: model.TypeTask,
-			CreatedAt: now.Add(time.Second),
+			CreatedAt: now.Add(2 * time.Second),
 			Dependencies: []*model.Dependency{
 				{IssueID: "task-1", DependsOnID: "epic-1", Type: model.DepParentChild},
 			},
 		},
 		{
 			ID: "task-2", Title: "Task Two", Status: model.StatusOpen, Priority: 2, IssueType: model.TypeTask,
-			CreatedAt: now.Add(2 * time.Second),
+			CreatedAt: now.Add(time.Second),
 			Dependencies: []*model.Dependency{
 				{IssueID: "task-2", DependsOnID: "epic-1", Type: model.DepParentChild},
 			},
 		},
-		{ID: "standalone-1", Title: "Standalone", Status: model.StatusOpen, Priority: 2, IssueType: model.TypeTask, CreatedAt: now.Add(3 * time.Second)},
+		{ID: "standalone-1", Title: "Standalone", Status: model.StatusOpen, Priority: 2, IssueType: model.TypeTask, CreatedAt: now},
 	}
 }
 
@@ -222,13 +224,15 @@ func createManyTreeIssues(n int) []model.Issue {
 	now := time.Now()
 	issues := make([]model.Issue, n)
 	for i := 0; i < n; i++ {
+		// CreatedAt descends so that default sort (Created desc) preserves
+		// the expected display order: t-0000 first, t-NNNN last (bd-2ty).
 		issues[i] = model.Issue{
 			ID:        fmt.Sprintf("t-%04d", i),
 			Title:     fmt.Sprintf("Task %04d", i),
 			Status:    model.StatusOpen,
 			Priority:  2,
 			IssueType: model.TypeTask,
-			CreatedAt: now.Add(time.Duration(i) * time.Second),
+			CreatedAt: now.Add(-time.Duration(i) * time.Second),
 		}
 	}
 	return issues
@@ -432,11 +436,73 @@ func lastN(s string, n int) string {
 }
 
 // ============================================================================
-// Tests: Sort popup menu integration (bd-t4e)
+// Tests: Sort popup menu integration (bd-u81)
 // ============================================================================
 
-// TestTreeViewSortPopupOpensOnS verifies that 's' opens the sort popup
-func TestTreeViewSortCyclesOnS(t *testing.T) {
+// TestTreeViewSortPopupOpensOnS verifies that 's' opens the sort popup overlay.
+func TestTreeViewSortPopupOpensOnS(t *testing.T) {
+	issues := createTreeTestIssues()
+	m := ui.NewModel(issues, nil, "")
+	m = enterTreeView(t, m)
+
+	// Popup should be closed initially
+	if m.TreeSortPopupOpen() {
+		t.Fatal("sort popup should be closed initially")
+	}
+
+	// Press 's' to open popup
+	m = sendKey(t, m, "s")
+	if !m.TreeSortPopupOpen() {
+		t.Error("sort popup should be open after pressing 's'")
+	}
+}
+
+// TestTreeViewSortPopupEscCloses verifies that Esc closes the sort popup without changing sort.
+func TestTreeViewSortPopupEscCloses(t *testing.T) {
+	issues := createTreeTestIssues()
+	m := ui.NewModel(issues, nil, "")
+	m = enterTreeView(t, m)
+
+	initialField := m.TreeSortField()
+	initialDir := m.TreeSortDirection()
+
+	// Open popup then close with Esc
+	m = sendKey(t, m, "s")
+	m = sendSpecialKey(t, m, tea.KeyEsc)
+
+	if m.TreeSortPopupOpen() {
+		t.Error("sort popup should be closed after Esc")
+	}
+	if m.TreeSortField() != initialField {
+		t.Errorf("sort field should be unchanged after Esc close, got %v", m.TreeSortField())
+	}
+	if m.TreeSortDirection() != initialDir {
+		t.Errorf("sort direction should be unchanged after Esc close, got %v", m.TreeSortDirection())
+	}
+}
+
+// TestTreeViewSortPopupSKeyCloses verifies that pressing 's' again closes the popup.
+func TestTreeViewSortPopupSKeyCloses(t *testing.T) {
+	issues := createTreeTestIssues()
+	m := ui.NewModel(issues, nil, "")
+	m = enterTreeView(t, m)
+
+	// Open popup
+	m = sendKey(t, m, "s")
+	if !m.TreeSortPopupOpen() {
+		t.Fatal("sort popup should be open after 's'")
+	}
+
+	// Press 's' again to close
+	m = sendKey(t, m, "s")
+	if m.TreeSortPopupOpen() {
+		t.Error("sort popup should be closed after pressing 's' again")
+	}
+}
+
+// TestTreeViewSortPopupSelectChangesSort verifies that navigating and pressing Enter
+// in the popup changes the sort field.
+func TestTreeViewSortPopupSelectChangesSort(t *testing.T) {
 	issues := createTreeTestIssues()
 	m := ui.NewModel(issues, nil, "")
 	m = enterTreeView(t, m)
@@ -446,36 +512,65 @@ func TestTreeViewSortCyclesOnS(t *testing.T) {
 		t.Fatalf("expected initial sort Created, got %v", m.TreeSortField())
 	}
 
-	// Press 's' to cycle to next sort field (Updated)
+	// Open popup, navigate down to Title, press Enter
 	m = sendKey(t, m, "s")
-	if m.TreeSortField() != ui.SortFieldUpdated {
-		t.Errorf("expected Updated after first 's', got %v", m.TreeSortField())
-	}
+	m = sendKey(t, m, "j") // Updated
+	m = sendKey(t, m, "j") // Title
+	m = sendSpecialKey(t, m, tea.KeyEnter)
 
-	// Press 's' again to cycle to Title
-	m = sendKey(t, m, "s")
+	if m.TreeSortPopupOpen() {
+		t.Error("popup should close after Enter")
+	}
 	if m.TreeSortField() != ui.SortFieldTitle {
-		t.Errorf("expected Title after second 's', got %v", m.TreeSortField())
+		t.Errorf("expected Title after selecting, got %v", m.TreeSortField())
 	}
 }
 
-// TestTreeViewSortCycleDoesNotFreezeNavigation verifies that after pressing 's',
-// j/k still navigate the tree (no popup consuming keys).
-func TestTreeViewSortCycleDoesNotFreezeNavigation(t *testing.T) {
+// TestTreeViewSortPopupToggleDirection verifies that selecting the current sort field
+// toggles its direction (asc/desc).
+func TestTreeViewSortPopupToggleDirection(t *testing.T) {
 	issues := createTreeTestIssues()
 	m := ui.NewModel(issues, nil, "")
 	m = enterTreeView(t, m)
 
-	// Press 's' to cycle sort
+	initialDir := m.TreeSortDirection()
+
+	// Open popup and select current field (Created) to toggle direction
 	m = sendKey(t, m, "s")
+	m = sendSpecialKey(t, m, tea.KeyEnter)
 
-	// Record ID after sort cycle
-	afterSortID := m.TreeSelectedID()
+	if m.TreeSortField() != ui.SortFieldCreated {
+		t.Errorf("sort field should remain Created, got %v", m.TreeSortField())
+	}
+	if m.TreeSortDirection() == initialDir {
+		t.Error("sort direction should have toggled after selecting the current field")
+	}
+}
 
-	// Press 'j' - should move cursor down (not consumed by popup)
+// TestTreeViewSortPopupDoesNotAffectNavigation verifies that j/k are consumed by the
+// popup when open (not passed to tree navigation), and after closing, navigation works.
+func TestTreeViewSortPopupDoesNotAffectNavigation(t *testing.T) {
+	issues := createTreeTestIssues()
+	m := ui.NewModel(issues, nil, "")
+	m = enterTreeView(t, m)
+
+	idBefore := m.TreeSelectedID()
+
+	// Open popup, press j (should move popup cursor, not tree cursor)
+	m = sendKey(t, m, "s")
 	m = sendKey(t, m, "j")
-	if m.TreeSelectedID() == afterSortID {
-		t.Error("j should move cursor after 's' (sort cycle), but selection didn't change")
+
+	if m.TreeSelectedID() != idBefore {
+		t.Error("j inside popup should not move tree cursor")
+	}
+
+	// Close popup with Esc
+	m = sendSpecialKey(t, m, tea.KeyEsc)
+
+	// Now j should move the tree cursor
+	m = sendKey(t, m, "j")
+	if m.TreeSelectedID() == idBefore {
+		t.Error("j after popup close should move tree cursor")
 	}
 }
 
@@ -707,6 +802,63 @@ func TestTreeViewEscFromDetailOnlyReturnsToTree(t *testing.T) {
 	// Detail should still be hidden (tree-only mode preserved)
 	if !m.TreeDetailHidden() {
 		t.Error("Expected detail still hidden after ESC from detail-only")
+	}
+}
+
+// TestTreeViewEnterFromDetailReturnsToTreeInNonSplit verifies Enter from
+// detail-only mode (non-split) returns focus to tree, same as ESC (bd-bys).
+func TestTreeViewEnterFromDetailReturnsToTreeInNonSplit(t *testing.T) {
+	issues := createTreeTestIssues()
+	m := ui.NewModel(issues, nil, "")
+	m = enterTreeView(t, m)
+
+	// Hide detail, enter detail-only via Enter
+	m = sendKey(t, m, "d")
+	if !m.TreeDetailHidden() {
+		t.Fatal("Expected detail hidden after 'd'")
+	}
+	m = sendKey(t, m, "enter")
+	if m.FocusState() != "detail" {
+		t.Fatalf("Expected focus 'detail' after Enter, got %q", m.FocusState())
+	}
+
+	// Press Enter again - should return to tree focus (toggle behavior)
+	m = sendKey(t, m, "enter")
+	if m.FocusState() != "tree" {
+		t.Errorf("Expected focus 'tree' after second Enter (toggle back), got %q", m.FocusState())
+	}
+	// Detail should still be hidden (tree-only mode preserved)
+	if !m.TreeDetailHidden() {
+		t.Error("Expected detail still hidden after Enter toggle back to tree")
+	}
+}
+
+// TestTreeViewEnterExpandsCollapseInSplitMode verifies Enter still toggles
+// expand/collapse when in split mode with detail visible (no regression, bd-bys).
+func TestTreeViewEnterExpandsCollapseInSplitMode(t *testing.T) {
+	issues := createTreeTestIssues()
+	m := ui.NewModel(issues, nil, "")
+
+	// Set wide terminal for split view
+	newM, _ := m.Update(tea.WindowSizeMsg{Width: 200, Height: 40})
+	m = newM.(ui.Model)
+
+	m = enterTreeView(t, m)
+
+	// Ensure detail is visible (split mode default)
+	if m.TreeDetailHidden() {
+		t.Fatal("Expected detail visible in split mode")
+	}
+
+	// Detail is visible, so treeDetailHidden is false.
+	// Enter should toggle expand/collapse (same as space), NOT switch focus.
+	m = sendKey(t, m, "enter")
+	if m.FocusState() != "tree" {
+		t.Errorf("Expected focus to remain 'tree' after Enter in split mode, got %q", m.FocusState())
+	}
+	// Detail should still be visible (not hidden)
+	if m.TreeDetailHidden() {
+		t.Error("Expected detail to remain visible after Enter in split mode")
 	}
 }
 

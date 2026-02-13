@@ -382,15 +382,20 @@ func (t *TreeModel) Build(issues []model.Issue) {
 	t.roots = roots
 	t.issueMap = nodeMap
 
-	// Step 5: Handle empty tree (no parent-child relationships found)
+	// Step 5: Re-sort using the model's configured sortField/sortDirection (bd-2ty).
+	// buildIssueTreeNodes uses a hardcoded priority-based sort internally, so we
+	// must re-sort all sibling groups to honour the actual default (Created desc).
+	t.sortAllSiblings()
+
+	// Step 6: Handle empty tree (no parent-child relationships found)
 	// If all issues are roots (no hierarchy), that's fine - show them all
 	// The View() will handle displaying a helpful message if needed
 
-	// Step 6: Load persisted state (bv-afcm)
+	// Step 7: Load persisted state (bv-afcm)
 	// This modifies node.Expanded values before we build the flat list
 	t.loadState()
 
-	// Step 7: Build the flat list for navigation
+	// Step 8: Build the flat list for navigation
 	// This must come after loadState so expand states are applied
 	t.rebuildFlatList()
 
@@ -426,6 +431,10 @@ func (t *TreeModel) BuildFromSnapshot(snapshot *DataSnapshot) {
 		t.lastHash = snapshot.DataHash
 		return
 	}
+
+	// Re-sort using the model's configured sortField/sortDirection (bd-2ty).
+	// Snapshot tree roots were built with a hardcoded priority-based sort.
+	t.sortAllSiblings()
 
 	// Apply persisted expand/collapse state and rebuild visible list.
 	t.loadState()
@@ -779,13 +788,6 @@ func (t *TreeModel) RenderSortPopup() string {
 	r := t.theme.Renderer
 	var sb strings.Builder
 
-	// Title
-	titleStyle := r.NewStyle().
-		Foreground(t.theme.Primary).
-		Bold(true)
-	sb.WriteString(titleStyle.Render("Sort by:"))
-	sb.WriteString("\n")
-
 	for i := SortField(0); i < NumSortFields; i++ {
 		isSelected := int(i) == t.sortPopupCursor
 		isCurrent := i == t.sortField
@@ -814,7 +816,19 @@ func (t *TreeModel) RenderSortPopup() string {
 		sb.WriteString("\n")
 	}
 
-	return sb.String()
+	content := strings.TrimRight(sb.String(), "\n")
+
+	// Wrap in a bordered box
+	boxStyle := r.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(t.theme.Primary).
+		Padding(0, 1)
+
+	titleStyle := r.NewStyle().
+		Foreground(t.theme.Primary).
+		Bold(true)
+
+	return boxStyle.Render(titleStyle.Render("Sort by")+"\n"+content) + "\n"
 }
 
 // SetPageRankScores sets externally-computed PageRank scores for sort-by-pagerank (bd-x3l).
@@ -998,6 +1012,25 @@ func (t *TreeModel) View() string {
 	if t.searchMode {
 		sb.WriteString("\n")
 		sb.WriteString(t.renderSearchBar())
+	}
+
+	// Overlay sort popup on top of the last rows when open (bd-u81)
+	if t.sortPopupOpen {
+		output := sb.String()
+		popupContent := t.RenderSortPopup()
+		if popupContent != "" {
+			// Split output into lines, replace last N lines with popup
+			lines := strings.Split(strings.TrimRight(output, "\n"), "\n")
+			popupLines := strings.Split(strings.TrimRight(popupContent, "\n"), "\n")
+			// Replace from the bottom
+			replaceStart := len(lines) - len(popupLines)
+			if replaceStart < 1 { // keep at least the header
+				replaceStart = 1
+			}
+			lines = lines[:replaceStart]
+			lines = append(lines, popupLines...)
+			return strings.Join(lines, "\n") + "\n"
+		}
 	}
 
 	return sb.String()

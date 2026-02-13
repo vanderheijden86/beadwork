@@ -162,7 +162,7 @@ func (s *ShortcutsSidebar) allSections() []shortcutSection {
 				{"X/Z", "Expand/collapse all"},
 				{"d", "Toggle detail"},
 				{"o/c/r/a", "Filter: o/c/r/all"},
-				{"s", "Cycle sort"},
+				{"s", "Sort popup"},
 				{"/", "Search tree"},
 				{"n/N", "Next/prev match"},
 			},

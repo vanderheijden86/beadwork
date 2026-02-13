@@ -2872,6 +2872,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.focused = focusTree
 					return m, nil
 				}
+				// Tree view: sort popup escape (bd-u81) takes precedence
+				if (m.treeViewActive || m.focused == focusTree) && m.tree.IsSortPopupOpen() {
+					m.tree.CloseSortPopup()
+					return m, nil
+				}
 				// Tree view: search mode escape (bd-wf8) takes precedence
 				if (m.treeViewActive || m.focused == focusTree) && m.tree.IsSearchMode() {
 					m.tree.ClearSearch()
@@ -3311,8 +3316,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m, listKeyConsumed = m.handleListKeys(msg)
 
 			case focusDetail:
-				// Toggle detail panel from detail focus in tree view (bd-80u)
-				if m.treeViewActive && msg.String() == "d" {
+				// Enter returns to tree in detail-only (non-split) mode (bd-bys)
+				if m.treeViewActive && m.treeDetailHidden && msg.String() == "enter" {
+					m.focused = focusTree
+				} else if m.treeViewActive && msg.String() == "d" {
+					// Toggle detail panel from detail focus in tree view (bd-80u)
 					m.treeDetailHidden = !m.treeDetailHidden
 					if m.treeDetailHidden {
 						m.focused = focusTree
@@ -3760,6 +3768,22 @@ func (m *Model) syncTreeToDetail() {
 
 // handleTreeKeys handles keyboard input when tree view is focused (bv-gllx)
 func (m Model) handleTreeKeys(msg tea.KeyMsg) Model {
+	// Sort popup mode: consume j/k/enter/esc/s only (bd-u81)
+	if m.tree.IsSortPopupOpen() {
+		switch msg.String() {
+		case "j", "down":
+			m.tree.SortPopupDown()
+		case "k", "up":
+			m.tree.SortPopupUp()
+		case "enter":
+			m.tree.SortPopupSelect()
+			m.syncTreeToDetail()
+		case "esc", "s":
+			m.tree.CloseSortPopup()
+		}
+		return m
+	}
+
 	// Search mode: forward input to tree search (bd-wf8)
 	if m.tree.IsSearchMode() {
 		switch msg.String() {
@@ -3830,9 +3854,8 @@ func (m Model) handleTreeKeys(msg tea.KeyMsg) Model {
 		m.tree.PageUp()
 		m.syncTreeToDetail()
 	case "s":
-		// Cycle sort mode (bd-80u: cycle like list view, no popup)
-		m.tree.CycleSortMode()
-		m.syncTreeToDetail()
+		// Open sort popup menu (bd-u81)
+		m.tree.OpenSortPopup()
 	case "/":
 		// Enter search mode (bd-wf8)
 		m.tree.EnterSearchMode()
@@ -7669,6 +7692,11 @@ func (m Model) TreeSortField() SortField {
 // TreeSortDirection returns the current sort direction of the tree view (bd-x3l).
 func (m Model) TreeSortDirection() SortDirection {
 	return m.tree.GetSortDirection()
+}
+
+// TreeSortPopupOpen returns whether the sort popup overlay is visible (bd-u81).
+func (m Model) TreeSortPopupOpen() bool {
+	return m.tree.IsSortPopupOpen()
 }
 
 // TreeBookmarkedIDs returns the IDs of bookmarked tree nodes (bd-k4n).

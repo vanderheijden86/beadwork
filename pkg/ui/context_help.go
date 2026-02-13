@@ -131,13 +131,13 @@ const contextHelpTree = `## Tree View
 
 **Layout**
   d         Toggle detail panel
-  Enter     Detail-only (tree-only)
+  Enter     Toggle detail-only view
   Esc       Return to tree-only
 
 **Filtering**
   o/c/r/a   Open/closed/ready/all
   Esc       Clear filter (or exit)
-  s         Cycle sort mode
+  s         Sort popup (j/k, Enter, Esc)
   /         Search tree
   n/N       Next/prev match`
 

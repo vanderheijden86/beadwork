@@ -34,31 +34,34 @@ func cleanTreeState(t *testing.T) {
 
 func createNavTestIssues() []model.Issue {
 	now := time.Now()
+	// CreatedAt values are set so that default sort (Created desc) produces
+	// the expected display order: epic-1, task-1, task-2, task-3,
+	// standalone-1, standalone-2 (bd-2ty).
 	return []model.Issue{
-		{ID: "epic-1", Title: "Epic One", Status: model.StatusOpen, Priority: 1, IssueType: model.TypeEpic, CreatedAt: now},
+		{ID: "epic-1", Title: "Epic One", Status: model.StatusOpen, Priority: 1, IssueType: model.TypeEpic, CreatedAt: now.Add(5 * time.Second)},
 		{
 			ID: "task-1", Title: "Task One", Status: model.StatusOpen, Priority: 2, IssueType: model.TypeTask,
-			CreatedAt: now.Add(time.Second),
+			CreatedAt: now.Add(4 * time.Second),
 			Dependencies: []*model.Dependency{
 				{IssueID: "task-1", DependsOnID: "epic-1", Type: model.DepParentChild},
 			},
 		},
 		{
 			ID: "task-2", Title: "Task Two", Status: model.StatusOpen, Priority: 2, IssueType: model.TypeTask,
-			CreatedAt: now.Add(2 * time.Second),
+			CreatedAt: now.Add(3 * time.Second),
 			Dependencies: []*model.Dependency{
 				{IssueID: "task-2", DependsOnID: "epic-1", Type: model.DepParentChild},
 			},
 		},
 		{
 			ID: "task-3", Title: "Task Three", Status: model.StatusOpen, Priority: 2, IssueType: model.TypeTask,
-			CreatedAt: now.Add(3 * time.Second),
+			CreatedAt: now.Add(2 * time.Second),
 			Dependencies: []*model.Dependency{
 				{IssueID: "task-3", DependsOnID: "epic-1", Type: model.DepParentChild},
 			},
 		},
-		{ID: "standalone-1", Title: "Standalone One", Status: model.StatusOpen, Priority: 2, IssueType: model.TypeTask, CreatedAt: now.Add(4 * time.Second)},
-		{ID: "standalone-2", Title: "Standalone Two", Status: model.StatusOpen, Priority: 3, IssueType: model.TypeTask, CreatedAt: now.Add(5 * time.Second)},
+		{ID: "standalone-1", Title: "Standalone One", Status: model.StatusOpen, Priority: 2, IssueType: model.TypeTask, CreatedAt: now.Add(time.Second)},
+		{ID: "standalone-2", Title: "Standalone Two", Status: model.StatusOpen, Priority: 3, IssueType: model.TypeTask, CreatedAt: now},
 	}
 }
 
@@ -304,11 +307,14 @@ func TestTreeNavSiblingAtRootLevel(t *testing.T) {
 //   standalone-1 (depth 0)
 func createDeepTreeIssues() []model.Issue {
 	now := time.Now()
+	// CreatedAt values are set so that default sort (Created desc) produces
+	// the expected display order: epic-1, task-1, subtask-1, task-2,
+	// standalone-1 (bd-2ty).
 	return []model.Issue{
-		{ID: "epic-1", Title: "Epic One", Status: model.StatusOpen, Priority: 1, IssueType: model.TypeEpic, CreatedAt: now},
+		{ID: "epic-1", Title: "Epic One", Status: model.StatusOpen, Priority: 1, IssueType: model.TypeEpic, CreatedAt: now.Add(4 * time.Second)},
 		{
 			ID: "task-1", Title: "Task One", Status: model.StatusOpen, Priority: 2, IssueType: model.TypeTask,
-			CreatedAt: now.Add(time.Second),
+			CreatedAt: now.Add(3 * time.Second),
 			Dependencies: []*model.Dependency{
 				{IssueID: "task-1", DependsOnID: "epic-1", Type: model.DepParentChild},
 			},
@@ -322,12 +328,12 @@ func createDeepTreeIssues() []model.Issue {
 		},
 		{
 			ID: "task-2", Title: "Task Two", Status: model.StatusOpen, Priority: 2, IssueType: model.TypeTask,
-			CreatedAt: now.Add(3 * time.Second),
+			CreatedAt: now.Add(time.Second),
 			Dependencies: []*model.Dependency{
 				{IssueID: "task-2", DependsOnID: "epic-1", Type: model.DepParentChild},
 			},
 		},
-		{ID: "standalone-1", Title: "Standalone", Status: model.StatusOpen, Priority: 2, IssueType: model.TypeTask, CreatedAt: now.Add(4 * time.Second)},
+		{ID: "standalone-1", Title: "Standalone", Status: model.StatusOpen, Priority: 2, IssueType: model.TypeTask, CreatedAt: now},
 	}
 }
 

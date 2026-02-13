@@ -258,12 +258,12 @@ func TestTreeBuildRelatedDepsIgnored(t *testing.T) {
 func TestTreeNavigation(t *testing.T) {
 	now := time.Now()
 	issues := []model.Issue{
-		{ID: "root-1", Title: "Root 1", Priority: 1, IssueType: model.TypeEpic, CreatedAt: now},
+		{ID: "root-1", Title: "Root 1", Priority: 1, IssueType: model.TypeEpic, CreatedAt: now.Add(2 * time.Hour)},
 		{
 			ID: "child-1", Title: "Child 1", Priority: 1, IssueType: model.TypeTask, CreatedAt: now.Add(time.Hour),
 			Dependencies: []*model.Dependency{{IssueID: "child-1", DependsOnID: "root-1", Type: model.DepParentChild}},
 		},
-		{ID: "root-2", Title: "Root 2", Priority: 2, IssueType: model.TypeTask, CreatedAt: now.Add(2 * time.Hour)},
+		{ID: "root-2", Title: "Root 2", Priority: 2, IssueType: model.TypeTask, CreatedAt: now},
 	}
 
 	tree := NewTreeModel(newTreeTestTheme())
@@ -1359,7 +1359,10 @@ func TestGetViewportOffset(t *testing.T) {
 
 // TestViewRendersOnlyVisible verifies that View() only renders visible nodes
 func TestViewRendersOnlyVisible(t *testing.T) {
-	// Create many issues for testing
+	// Create many issues for testing.
+	// CreatedAt is set in descending order so that default sort (created desc)
+	// preserves the expected display order: issue-00 first, issue-99 last.
+	now := time.Now()
 	var issues []model.Issue
 	for i := 0; i < 100; i++ {
 		issues = append(issues, model.Issue{
@@ -1367,6 +1370,7 @@ func TestViewRendersOnlyVisible(t *testing.T) {
 			Title:     fmt.Sprintf("Issue %d", i),
 			Priority:  2,
 			IssueType: model.TypeTask,
+			CreatedAt: now.Add(-time.Duration(i) * time.Minute),
 		})
 	}
 
@@ -1475,6 +1479,7 @@ func TestViewSelectionHighlightWithOffset(t *testing.T) {
 
 // TestViewAtEndOfList verifies rendering at the end of a long list
 func TestViewAtEndOfList(t *testing.T) {
+	now := time.Now()
 	var issues []model.Issue
 	for i := 0; i < 100; i++ {
 		issues = append(issues, model.Issue{
@@ -1482,6 +1487,7 @@ func TestViewAtEndOfList(t *testing.T) {
 			Title:     fmt.Sprintf("Issue %d", i),
 			Priority:  2,
 			IssueType: model.TypeTask,
+			CreatedAt: now.Add(-time.Duration(i) * time.Minute),
 		})
 	}
 
@@ -1958,10 +1964,11 @@ func TestSortFieldValues(t *testing.T) {
 
 // TestTreeToggleMark verifies marking and unmarking a node
 func TestTreeToggleMark(t *testing.T) {
+	now := time.Now()
 	issues := []model.Issue{
-		{ID: "item-1", Title: "Item 1", Priority: 1, IssueType: model.TypeTask},
-		{ID: "item-2", Title: "Item 2", Priority: 2, IssueType: model.TypeTask},
-		{ID: "item-3", Title: "Item 3", Priority: 3, IssueType: model.TypeTask},
+		{ID: "item-1", Title: "Item 1", Priority: 1, IssueType: model.TypeTask, CreatedAt: now.Add(2 * time.Hour)},
+		{ID: "item-2", Title: "Item 2", Priority: 2, IssueType: model.TypeTask, CreatedAt: now.Add(time.Hour)},
+		{ID: "item-3", Title: "Item 3", Priority: 3, IssueType: model.TypeTask, CreatedAt: now},
 	}
 
 	tree := NewTreeModel(newTreeTestTheme())
@@ -2072,9 +2079,10 @@ func TestTreeMarkSurvivesExpandCollapse(t *testing.T) {
 
 // TestTreeIsMarked verifies the IsMarked check
 func TestTreeIsMarked(t *testing.T) {
+	now := time.Now()
 	issues := []model.Issue{
-		{ID: "item-1", Title: "Item 1", Priority: 1, IssueType: model.TypeTask},
-		{ID: "item-2", Title: "Item 2", Priority: 2, IssueType: model.TypeTask},
+		{ID: "item-1", Title: "Item 1", Priority: 1, IssueType: model.TypeTask, CreatedAt: now.Add(time.Hour)},
+		{ID: "item-2", Title: "Item 2", Priority: 2, IssueType: model.TypeTask, CreatedAt: now},
 	}
 
 	tree := NewTreeModel(newTreeTestTheme())
@@ -2101,12 +2109,12 @@ func TestTreeIsMarked(t *testing.T) {
 func TestTreeXRayEnterExit(t *testing.T) {
 	now := time.Now()
 	issues := []model.Issue{
-		{ID: "epic-1", Title: "Epic 1", Priority: 1, IssueType: model.TypeEpic, CreatedAt: now},
+		{ID: "epic-1", Title: "Epic 1", Priority: 1, IssueType: model.TypeEpic, CreatedAt: now.Add(2 * time.Hour)},
 		{
 			ID: "task-1", Title: "Task 1", Priority: 2, IssueType: model.TypeTask, CreatedAt: now.Add(time.Hour),
 			Dependencies: []*model.Dependency{{IssueID: "task-1", DependsOnID: "epic-1", Type: model.DepParentChild}},
 		},
-		{ID: "epic-2", Title: "Epic 2", Priority: 1, IssueType: model.TypeEpic, CreatedAt: now.Add(2 * time.Hour)},
+		{ID: "epic-2", Title: "Epic 2", Priority: 1, IssueType: model.TypeEpic, CreatedAt: now},
 	}
 
 	tree := NewTreeModel(newTreeTestTheme())
@@ -2178,13 +2186,13 @@ func TestTreeXRayOnLeafNode(t *testing.T) {
 func TestTreeXRayNavigationWorks(t *testing.T) {
 	now := time.Now()
 	issues := []model.Issue{
-		{ID: "epic-1", Title: "Epic 1", Priority: 1, IssueType: model.TypeEpic, CreatedAt: now},
+		{ID: "epic-1", Title: "Epic 1", Priority: 1, IssueType: model.TypeEpic, CreatedAt: now.Add(2 * time.Hour)},
 		{
 			ID: "task-1", Title: "Task 1", Priority: 2, IssueType: model.TypeTask, CreatedAt: now.Add(time.Hour),
 			Dependencies: []*model.Dependency{{IssueID: "task-1", DependsOnID: "epic-1", Type: model.DepParentChild}},
 		},
 		{
-			ID: "task-2", Title: "Task 2", Priority: 3, IssueType: model.TypeTask, CreatedAt: now.Add(2 * time.Hour),
+			ID: "task-2", Title: "Task 2", Priority: 3, IssueType: model.TypeTask, CreatedAt: now,
 			Dependencies: []*model.Dependency{{IssueID: "task-2", DependsOnID: "epic-1", Type: model.DepParentChild}},
 		},
 	}
@@ -2230,12 +2238,12 @@ func TestTreeXRayNavigationWorks(t *testing.T) {
 func TestTreeXRayExitWithEscape(t *testing.T) {
 	now := time.Now()
 	issues := []model.Issue{
-		{ID: "epic-1", Title: "Epic 1", Priority: 1, IssueType: model.TypeEpic, CreatedAt: now},
+		{ID: "epic-1", Title: "Epic 1", Priority: 1, IssueType: model.TypeEpic, CreatedAt: now.Add(2 * time.Hour)},
 		{
 			ID: "task-1", Title: "Task 1", Priority: 2, IssueType: model.TypeTask, CreatedAt: now.Add(time.Hour),
 			Dependencies: []*model.Dependency{{IssueID: "task-1", DependsOnID: "epic-1", Type: model.DepParentChild}},
 		},
-		{ID: "root-2", Title: "Root 2", Priority: 1, IssueType: model.TypeTask, CreatedAt: now.Add(2 * time.Hour)},
+		{ID: "root-2", Title: "Root 2", Priority: 1, IssueType: model.TypeTask, CreatedAt: now},
 	}
 
 	tree := NewTreeModel(newTreeTestTheme())
@@ -2800,9 +2808,10 @@ func TestFlatModeShowsAllNodesWithoutHierarchy(t *testing.T) {
 
 // TestTreeToggleBookmark verifies toggling a bookmark on/off for the selected node
 func TestTreeToggleBookmark(t *testing.T) {
+	now := time.Now()
 	issues := []model.Issue{
-		{ID: "issue-1", Title: "Issue 1", Priority: 1, IssueType: model.TypeTask},
-		{ID: "issue-2", Title: "Issue 2", Priority: 2, IssueType: model.TypeTask},
+		{ID: "issue-1", Title: "Issue 1", Priority: 1, IssueType: model.TypeTask, CreatedAt: now.Add(time.Hour)},
+		{ID: "issue-2", Title: "Issue 2", Priority: 2, IssueType: model.TypeTask, CreatedAt: now},
 	}
 
 	tree := NewTreeModel(newTreeTestTheme())
@@ -2830,11 +2839,12 @@ func TestTreeToggleBookmark(t *testing.T) {
 
 // TestTreeCycleBookmarks verifies cycling through bookmarked nodes with 'B'
 func TestTreeCycleBookmarks(t *testing.T) {
+	now := time.Now()
 	issues := []model.Issue{
-		{ID: "issue-0", Title: "Issue 0", Priority: 1, IssueType: model.TypeTask},
-		{ID: "issue-1", Title: "Issue 1", Priority: 2, IssueType: model.TypeTask},
-		{ID: "issue-2", Title: "Issue 2", Priority: 3, IssueType: model.TypeTask},
-		{ID: "issue-3", Title: "Issue 3", Priority: 4, IssueType: model.TypeTask},
+		{ID: "issue-0", Title: "Issue 0", Priority: 1, IssueType: model.TypeTask, CreatedAt: now.Add(3 * time.Hour)},
+		{ID: "issue-1", Title: "Issue 1", Priority: 2, IssueType: model.TypeTask, CreatedAt: now.Add(2 * time.Hour)},
+		{ID: "issue-2", Title: "Issue 2", Priority: 3, IssueType: model.TypeTask, CreatedAt: now.Add(time.Hour)},
+		{ID: "issue-3", Title: "Issue 3", Priority: 4, IssueType: model.TypeTask, CreatedAt: now},
 	}
 
 	tree := NewTreeModel(newTreeTestTheme())
@@ -3684,13 +3694,13 @@ func TestTreeFollowModeExpandsCollapsedParent(t *testing.T) {
 func TestTreeConnectorAlignmentOnSelectedRow(t *testing.T) {
 	now := time.Now()
 	issues := []model.Issue{
-		{ID: "epic-1", Title: "Parent Epic", Priority: 1, IssueType: model.TypeEpic, Status: model.StatusOpen, CreatedAt: now},
+		{ID: "epic-1", Title: "Parent Epic", Priority: 1, IssueType: model.TypeEpic, Status: model.StatusOpen, CreatedAt: now.Add(2 * time.Hour)},
 		{
 			ID: "task-1", Title: "First Child", Priority: 2, IssueType: model.TypeTask, Status: model.StatusOpen, CreatedAt: now.Add(time.Hour),
 			Dependencies: []*model.Dependency{{IssueID: "task-1", DependsOnID: "epic-1", Type: model.DepParentChild}},
 		},
 		{
-			ID: "task-2", Title: "Second Child", Priority: 2, IssueType: model.TypeTask, Status: model.StatusOpen, CreatedAt: now.Add(2 * time.Hour),
+			ID: "task-2", Title: "Second Child", Priority: 2, IssueType: model.TypeTask, Status: model.StatusOpen, CreatedAt: now,
 			Dependencies: []*model.Dependency{{IssueID: "task-2", DependsOnID: "epic-1", Type: model.DepParentChild}},
 		},
 	}
@@ -3808,6 +3818,166 @@ func TestTreeViewDefaultCanSwitchToList(t *testing.T) {
 	}
 	if m.treeViewActive {
 		t.Error("after pressing 'E', expected treeViewActive = false")
+	}
+}
+
+// TestTreeDefaultSortCreatedDesc verifies that the default sort order is
+// Created/Descending (newest first) in the tree view (bd-2ty).
+// This is a regression test: the tree was sorting by priority instead of
+// by creation date descending because buildIssueTreeNodes used a hardcoded
+// priority-based sort and Build() never re-sorted using the model's configured
+// sortField/sortDirection.
+func TestTreeDefaultSortCreatedDesc(t *testing.T) {
+	now := time.Now()
+
+	// Create issues with different creation dates and priorities.
+	// If sorted by priority, the order would be: P0, P1, P2
+	// If sorted by created desc, the order should be: newest, middle, oldest
+	issues := []model.Issue{
+		{
+			ID:        "old-1",
+			Title:     "Oldest issue",
+			Priority:  0, // Highest priority
+			IssueType: model.TypeTask,
+			CreatedAt: now.Add(-3 * time.Hour),
+		},
+		{
+			ID:        "mid-2",
+			Title:     "Middle issue",
+			Priority:  1,
+			IssueType: model.TypeTask,
+			CreatedAt: now.Add(-1 * time.Hour),
+		},
+		{
+			ID:        "new-3",
+			Title:     "Newest issue",
+			Priority:  2, // Lowest priority
+			IssueType: model.TypeTask,
+			CreatedAt: now,
+		},
+	}
+
+	tree := NewTreeModel(newTreeTestTheme())
+
+	// Verify default sort settings
+	if tree.GetSortField() != SortFieldCreated {
+		t.Fatalf("expected default sort field = SortFieldCreated, got %v", tree.GetSortField())
+	}
+	if tree.GetSortDirection() != SortDescending {
+		t.Fatalf("expected default sort direction = SortDescending, got %v", tree.GetSortDirection())
+	}
+
+	tree.Build(issues)
+
+	// The flat list should be ordered newest-first (created descending).
+	if tree.NodeCount() != 3 {
+		t.Fatalf("expected 3 nodes, got %d", tree.NodeCount())
+	}
+
+	// Navigate through the flat list and collect issue IDs in display order.
+	var displayOrder []string
+	for i := 0; i < tree.NodeCount(); i++ {
+		tree.cursor = i
+		issue := tree.SelectedIssue()
+		if issue == nil {
+			t.Fatalf("node at index %d has nil issue", i)
+		}
+		displayOrder = append(displayOrder, issue.ID)
+	}
+
+	// Expected: newest first (created descending)
+	expectedOrder := []string{"new-3", "mid-2", "old-1"}
+	for i, expected := range expectedOrder {
+		if displayOrder[i] != expected {
+			t.Errorf("position %d: expected %s, got %s (display order: %v)",
+				i, expected, displayOrder[i], displayOrder)
+		}
+	}
+}
+
+// TestTreeDefaultSortCreatedDescWithHierarchy verifies that the default sort
+// (Created/Descending) works correctly with parent-child hierarchies (bd-2ty).
+// Both root nodes and sibling children should be sorted newest-first.
+func TestTreeDefaultSortCreatedDescWithHierarchy(t *testing.T) {
+	now := time.Now()
+
+	issues := []model.Issue{
+		{
+			ID:        "epic-old",
+			Title:     "Old Epic",
+			Priority:  0,
+			IssueType: model.TypeEpic,
+			CreatedAt: now.Add(-5 * time.Hour),
+		},
+		{
+			ID:        "epic-new",
+			Title:     "New Epic",
+			Priority:  1,
+			IssueType: model.TypeEpic,
+			CreatedAt: now.Add(-1 * time.Hour),
+		},
+		{
+			// Child of old epic, created recently
+			ID:        "child-new",
+			Title:     "New Child",
+			Priority:  2,
+			IssueType: model.TypeTask,
+			CreatedAt: now,
+			Dependencies: []*model.Dependency{
+				{IssueID: "child-new", DependsOnID: "epic-old", Type: model.DepParentChild},
+			},
+		},
+		{
+			// Child of old epic, created long ago
+			ID:        "child-old",
+			Title:     "Old Child",
+			Priority:  0,
+			IssueType: model.TypeTask,
+			CreatedAt: now.Add(-4 * time.Hour),
+			Dependencies: []*model.Dependency{
+				{IssueID: "child-old", DependsOnID: "epic-old", Type: model.DepParentChild},
+			},
+		},
+	}
+
+	tree := NewTreeModel(newTreeTestTheme())
+	tree.Build(issues)
+
+	// Collect display order. With created desc:
+	// Root order: epic-new (newer) before epic-old (older)
+	// Under epic-old: child-new (newer) before child-old (older)
+	// Total flat list with default expand (epics expanded):
+	//   epic-new, epic-old, child-new, child-old
+	var displayOrder []string
+	for i := 0; i < tree.NodeCount(); i++ {
+		tree.cursor = i
+		issue := tree.SelectedIssue()
+		if issue == nil {
+			t.Fatalf("node at index %d has nil issue", i)
+		}
+		displayOrder = append(displayOrder, issue.ID)
+	}
+
+	// Verify root ordering: newest epic first
+	rootOrder := []string{}
+	for _, id := range displayOrder {
+		if id == "epic-old" || id == "epic-new" {
+			rootOrder = append(rootOrder, id)
+		}
+	}
+	if len(rootOrder) < 2 || rootOrder[0] != "epic-new" {
+		t.Errorf("expected epic-new before epic-old in root order, got %v (full: %v)", rootOrder, displayOrder)
+	}
+
+	// Verify child ordering under epic-old: newest child first
+	childOrder := []string{}
+	for _, id := range displayOrder {
+		if id == "child-new" || id == "child-old" {
+			childOrder = append(childOrder, id)
+		}
+	}
+	if len(childOrder) < 2 || childOrder[0] != "child-new" {
+		t.Errorf("expected child-new before child-old in child order, got %v (full: %v)", childOrder, displayOrder)
 	}
 }
 
