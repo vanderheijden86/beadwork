@@ -2174,6 +2174,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
+		// Rebuild tree view if focused (bd-byp).
+		if m.focused == focusTree {
+			var treeStart time.Time
+			if profileRefresh {
+				treeStart = time.Now()
+			}
+			m.tree.Build(m.issues)
+			m.tree.SetSize(m.width, m.height-2)
+			m.tree.SetGlobalIssueMap(m.issueMap)
+			if profileRefresh {
+				recordTiming("tree_rebuild", time.Since(treeStart))
+			}
+		}
+
 		// Re-apply recipe filter if active
 		if m.activeRecipe != nil {
 			m.applyRecipe(m.activeRecipe)
@@ -2237,6 +2251,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			addTiming("alerts", "alerts")
 			addTiming("list", "list_items")
 			addTiming("graph", "board_graph")
+			addTiming("tree", "tree_rebuild")
 			addTiming("total", "total")
 			m.statusMsg += "]"
 		}
