@@ -54,6 +54,14 @@ All the core functionality from beads_viewer is preserved: list view, kanban boa
 
 ## Installation
 
+### Homebrew (macOS/Linux)
+
+```bash
+brew install vanderheijden86/tap/bw
+```
+
+### From source
+
 Requires [Go 1.22+](https://go.dev/dl/).
 
 ```bash
