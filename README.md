@@ -7,21 +7,25 @@
 
 ## Why this fork?
 
-The original [beads_viewer](https://github.com/Dicklesworthstone/beads_viewer) by [@Dicklesworthstone](https://github.com/Dicklesworthstone) is a great tool, but the maintainer does not accept pull requests. Contributions, bug fixes, and new features submitted by the community go unmerged.
+The original [beads_viewer](https://github.com/Dicklesworthstone/beads_viewer) by [@Dicklesworthstone](https://github.com/Dicklesworthstone) is an excellent piece of software. The architecture, the graph analysis engine, the robot protocol for AI agents: it's one of the best TUIs out there. Full credit goes to him for the design and implementation.
 
-**Beadwork** exists so that community contributions have a place to land. If you want to fix a bug, add a feature, or improve the codebase, PRs are welcome here.
+Per the project's [contribution guidelines](https://github.com/Dicklesworthstone/beads_viewer/blob/main/CONTRIBUTING.md), beads_viewer does not accept external pull requests. Feature requests and bug reports are welcome and the maintainer does incorporate community feedback, but the codebase is maintained solely by its author. That's a perfectly valid approach that keeps the project focused and avoids the overhead of reviewing external code.
+
+**Beadwork** exists because I'm a long-time TUI user (K9s, Emacs) with strong opinions about navigation, keybindings, and information density. Rather than filing feature requests for changes that reflect personal workflow preferences, it made more sense to maintain a fork where I can build exactly the UX I want, and share it with anyone who feels the same way.
+
+No hard feelings toward the original project. This is simply a differentiated offering: same powerful foundation, different UX choices. The goal is to expand the overall user base of the [Beads](https://github.com/steveyegge/beads) ecosystem by catering to different preferences.
 
 ### What's different from the original?
 
-- **Accepts contributions**: PRs are reviewed and merged
-- **Renamed binary**: `bw` instead of `bv` to avoid conflicts if you have both installed
-- **Tree view with split pane**: added a tree view that shows the issue hierarchy alongside a detail panel
+- **Open to contributions**: PRs are welcome here
+- **Renamed binary**: `bw` instead of `bv`, so both can coexist on the same machine
+- **Tree view with split pane**: hierarchical issue view with a detail panel alongside
 - **Sort improvements**: persistent sort order, sort indicator in the header
-- **Ongoing development**: active bug fixes and UX improvements that aren't available upstream
+- **Opinionated UX defaults**: navigation and layout choices shaped by Emacs/K9s habits
 
 ### What's the same?
 
-All the core functionality from beads_viewer is preserved: list view, kanban board, graph view, insights dashboard, robot mode for AI agents, and the full graph analysis engine (PageRank, betweenness, HITS, critical path, and more).
+All the core functionality from beads_viewer is preserved: list view, kanban board, graph view, insights dashboard, robot mode for AI agents, and the full graph analysis engine (PageRank, betweenness, HITS, critical path, and more). The excellent architecture and design are entirely [@Dicklesworthstone](https://github.com/Dicklesworthstone)'s work.
 
 <div align="center" style="margin: 1.2em 0;">
   <table>
