@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Dicklesworthstone/beads_viewer/pkg/model"
+	"github.com/vanderheijden86/beadwork/pkg/model"
 )
 
 func TestComputeTriage_Empty(t *testing.T) {
@@ -1346,7 +1346,7 @@ func TestComputeTriageFromAnalyzer_Empty(t *testing.T) {
 
 // TestBuildTopPicks_FiltersBlockedItems verifies that blocked items are excluded from TopPicks.
 // This is critical for --robot-next which should only return actionable items.
-// Fixes: https://github.com/Dicklesworthstone/beads_viewer/issues/53
+// Fixes: https://github.com/vanderheijden86/beadwork/issues/53
 func TestBuildTopPicks_FiltersBlockedItems(t *testing.T) {
 	recommendations := []Recommendation{
 		{

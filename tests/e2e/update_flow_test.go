@@ -106,7 +106,7 @@ func TestUpdateFlag_RequiresNetwork(t *testing.T) {
 	cmd := exec.Command(bv, "--update", "-y")
 	cmd.Dir = tmpDir
 	// Set a short timeout
-	cmd.Env = append(os.Environ(), "BV_UPDATE_TIMEOUT=2s")
+	cmd.Env = append(os.Environ(), "BW_UPDATE_TIMEOUT=2s")
 	out, _ := cmd.CombinedOutput()
 
 	output := string(out)

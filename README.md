@@ -1,10 +1,10 @@
 # Beads Viewer (bv)
 
-![Release](https://img.shields.io/github/v/release/Dicklesworthstone/beads_viewer?style=for-the-badge&color=bd93f9)
-![Go Version](https://img.shields.io/github/go-mod/go-version/Dicklesworthstone/beads_viewer?style=for-the-badge&color=6272a4)
+![Release](https://img.shields.io/github/v/release/vanderheijden86/beadwork?style=for-the-badge&color=bd93f9)
+![Go Version](https://img.shields.io/github/go-mod/go-version/vanderheijden86/beadwork?style=for-the-badge&color=6272a4)
 ![License](https://img.shields.io/badge/License-MIT-50fa7b?style=for-the-badge)
-![Build Status](https://img.shields.io/github/actions/workflow/status/Dicklesworthstone/beads_viewer/ci.yml?style=for-the-badge&logo=github)
-[![Coverage](https://codecov.io/gh/Dicklesworthstone/beads_viewer/branch/main/graph/badge.svg)](https://codecov.io/gh/Dicklesworthstone/beads_viewer)
+![Build Status](https://img.shields.io/github/actions/workflow/status/vanderheijden86/beadwork/ci.yml?style=for-the-badge&logo=github)
+[![Coverage](https://codecov.io/gh/vanderheijden86/beadwork/branch/main/graph/badge.svg)](https://codecov.io/gh/vanderheijden86/beadwork)
 
 > **The elegant, keyboard-driven terminal interface for the [Beads](https://github.com/steveyegge/beads) issue tracker.**
 
@@ -56,11 +56,11 @@ scoop install dicklesworthstone/bv
 ### Alternative: Direct Download
 
 Download the latest release for your platform (tar.gz assets):
-- [Linux x86_64](https://github.com/Dicklesworthstone/beads_viewer/releases/latest/download/bv_0.13.0_linux_amd64.tar.gz)
-- [Linux ARM64](https://github.com/Dicklesworthstone/beads_viewer/releases/latest/download/bv_0.13.0_linux_arm64.tar.gz)
-- [macOS Intel](https://github.com/Dicklesworthstone/beads_viewer/releases/latest/download/bv_0.13.0_darwin_amd64.tar.gz)
-- [macOS ARM](https://github.com/Dicklesworthstone/beads_viewer/releases/latest/download/bv_0.13.0_darwin_arm64.tar.gz)
-- [Windows](https://github.com/Dicklesworthstone/beads_viewer/releases/latest/download/bv_0.13.0_windows_amd64.tar.gz)
+- [Linux x86_64](https://github.com/vanderheijden86/beadwork/releases/latest/download/bv_0.13.0_linux_amd64.tar.gz)
+- [Linux ARM64](https://github.com/vanderheijden86/beadwork/releases/latest/download/bv_0.13.0_linux_arm64.tar.gz)
+- [macOS Intel](https://github.com/vanderheijden86/beadwork/releases/latest/download/bv_0.13.0_darwin_amd64.tar.gz)
+- [macOS ARM](https://github.com/vanderheijden86/beadwork/releases/latest/download/bv_0.13.0_darwin_arm64.tar.gz)
+- [Windows](https://github.com/vanderheijden86/beadwork/releases/latest/download/bv_0.13.0_windows_amd64.tar.gz)
 
 > Note: Asset names include the release version. If a link 404s, open the latest release page and download the matching asset.
 
@@ -68,12 +68,12 @@ Download the latest release for your platform (tar.gz assets):
 
 **Linux/macOS:**
 ```bash
-curl -fsSL "https://raw.githubusercontent.com/Dicklesworthstone/beads_viewer/main/install.sh?$(date +%s)" | bash
+curl -fsSL "https://raw.githubusercontent.com/vanderheijden86/beadwork/main/install.sh?$(date +%s)" | bash
 ```
 
 **Windows (PowerShell):**
 ```powershell
-irm "https://raw.githubusercontent.com/Dicklesworthstone/beads_viewer/main/install.ps1" | iex
+irm "https://raw.githubusercontent.com/vanderheijden86/beadwork/main/install.ps1" | iex
 ```
 > **Note:** Windows requires Go 1.21+ ([download](https://go.dev/dl/)). For best display, use Windows Terminal with a [Nerd Font](https://www.nerdfonts.com/).
 
@@ -92,7 +92,7 @@ bv --robot-next
 
 # 3) Token-optimized output (TOON)
 bv --robot-triage --format toon
-export BV_OUTPUT_FORMAT=toon
+export BW_OUTPUT_FORMAT=toon
 
 # 4) Full robot help
 bv --robot-help
@@ -147,7 +147,7 @@ Don't just read the title. `bv` gives you the full picture:
 *   **Time-Travel:** Press `t` to compare against any git revision, or `T` for quick HEAD~5 comparison. Combined with History view (`h`), you can navigate to any commit and see exactly what changed.
 
 ### 🔌 Automation Hooks
-Configure pre- and post-export hooks in `.bv/hooks.yaml` to run validations, notifications, or uploads. Defaults: pre-export hooks fail fast on errors (`on_error: fail`), post-export hooks log and continue (`on_error: continue`). Empty commands are ignored with a warning for safety. Hook env includes `BV_EXPORT_PATH`, `BV_EXPORT_FORMAT`, `BV_ISSUE_COUNT`, `BV_TIMESTAMP`, plus any custom `env` entries.
+Configure pre- and post-export hooks in `.bv/hooks.yaml` to run validations, notifications, or uploads. Defaults: pre-export hooks fail fast on errors (`on_error: fail`), post-export hooks log and continue (`on_error: continue`). Empty commands are ignored with a warning for safety. Hook env includes `BW_EXPORT_PATH`, `BW_EXPORT_FORMAT`, `BW_ISSUE_COUNT`, `BW_TIMESTAMP`, plus any custom `env` entries.
 
 ---
 
@@ -177,7 +177,7 @@ bv --robot-next          # Minimal: just the single top pick + claim command
 
 # Token-optimized output (TOON) for lower LLM context usage:
 bv --robot-triage --format toon
-export BV_OUTPUT_FORMAT=toon
+export BW_OUTPUT_FORMAT=toon
 bv --robot-next
 
 #### Other Commands
@@ -2721,7 +2721,7 @@ For very large datasets, you can build an optional WASM scorer used by the stati
 ./scripts/build_hybrid_wasm.sh
 
 # Or build during export
-BV_BUILD_HYBRID_WASM=1 bv --export-pages ./bv-pages
+BW_BUILD_HYBRID_WASM=1 bv --export-pages ./bv-pages
 ```
 
 If the `wasm/` assets are missing, the viewer automatically falls back to the JS scorer.
@@ -3121,9 +3121,9 @@ Hybrid mode is a two-stage pipeline: it first retrieves the top candidates by se
 Short, intent-heavy queries (e.g., “benchmarks”, “oauth”) are treated differently on purpose. bv widens the candidate pool, boosts literal matches, and raises the text weight so quick lookups behave like a precise search. Longer, descriptive queries lean more on graph signals for smart tie‑breaking and prioritization.
 
 Hybrid defaults can be set via:
-- `BV_SEARCH_MODE` (text|hybrid)
-- `BV_SEARCH_PRESET` (default|bug-hunting|sprint-planning|impact-first|text-only)
-- `BV_SEARCH_WEIGHTS` (JSON string, overrides preset)
+- `BW_SEARCH_MODE` (text|hybrid)
+- `BW_SEARCH_PRESET` (default|bug-hunting|sprint-planning|impact-first|text-only)
+- `BW_SEARCH_WEIGHTS` (JSON string, overrides preset)
 
 In `--robot-search` JSON, hybrid results include `mode`, `preset`, `weights`, plus per-result `text_score` and `component_scores`.
 
@@ -3499,16 +3499,16 @@ The analysis engine uses a **compact adjacency-list graph** (`compactDirectedGra
 *   Some filesystems don’t reliably deliver filesystem events. `bv` will try to auto-detect this and switch to polling.
 *   If it still misbehaves, force polling:
     ```bash
-    BV_FORCE_POLLING=1 bv
+    BW_FORCE_POLLING=1 bv
     # or
-    BV_FORCE_POLL=1 bv
+    BW_FORCE_POLL=1 bv
     ```
 
 **Q: I see `polling …` in the footer. Is that bad?**
 No — it just means `bv` is using polling instead of filesystem events for live reload (common on remote filesystems). Polling can add a small delay before updates appear.
 
 **Q: I see `⚠ STALE` / `✗ bg …` / `⚠ worker unresponsive` / `↻ recovered` in the footer.**
-These indicators mean the background worker hasn’t produced a fresh snapshot recently (or needed to self-heal). Try `Ctrl+R`/`F5`, check filesystem permissions/health, or temporarily disable background mode (`BV_BACKGROUND_MODE=0`) to fall back to synchronous reload.
+These indicators mean the background worker hasn’t produced a fresh snapshot recently (or needed to self-heal). Try `Ctrl+R`/`F5`, check filesystem permissions/health, or temporarily disable background mode (`BW_BACKGROUND_MODE=0`) to fall back to synchronous reload.
 
 **Q: I see "Cycles Detected" in the dashboard. What now?**
 A: A cycle (e.g., A → B → A) means your project logic is broken; no task can be finished first. Use the Insights Dashboard (`i`) to find the specific cycle members, then use `bd` to remove one of the dependency links (e.g., `bd unblock A --from B`).
@@ -3527,14 +3527,14 @@ A: They're the same thing! In the Beads ecosystem, the unit of work is called a 
 The fastest way to get started. Detects your OS and architecture automatically.
 
 ```bash
-curl -fsSL "https://raw.githubusercontent.com/Dicklesworthstone/beads_viewer/main/install.sh?$(date +%s)" | bash
+curl -fsSL "https://raw.githubusercontent.com/vanderheijden86/beadwork/main/install.sh?$(date +%s)" | bash
 ```
 
 ### One-Line Install (Windows)
 For Windows users using PowerShell:
 
 ```powershell
-irm "https://raw.githubusercontent.com/Dicklesworthstone/beads_viewer/main/install.ps1" | iex
+irm "https://raw.githubusercontent.com/vanderheijden86/beadwork/main/install.ps1" | iex
 ```
 
 **Requirements:**
@@ -3545,9 +3545,9 @@ irm "https://raw.githubusercontent.com/Dicklesworthstone/beads_viewer/main/insta
 Requires Go 1.21+.
 
 ```bash
-git clone https://github.com/Dicklesworthstone/beads_viewer.git
-cd beads_viewer
-go install ./cmd/bv
+git clone https://github.com/vanderheijden86/beadwork.git
+cd beadwork
+go install ./cmd/bw
 ```
 
 ### Nix Flake
@@ -3555,19 +3555,19 @@ For Nix users, `bv` provides a flake for reproducible builds and development env
 
 ```bash
 # Run directly
-nix run github:Dicklesworthstone/beads_viewer
+nix run github:vanderheijden86/beadwork
 
 # Install to profile
-nix profile install github:Dicklesworthstone/beads_viewer
+nix profile install github:vanderheijden86/beadwork
 
 # Development shell with Go toolchain
-nix develop github:Dicklesworthstone/beads_viewer
+nix develop github:vanderheijden86/beadwork
 ```
 
 Or add to your flake inputs:
 ```nix
 {
-  inputs.bv.url = "github:Dicklesworthstone/beads_viewer";
+  inputs.bv.url = "github:vanderheijden86/beadwork";
   # Use: bv.packages.${system}.default
 }
 ```
@@ -3659,21 +3659,21 @@ bv has a comprehensive built-in help system:
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `BEADS_DIR` | Custom beads directory path. When set, overrides the default `.beads` directory lookup. | `.beads` in cwd |
-| `BV_BACKGROUND_MODE` | Experimental: enable background snapshot loading for live reload in the TUI (`1`/`0`). | (disabled) |
-| `BV_FORCE_POLLING` | Force polling-based live reload (useful on NFS/SMB/SSHFS/FUSE or any setup where filesystem events are unreliable) (`1`/`0`). | (auto) |
-| `BV_FORCE_POLL` | Alias for `BV_FORCE_POLLING`. | (auto) |
-| `BV_DEBOUNCE_MS` | Debounce window (milliseconds) for live reload events in background mode. | `200` |
-| `BV_CHANNEL_BUFFER` | Background worker message buffer size (worker → UI). | `8` |
-| `BV_HEARTBEAT_INTERVAL_S` | Background worker heartbeat interval (seconds). | `5` |
-| `BV_WATCHDOG_INTERVAL_S` | Background worker watchdog interval (seconds). | `10` |
-| `BV_FRESHNESS_WARN_S` | Snapshot staleness warning threshold (seconds). | `30` |
-| `BV_FRESHNESS_STALE_S` | Snapshot staleness critical threshold (seconds). | `120` |
-| `BV_MAX_LINE_SIZE_MB` | Max JSONL line size in MB (lines larger than this are skipped with a warning). | `10` |
-| `BV_SKIP_PHASE2` | Skip Phase 2 graph metrics (centrality, cycles, critical path) (`1`/`0`). | (disabled) |
-| `BV_PHASE2_TIMEOUT_S` | Override per-metric Phase 2 timeouts (seconds). | (size-based) |
-| `BV_SEMANTIC_EMBEDDER` | Semantic embedding provider for `bv --search` and TUI semantic mode. | `hash` |
-| `BV_SEMANTIC_DIM` | Embedding dimension for semantic search index. | `384` |
-| `BV_SEMANTIC_MODEL` | Provider-specific model name for semantic search (optional). | (empty) |
+| `BW_BACKGROUND_MODE` | Experimental: enable background snapshot loading for live reload in the TUI (`1`/`0`). | (disabled) |
+| `BW_FORCE_POLLING` | Force polling-based live reload (useful on NFS/SMB/SSHFS/FUSE or any setup where filesystem events are unreliable) (`1`/`0`). | (auto) |
+| `BW_FORCE_POLL` | Alias for `BW_FORCE_POLLING`. | (auto) |
+| `BW_DEBOUNCE_MS` | Debounce window (milliseconds) for live reload events in background mode. | `200` |
+| `BW_CHANNEL_BUFFER` | Background worker message buffer size (worker → UI). | `8` |
+| `BW_HEARTBEAT_INTERVAL_S` | Background worker heartbeat interval (seconds). | `5` |
+| `BW_WATCHDOG_INTERVAL_S` | Background worker watchdog interval (seconds). | `10` |
+| `BW_FRESHNESS_WARN_S` | Snapshot staleness warning threshold (seconds). | `30` |
+| `BW_FRESHNESS_STALE_S` | Snapshot staleness critical threshold (seconds). | `120` |
+| `BW_MAX_LINE_SIZE_MB` | Max JSONL line size in MB (lines larger than this are skipped with a warning). | `10` |
+| `BW_SKIP_PHASE2` | Skip Phase 2 graph metrics (centrality, cycles, critical path) (`1`/`0`). | (disabled) |
+| `BW_PHASE2_TIMEOUT_S` | Override per-metric Phase 2 timeouts (seconds). | (size-based) |
+| `BW_SEMANTIC_EMBEDDER` | Semantic embedding provider for `bv --search` and TUI semantic mode. | `hash` |
+| `BW_SEMANTIC_DIM` | Embedding dimension for semantic search index. | `384` |
+| `BW_SEMANTIC_MODEL` | Provider-specific model name for semantic search (optional). | (empty) |
 
 **Use cases for `BEADS_DIR`:**
 - **Monorepos**: Single beads directory shared across multiple packages
@@ -3695,28 +3695,28 @@ The TUI can run live reload using an **experimental background snapshot worker**
 
 **Enable (opt-in):**
 ```bash
-BV_BACKGROUND_MODE=1 bv
+BW_BACKGROUND_MODE=1 bv
 bv --background-mode
 ```
 
 **Disable / rollback:**
 ```bash
-BV_BACKGROUND_MODE=0 bv
+BW_BACKGROUND_MODE=0 bv
 bv --no-background-mode
 ```
 
-**User config file (when neither CLI flags nor `BV_BACKGROUND_MODE` are set):**
+**User config file (when neither CLI flags nor `BW_BACKGROUND_MODE` are set):**
 ```yaml
 # ~/.config/bv/config.yaml
 experimental:
   background_mode: true
 ```
 
-**Precedence:** CLI flags → `BV_BACKGROUND_MODE` → `~/.config/bv/config.yaml`.
+**Precedence:** CLI flags → `BW_BACKGROUND_MODE` → `~/.config/bv/config.yaml`.
 
 **Migration plan (high level):**
 - Phase A (now): opt-in background mode, sync remains default.
-- Phase B: broaden rollout; keep explicit rollback (`--no-background-mode` / `BV_BACKGROUND_MODE=0`).
+- Phase B: broaden rollout; keep explicit rollback (`--no-background-mode` / `BW_BACKGROUND_MODE=0`).
 - Phase C: flip default when stable; keep sync as fallback for a period.
 - Phase D: remove legacy sync reload path after deprecation window.
 
@@ -3808,7 +3808,7 @@ Copyright (c) 2025 Jeffrey Emanuel
 - Direction: “increase” or “decrease” priority derived from score vs current priority; confidence blends signal count, strength, and score delta.
 
 ## 🔍 Diff & Time-Travel Safety Notes
-- When stdout is non-TTY or `BV_ROBOT=1`, `--diff-since` auto-emits JSON (or requires `--robot-diff` in strict setups); resolved revision is echoed in the payload.
+- When stdout is non-TTY or `BW_ROBOT=1`, `--diff-since` auto-emits JSON (or requires `--robot-diff` in strict setups); resolved revision is echoed in the payload.
 - TUI time-travel badges: `[NEW]`, `[CLOSED]`, `[MODIFIED]`, `[REOPENED]`, matching the robot diff summary.
 
 ## 🛡️ Performance Guardrails
@@ -3922,7 +3922,7 @@ SOFTWARE.
 - `as_of` / `as_of_commit`: present when using `--as-of`; contains the ref you specified and the resolved commit SHA for reproducibility.
 
 **Schemas in 5 seconds (jq-friendly)**
-- `bv --robot-insights` → `.status`, `.analysis_config`, metric maps (capped by `BV_INSIGHTS_MAP_LIMIT`), `Bottlenecks`, `CriticalPath`, `Cycles`, plus advanced signals: `Cores` (k-core), `Articulation` (cut vertices), `Slack` (longest-path slack).
+- `bv --robot-insights` → `.status`, `.analysis_config`, metric maps (capped by `BW_INSIGHTS_MAP_LIMIT`), `Bottlenecks`, `CriticalPath`, `Cycles`, plus advanced signals: `Cores` (k-core), `Articulation` (cut vertices), `Slack` (longest-path slack).
 - `bv --robot-plan` → `.plan.tracks[].items[].{id,unblocks}` for downstream unlocks; `.plan.summary.highest_impact`.
 - `bv --robot-priority` → `.recommendations[].{id,current_priority,suggested_priority,confidence,reasoning}`.
 - `bv --robot-suggest` → `.suggestions.suggestions[]` (ranked suggestions) + `.suggestions.stats` (counts) + `.usage_hints`.

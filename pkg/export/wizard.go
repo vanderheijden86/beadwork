@@ -203,9 +203,9 @@ func (w *Wizard) Run() (*WizardResult, error) {
 		}
 	}
 
-	// Check for saved configuration first (unless BV_NO_SAVED_CONFIG is set)
+	// Check for saved configuration first (unless BW_NO_SAVED_CONFIG is set)
 	savedConfig, err := LoadWizardConfig()
-	skipSaved := os.Getenv("BV_NO_SAVED_CONFIG") != ""
+	skipSaved := os.Getenv("BW_NO_SAVED_CONFIG") != ""
 	if !skipSaved && err == nil && savedConfig != nil && savedConfig.DeployTarget != "" {
 		// Found saved config - ask if user wants to use it
 		useSaved, err := w.offerSavedConfig(savedConfig)
@@ -367,7 +367,7 @@ func (w *Wizard) collectGitHubConfig() error {
 	cwd, _ := os.Getwd()
 	base := filepath.Base(cwd)
 	if base == "." || base == "/" {
-		base = "beads-viewer-pages"
+		base = "beadwork-pages"
 	}
 	suggestedName := base + "-pages"
 	repoName := suggestedName
@@ -414,7 +414,7 @@ func (w *Wizard) collectCloudflareConfig() error {
 		cwd, _ := os.Getwd()
 		base := filepath.Base(cwd)
 		if base == "." || base == "/" {
-			base = "beads-viewer-pages"
+			base = "beadwork-pages"
 		}
 		suggestedName = base + "-pages"
 	}

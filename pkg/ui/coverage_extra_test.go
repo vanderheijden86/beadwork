@@ -10,10 +10,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Dicklesworthstone/beads_viewer/pkg/analysis"
-	"github.com/Dicklesworthstone/beads_viewer/pkg/model"
-	"github.com/Dicklesworthstone/beads_viewer/pkg/recipe"
-	"github.com/Dicklesworthstone/beads_viewer/pkg/watcher"
+	"github.com/vanderheijden86/beadwork/pkg/analysis"
+	"github.com/vanderheijden86/beadwork/pkg/model"
+	"github.com/vanderheijden86/beadwork/pkg/recipe"
+	"github.com/vanderheijden86/beadwork/pkg/watcher"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )

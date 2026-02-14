@@ -5,7 +5,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/Dicklesworthstone/beads_viewer/pkg/model"
+	"github.com/vanderheijden86/beadwork/pkg/model"
 )
 
 // NetworkEdgeType categorizes the types of connections between beads.

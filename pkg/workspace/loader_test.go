@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Dicklesworthstone/beads_viewer/pkg/model"
-	"github.com/Dicklesworthstone/beads_viewer/pkg/workspace"
+	"github.com/vanderheijden86/beadwork/pkg/model"
+	"github.com/vanderheijden86/beadwork/pkg/workspace"
 )
 
 // createTestBeadsFile creates a .beads/beads.jsonl file with test issues

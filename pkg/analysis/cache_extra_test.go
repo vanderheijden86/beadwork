@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Dicklesworthstone/beads_viewer/pkg/model"
+	"github.com/vanderheijden86/beadwork/pkg/model"
 )
 
 func TestCacheSetTTLAndHash(t *testing.T) {

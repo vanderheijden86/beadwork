@@ -14,7 +14,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Dicklesworthstone/beads_viewer/pkg/model"
+	"github.com/vanderheijden86/beadwork/pkg/model"
 )
 
 const (
@@ -714,11 +714,11 @@ func (b graphStatsCacheBlob) toGraphStats() *GraphStats {
 }
 
 func robotDiskCacheEnabled() bool {
-	return os.Getenv("BV_ROBOT") == "1"
+	return os.Getenv("BW_ROBOT") == "1"
 }
 
 func robotAnalysisDiskCachePath(create bool) (string, error) {
-	base := os.Getenv("BV_CACHE_DIR")
+	base := os.Getenv("BW_CACHE_DIR")
 	if base == "" {
 		dir, err := os.UserCacheDir()
 		if err != nil {

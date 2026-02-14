@@ -4,7 +4,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/Dicklesworthstone/beads_viewer/pkg/model"
+	"github.com/vanderheijden86/beadwork/pkg/model"
 )
 
 // SuggestAllConfig configures the unified suggestion generator

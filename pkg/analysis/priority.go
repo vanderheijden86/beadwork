@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Dicklesworthstone/beads_viewer/pkg/model"
+	"github.com/vanderheijden86/beadwork/pkg/model"
 )
 
 // ImpactScore represents the composite priority score for an issue

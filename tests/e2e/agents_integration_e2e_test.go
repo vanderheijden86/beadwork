@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Dicklesworthstone/beads_viewer/pkg/agents"
+	"github.com/vanderheijden86/beadwork/pkg/agents"
 )
 
 // TestAgentsE2E_DetectionFlow tests the complete detection flow across different scenarios.

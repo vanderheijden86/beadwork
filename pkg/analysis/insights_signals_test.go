@@ -4,7 +4,7 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/Dicklesworthstone/beads_viewer/pkg/model"
+	"github.com/vanderheijden86/beadwork/pkg/model"
 )
 
 // Graph: square A-B-C-D (cycle) + leaf E attached to C.

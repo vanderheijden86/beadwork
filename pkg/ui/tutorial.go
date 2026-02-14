@@ -325,7 +325,7 @@ func (m TutorialModel) renderHeader(page TutorialPage, totalPages int) string {
 			Render(strings.Repeat("░", barWidth-filledWidth))
 
 	// Title
-	title := titleStyle.Render("📚 beads_viewer Tutorial")
+	title := titleStyle.Render("📚 beadwork Tutorial")
 
 	// Calculate spacing to align progress to the right
 	headerContent := title + "  " + progressText + " " + progressBar
@@ -1030,11 +1030,11 @@ func defaultTutorialPages() []TutorialPage {
 // =============================================================================
 
 // introWelcomeContent is Page 1 of the Introduction section.
-const introWelcomeContent = `## Welcome to beads_viewer
+const introWelcomeContent = `## Welcome to beadwork
 
 ` + "```" + `
     ╭──────────────────────────────────────╮
-    │      beads_viewer (bv)               │
+    │      beadwork (bv)               │
     │  Issue tracking that lives in code   │
     ╰──────────────────────────────────────╯
 ` + "```" + `
@@ -1838,7 +1838,7 @@ Searching for "permissions":
 
 ### Tuning (Optional)
 
-` + "```bash\nBV_SEARCH_MODE=hybrid\nBV_SEARCH_PRESET=impact-first\nBV_SEARCH_WEIGHTS='{\"text\":0.4,\"pagerank\":0.2,\"status\":0.15,\"impact\":0.1,\"priority\":0.1,\"recency\":0.05}'\n```" + `
+` + "```bash\nBW_SEARCH_MODE=hybrid\nBW_SEARCH_PRESET=impact-first\nBW_SEARCH_WEIGHTS='{\"text\":0.4,\"pagerank\":0.2,\"status\":0.15,\"impact\":0.1,\"priority\":0.1,\"recency\":0.05}'\n```" + `
 
 > Press **→** to continue.`
 

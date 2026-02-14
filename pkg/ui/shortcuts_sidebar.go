@@ -85,6 +85,38 @@ func (s *ShortcutsSidebar) Width() int {
 	return s.width
 }
 
+// NeedsScroll returns true if the sidebar content exceeds the available height.
+func (s *ShortcutsSidebar) NeedsScroll() bool {
+	totalLines := s.contentLineCount()
+	availableHeight := s.height - 4
+	if availableHeight < 5 {
+		availableHeight = 5
+	}
+	return totalLines > availableHeight
+}
+
+// contentLineCount returns the total number of rendered lines for the current context.
+func (s *ShortcutsSidebar) contentLineCount() int {
+	lines := 2 // title + newline
+	sections := s.allSections()
+	for _, section := range sections {
+		if len(section.contexts) > 0 {
+			found := false
+			for _, ctx := range section.contexts {
+				if ctx == s.context {
+					found = true
+					break
+				}
+			}
+			if !found {
+				continue
+			}
+		}
+		lines += 1 + len(section.items) + 1 // margin-top + title + items
+	}
+	return lines
+}
+
 // allSections returns all shortcut sections with their contexts
 func (s *ShortcutsSidebar) allSections() []shortcutSection {
 	return []shortcutSection{
@@ -103,6 +135,7 @@ func (s *ShortcutsSidebar) allSections() []shortcutSection {
 			title:    "Views",
 			contexts: []string{"list", "detail", "split"},
 			items: []shortcutItem{
+				{"E", "Tree view"},
 				{"a", "Actionable"},
 				{"b", "Board"},
 				{"g", "Graph"},
@@ -156,15 +189,25 @@ func (s *ShortcutsSidebar) allSections() []shortcutSection {
 			contexts: []string{"tree"},
 			items: []shortcutItem{
 				{"j/k", "Move ↓/↑"},
-				{"h/←", "Collapse/parent"},
-				{"l/→", "Expand/child"},
-				{"Enter/^↵", "Toggle expand"},
+				{"h", "Collapse/parent"},
+				{"l", "Expand/child"},
+				{"←/→", "Page back/forward"},
+				{"Enter/Spc", "Toggle expand"},
+				{"g/G", "Top/bottom"},
+				{"p", "Jump to parent"},
 				{"X/Z", "Expand/collapse all"},
+				{"Tab", "Cycle visibility"},
+				{"1-9", "Expand to level"},
 				{"d", "Toggle detail"},
 				{"o/c/r/a", "Filter: o/c/r/all"},
 				{"s", "Sort popup"},
 				{"/", "Search tree"},
 				{"n/N", "Next/prev match"},
+				{"O", "Occur mode"},
+				{"x", "XRay drill-down"},
+				{"`", "Flat/tree toggle"},
+				{"b/B", "Bookmark/cycle"},
+				{"m/M", "Mark/unmark all"},
 			},
 		},
 		{

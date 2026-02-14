@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Dicklesworthstone/beads_viewer/pkg/analysis"
-	"github.com/Dicklesworthstone/beads_viewer/pkg/loader"
-	"github.com/Dicklesworthstone/beads_viewer/pkg/model"
+	"github.com/vanderheijden86/beadwork/pkg/analysis"
+	"github.com/vanderheijden86/beadwork/pkg/loader"
+	"github.com/vanderheijden86/beadwork/pkg/model"
 )
 
 // skipIfNotPerfTest skips the test unless PERF_TEST=1 is set.

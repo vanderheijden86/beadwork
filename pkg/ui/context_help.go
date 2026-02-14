@@ -94,18 +94,17 @@ const contextHelpList = `## List View
 **Navigation**
   j/k       Move up/down
   Enter     View issue details
-  g/G       Jump to top/bottom
+  G         Jump to bottom
+  ^d/^u     Page down/up
 
 **Filtering**
-  o         Open issues only
-  c         Closed issues only
-  r         Ready (no blockers)
+  o/c/r/a   Open/closed/ready/all
   /         Fuzzy search
-  Ctrl+S    Semantic search (AI)
-  H         Hybrid ranking
-  Alt+H     Hybrid preset
+  s         Cycle sort mode
+  l         Label picker
 
 **Switch Views**
+  E         Tree view
   a         Actionable view
   b         Board view
   g         Graph view
@@ -113,6 +112,8 @@ const contextHelpList = `## List View
   h         History view
 
 **Actions**
+  y         Copy issue ID
+  t/T       Time-travel
   U         Self-update bv
   V         Preview cass sessions`
 
@@ -120,26 +121,29 @@ const contextHelpTree = `## Tree View
 
 **Navigation**
   j/k       Move up/down
-  h/←       Collapse or go to parent
-  l/→       Expand or go to child
-  Enter/^↵  Toggle expand/collapse
+  h         Collapse or go to parent
+  l         Expand or go to child
+  ←/→       Page backward/forward
+  Enter/Spc Toggle expand/collapse
   g/G       Jump to top/bottom
+  p         Jump to parent node
 
-**Expand/Collapse**
-  X         Expand all nodes
-  Z         Collapse all nodes
-
-**Layout**
+**Structure**
+  X/Z       Expand/collapse all
+  Tab       Cycle node visibility
+  S-Tab     Cycle global visibility
+  1-9       Expand to level N
   d         Toggle detail panel
-  Enter     Toggle detail-only view
-  Esc       Return to tree-only
 
 **Filtering**
   o/c/r/a   Open/closed/ready/all
-  Esc       Clear filter (or exit)
-  s         Sort popup (j/k, Enter, Esc)
-  /         Search tree
-  n/N       Next/prev match`
+  s         Sort popup · /  Search
+  n/N       Next/prev match
+
+**Modes**
+  O  Occur   x  XRay
+  ` + "`" + `  Flat    F  Follow
+  b/B  Bookmark/cycle   m/M  Mark`
 
 const contextHelpGraph = `## Graph View
 

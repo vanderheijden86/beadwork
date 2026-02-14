@@ -1,4 +1,4 @@
-# Agent-Friendliness Report: beads_viewer (bv)
+# Agent-Friendliness Report: beadwork (bv)
 
 **Bead ID**: bd-c5g (re-underwriting)
 **Date**: 2026-01-25

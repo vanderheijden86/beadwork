@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/Dicklesworthstone/beads_viewer/pkg/model"
+	"github.com/vanderheijden86/beadwork/pkg/model"
 )
 
 // DependencySuggestionConfig configures dependency suggestion generation

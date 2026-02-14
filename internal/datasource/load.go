@@ -3,8 +3,8 @@ package datasource
 import (
 	"fmt"
 
-	"github.com/Dicklesworthstone/beads_viewer/pkg/loader"
-	"github.com/Dicklesworthstone/beads_viewer/pkg/model"
+	"github.com/vanderheijden86/beadwork/pkg/loader"
+	"github.com/vanderheijden86/beadwork/pkg/model"
 )
 
 // LoadIssues performs smart multi-source detection and loading.

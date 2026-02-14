@@ -28,10 +28,10 @@ func TestExportPages_IncludesHistoryAndRunsHooks(t *testing.T) {
 	hooksYAML := `hooks:
   pre-export:
     - name: pre
-      command: 'mkdir -p "$BV_EXPORT_PATH" && echo pre > "$BV_EXPORT_PATH/pre-hook.txt"'
+      command: 'mkdir -p "$BW_EXPORT_PATH" && echo pre > "$BW_EXPORT_PATH/pre-hook.txt"'
   post-export:
     - name: post
-      command: 'echo post > "$BV_EXPORT_PATH/post-hook.txt"'
+      command: 'echo post > "$BW_EXPORT_PATH/post-hook.txt"'
 `
 	if err := os.WriteFile(filepath.Join(repoDir, ".bv", "hooks.yaml"), []byte(hooksYAML), 0o644); err != nil {
 		t.Fatalf("write hooks.yaml: %v", err)

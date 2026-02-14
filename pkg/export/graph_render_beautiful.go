@@ -860,7 +860,7 @@ func generateUltimateHTML(title, dataHash, graphDataJSON string, nodeCount, edge
     </main>
     <footer>
         <div>Generated %s | Hash: %s</div>
-        <div>Project: %s | <a href="https://github.com/Dicklesworthstone/beads_viewer">bv</a></div>
+        <div>Project: %s | <a href="https://github.com/vanderheijden86/beadwork">bv</a></div>
     </footer>
     <div class="toast" id="toast"></div>
     <div class="context-menu" id="context-menu">

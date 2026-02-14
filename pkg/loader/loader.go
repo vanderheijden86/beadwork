@@ -12,7 +12,7 @@ import (
 
 	json "github.com/goccy/go-json"
 
-	"github.com/Dicklesworthstone/beads_viewer/pkg/model"
+	"github.com/vanderheijden86/beadwork/pkg/model"
 )
 
 // BeadsDirEnvVar is the name of the environment variable for custom beads directory
@@ -334,7 +334,7 @@ func parseIssuesWithOptions(r io.Reader, opts ParseOptions, usePool bool) ([]mod
 	// Default warning handler prints to stderr (suppressed in robot mode).
 	warn := opts.WarningHandler
 	if warn == nil {
-		if os.Getenv("BV_ROBOT") == "1" {
+		if os.Getenv("BW_ROBOT") == "1" {
 			warn = func(string) {}
 		} else {
 			warn = func(msg string) {

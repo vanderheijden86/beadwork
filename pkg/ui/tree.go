@@ -10,7 +10,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/Dicklesworthstone/beads_viewer/pkg/model"
+	"github.com/vanderheijden86/beadwork/pkg/model"
 	"github.com/charmbracelet/bubbles/viewport"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -292,6 +292,12 @@ type TreeModel struct {
 	// Follow mode state (bd-c0c)
 	followMode   bool     // Whether follow mode is active
 	lastIssueIDs []string // Issue IDs from last refresh, for detecting changes
+
+	// Occur mode state (bd-sjs.2)
+	occurMode    bool   // Is occur mode active?
+	occurPattern string // Current occur pattern
+
+
 }
 
 // NewTreeModel creates an empty tree model
@@ -1180,8 +1186,10 @@ func (t *TreeModel) RenderHeader() string {
 	if t.flatMode {
 		modeBadge = "FLAT"
 	}
-
-	sortBadge := fmt.Sprintf("%s %s", t.sortField.String(), t.sortDirection.Indicator())
+	if t.occurMode {
+		modeBadge = fmt.Sprintf("OCCUR[%s](%d)", t.occurPattern, len(t.flatList))
+	}
+sortBadge := fmt.Sprintf("%s %s", t.sortField.String(), t.sortDirection.Indicator())
 	headerText := fmt.Sprintf("  [%s] TYPE PRI STATUS      ID                     TITLE  [%s]", modeBadge, sortBadge)
 	return headerStyle.Render(headerText)
 }
@@ -1266,6 +1274,7 @@ func (t *TreeModel) renderNode(node *IssueTreeNode, isSelected bool) string {
 	// ── Right side: age column ──
 	rightWidth := 0
 	var rightParts []string
+
 	if width > 60 {
 		ageStr := FormatTimeRel(issue.CreatedAt)
 		rightParts = append(rightParts, t.theme.MutedText.Render(fmt.Sprintf("%8s", ageStr)))
@@ -1987,6 +1996,19 @@ func (t *TreeModel) rebuildFlatList() {
 	}
 	if t.currentFilter != "" && t.currentFilter != "all" && t.filterMatches != nil {
 		t.rebuildFilteredFlatList()
+		return
+	}
+	// Occur mode: filter to matching issues (bd-sjs.2)
+	if t.occurMode && t.occurPattern != "" {
+		t.flatList = t.flatList[:0]
+		if t.xrayRoot != nil {
+			t.appendVisible(t.xrayRoot)
+		} else {
+			for _, root := range t.roots {
+				t.appendVisible(root)
+			}
+		}
+		t.rebuildOccurFlatList()
 		return
 	}
 	t.flatList = t.flatList[:0]
@@ -2867,3 +2889,4 @@ func (t *TreeModel) XRayTitle() string {
 	}
 	return ""
 }
+

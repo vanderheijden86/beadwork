@@ -10,8 +10,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/Dicklesworthstone/beads_viewer/pkg/analysis"
-	"github.com/Dicklesworthstone/beads_viewer/pkg/model"
+	"github.com/vanderheijden86/beadwork/pkg/analysis"
+	"github.com/vanderheijden86/beadwork/pkg/model"
 
 	"git.sr.ht/~sbinet/gg"
 	"github.com/ajstarks/svgo"

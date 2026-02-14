@@ -7,7 +7,7 @@ package export
 import (
 	"time"
 
-	"github.com/Dicklesworthstone/beads_viewer/pkg/model"
+	"github.com/vanderheijden86/beadwork/pkg/model"
 )
 
 // ExportIssue extends model.Issue with computed graph metrics for export.

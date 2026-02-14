@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/Dicklesworthstone/beads_viewer/pkg/testutil"
+	"github.com/vanderheijden86/beadwork/pkg/testutil"
 )
 
 func BenchmarkAnalyzePhase1Only(b *testing.B) {

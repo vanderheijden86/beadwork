@@ -3,7 +3,7 @@ package analysis
 import (
 	"testing"
 
-	"github.com/Dicklesworthstone/beads_viewer/pkg/model"
+	"github.com/vanderheijden86/beadwork/pkg/model"
 )
 
 func TestApproxBetweenness_SmallGraph(t *testing.T) {

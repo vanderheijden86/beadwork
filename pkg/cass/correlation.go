@@ -8,7 +8,7 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/Dicklesworthstone/beads_viewer/pkg/model"
+	"github.com/vanderheijden86/beadwork/pkg/model"
 )
 
 // Scoring constants - all values are tunable based on real-world usage.

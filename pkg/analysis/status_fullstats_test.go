@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Dicklesworthstone/beads_viewer/pkg/model"
+	"github.com/vanderheijden86/beadwork/pkg/model"
 )
 
 // TestMetricStatusAndFullStatsLimits verifies metric status population and map caps using real Analyzer.
@@ -20,8 +20,8 @@ func TestMetricStatusAndFullStatsLimits(t *testing.T) {
 	}
 
 	// cap maps to 2
-	os.Setenv("BV_INSIGHTS_MAP_LIMIT", "2")
-	defer os.Unsetenv("BV_INSIGHTS_MAP_LIMIT")
+	os.Setenv("BW_INSIGHTS_MAP_LIMIT", "2")
+	defer os.Unsetenv("BW_INSIGHTS_MAP_LIMIT")
 
 	cached := NewCachedAnalyzer(issues, nil)
 	stats := cached.AnalyzeAsync(context.Background())

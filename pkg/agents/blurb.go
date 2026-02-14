@@ -1,6 +1,6 @@
 // Package agents provides AGENTS.md integration for AI coding agents.
 // It handles detection, content injection, and preference storage for
-// automatically adding beads_viewer usage instructions to agent configuration files.
+// automatically adding beadwork usage instructions to agent configuration files.
 package agents
 
 import (
@@ -26,7 +26,7 @@ const AgentBlurb = `<!-- bv-agent-instructions-v1 -->
 
 ## Beads Workflow Integration
 
-This project uses [beads_viewer](https://github.com/Dicklesworthstone/beads_viewer) for issue tracking. Issues are stored in ` + "`" + `.beads/` + "`" + ` and tracked in git.
+This project uses [beadwork](https://github.com/vanderheijden86/beadwork) for issue tracking. Issues are stored in ` + "`" + `.beads/` + "`" + ` and tracked in git.
 
 ### Essential Commands
 
@@ -113,7 +113,7 @@ var legacyBlurbEndPattern = regexp.MustCompile(`(?m)bv already computes the hard
 // Used as fallback when the end pattern isn't found.
 var legacyBlurbNextSectionPattern = regexp.MustCompile(`(?m)^#{1,2}\s+[^#]`)
 
-// ContainsBlurb checks if the content already contains a beads_viewer agent blurb.
+// ContainsBlurb checks if the content already contains a beadwork agent blurb.
 func ContainsBlurb(content string) bool {
 	return strings.Contains(content, "<!-- bv-agent-instructions-v")
 }

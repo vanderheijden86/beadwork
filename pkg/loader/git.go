@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Dicklesworthstone/beads_viewer/pkg/model"
+	"github.com/vanderheijden86/beadwork/pkg/model"
 )
 
 // GitLoader loads beads from git history

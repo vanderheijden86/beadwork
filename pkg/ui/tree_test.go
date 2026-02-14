@@ -12,7 +12,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/Dicklesworthstone/beads_viewer/pkg/model"
+	"github.com/vanderheijden86/beadwork/pkg/model"
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -4051,4 +4051,3 @@ func TestTreeSortPersistence(t *testing.T) {
 		t.Fatalf("expected sort direction to persist as Ascending, got %v", tree2.GetSortDirection())
 	}
 }
-

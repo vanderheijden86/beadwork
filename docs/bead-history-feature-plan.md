@@ -725,7 +725,7 @@ description: |
   - If specific bead not found: Error with "bead not found" message
 
   ## File Location
-  - Main logic: `cmd/bv/main.go` (add flag handling)
+  - Main logic: `cmd/bw/main.go` (add flag handling)
   - Correlator: `pkg/correlation/correlator.go` (orchestration)
 
 acceptance_criteria: |
@@ -1232,7 +1232,7 @@ description: |
   - `orphan_ratio`: orphan_commits / total_commits
 
   ## File Location
-  - `cmd/bv/main.go` (new flag)
+  - `cmd/bw/main.go` (new flag)
   - `pkg/correlation/reverse.go` (lookup logic)
 
 acceptance_criteria: |

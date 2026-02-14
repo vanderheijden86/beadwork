@@ -4,7 +4,7 @@ import (
 	"math"
 	"time"
 
-	"github.com/Dicklesworthstone/beads_viewer/pkg/model"
+	"github.com/vanderheijden86/beadwork/pkg/model"
 )
 
 // RiskSignals contains volatility and risk metrics for an issue

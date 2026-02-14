@@ -7,8 +7,8 @@ import (
 	"sort"
 	"time"
 
-	"github.com/Dicklesworthstone/beads_viewer/pkg/correlation"
-	"github.com/Dicklesworthstone/beads_viewer/pkg/model"
+	"github.com/vanderheijden86/beadwork/pkg/correlation"
+	"github.com/vanderheijden86/beadwork/pkg/model"
 )
 
 func isClosedLikeStatus(status model.Status) bool {

@@ -11,21 +11,21 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Dicklesworthstone/beads_viewer/pkg/agents"
-	"github.com/Dicklesworthstone/beads_viewer/pkg/analysis"
-	"github.com/Dicklesworthstone/beads_viewer/pkg/baseline"
-	"github.com/Dicklesworthstone/beads_viewer/pkg/cass"
-	"github.com/Dicklesworthstone/beads_viewer/pkg/correlation"
-	"github.com/Dicklesworthstone/beads_viewer/pkg/debug"
-	"github.com/Dicklesworthstone/beads_viewer/pkg/drift"
-	"github.com/Dicklesworthstone/beads_viewer/pkg/export"
-	"github.com/Dicklesworthstone/beads_viewer/pkg/instance"
-	"github.com/Dicklesworthstone/beads_viewer/pkg/loader"
-	"github.com/Dicklesworthstone/beads_viewer/pkg/model"
-	"github.com/Dicklesworthstone/beads_viewer/pkg/recipe"
-	"github.com/Dicklesworthstone/beads_viewer/pkg/search"
-	"github.com/Dicklesworthstone/beads_viewer/pkg/updater"
-	"github.com/Dicklesworthstone/beads_viewer/pkg/watcher"
+	"github.com/vanderheijden86/beadwork/pkg/agents"
+	"github.com/vanderheijden86/beadwork/pkg/analysis"
+	"github.com/vanderheijden86/beadwork/pkg/baseline"
+	"github.com/vanderheijden86/beadwork/pkg/cass"
+	"github.com/vanderheijden86/beadwork/pkg/correlation"
+	"github.com/vanderheijden86/beadwork/pkg/debug"
+	"github.com/vanderheijden86/beadwork/pkg/drift"
+	"github.com/vanderheijden86/beadwork/pkg/export"
+	"github.com/vanderheijden86/beadwork/pkg/instance"
+	"github.com/vanderheijden86/beadwork/pkg/loader"
+	"github.com/vanderheijden86/beadwork/pkg/model"
+	"github.com/vanderheijden86/beadwork/pkg/recipe"
+	"github.com/vanderheijden86/beadwork/pkg/search"
+	"github.com/vanderheijden86/beadwork/pkg/updater"
+	"github.com/vanderheijden86/beadwork/pkg/watcher"
 
 	"github.com/atotto/clipboard"
 	"github.com/charmbracelet/bubbles/list"
@@ -235,11 +235,11 @@ const (
 )
 
 func freshnessWarnThreshold() time.Duration {
-	return envDurationSeconds("BV_FRESHNESS_WARN_S", 30*time.Second)
+	return envDurationSeconds("BW_FRESHNESS_WARN_S", 30*time.Second)
 }
 
 func freshnessStaleThreshold() time.Duration {
-	return envDurationSeconds("BV_FRESHNESS_STALE_S", 2*time.Minute)
+	return envDurationSeconds("BW_FRESHNESS_STALE_S", 2*time.Minute)
 }
 
 func workerPollTickCmd() tea.Cmd {
@@ -459,6 +459,7 @@ type Model struct {
 	focusBeforeHelp          focus // Stores focus before opening help overlay
 	treeViewActive           bool  // True when tree view is the active left pane (bd-xfd)
 	treeDetailHidden         bool  // True when detail panel is hidden in tree view (bd-80u)
+	detailHiddenByNarrow     bool  // True when detail was auto-hidden due to narrow window (bd-6eg)
 	isSplitView              bool
 	splitPaneRatio           float64 // Ratio of list pane width (0.2-0.8), default 0.4
 	isBoardView              bool
@@ -1004,7 +1005,7 @@ func NewModel(issues []model.Issue, activeRecipe *recipe.Recipe, beadsPath strin
 	var backgroundWorker *BackgroundWorker
 	var backgroundModeErr error
 	backgroundModeRequested := false
-	if v := strings.TrimSpace(os.Getenv("BV_BACKGROUND_MODE")); v != "" {
+	if v := strings.TrimSpace(os.Getenv("BW_BACKGROUND_MODE")); v != "" {
 		switch strings.ToLower(v) {
 		case "1", "true", "yes", "on":
 			backgroundModeRequested = true
@@ -2255,12 +2256,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			addTiming("total", "total")
 			m.statusMsg += "]"
 		}
-		// Auto-enable background mode after slow sync reloads (opt-out via BV_BACKGROUND_MODE=0).
+		// Auto-enable background mode after slow sync reloads (opt-out via BW_BACKGROUND_MODE=0).
 		autoEnabled := false
 		slowReload := reloadDuration >= time.Second
 		if slowReload && m.backgroundWorker == nil && m.beadsPath != "" {
 			autoAllowed := true
-			if v := strings.TrimSpace(os.Getenv("BV_BACKGROUND_MODE")); v != "" {
+			if v := strings.TrimSpace(os.Getenv("BW_BACKGROUND_MODE")); v != "" {
 				switch strings.ToLower(v) {
 				case "0", "false", "no", "off":
 					autoAllowed = false
@@ -2290,7 +2291,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if autoEnabled {
 				m.statusMsg += "; background mode auto-enabled"
 			} else {
-				m.statusMsg += "; consider BV_BACKGROUND_MODE=1"
+				m.statusMsg += "; consider BW_BACKGROUND_MODE=1"
 			}
 		}
 		m.statusIsError = false
@@ -2653,14 +2654,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		// Handle shortcuts sidebar scrolling (j/k, arrows, ctrl+j/k when sidebar visible) - bv-3qi5, bd-jk0
+		// Only intercept navigation keys when the sidebar content actually overflows.
+		// Otherwise let keys pass through to the view handler for normal navigation.
 		if m.showShortcutsSidebar && m.list.FilterState() != list.Filtering {
-			switch msg.String() {
-			case "j", "down", "ctrl+j":
-				m.shortcutsSidebar.ScrollDown()
-				return m, nil
-			case "k", "up", "ctrl+k":
-				m.shortcutsSidebar.ScrollUp()
-				return m, nil
+			m.shortcutsSidebar.SetContext(ContextFromFocus(m.focused))
+			m.shortcutsSidebar.SetSize(m.shortcutsSidebar.Width(), m.height-2)
+			if m.shortcutsSidebar.NeedsScroll() {
+				switch msg.String() {
+				case "j", "down", "ctrl+j":
+					m.shortcutsSidebar.ScrollDown()
+					return m, nil
+				case "k", "up", "ctrl+k":
+					m.shortcutsSidebar.ScrollUp()
+					return m, nil
+				}
 			}
 		}
 
@@ -3457,15 +3464,23 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.renderer.SetWidthWithTheme(msg.Width, m.theme)
 		}
 
-		// Auto-hide detail panel when it would be too narrow to read (bd-dy7).
-		// This applies on every resize. The user can still toggle with 'd'.
-		if m.isSplitView && m.detailPaneWidth() < MinDetailPaneWidth {
+		// Auto-hide detail panel when window is too narrow for split view (bd-6eg, bd-dy7).
+		// In narrow windows, Enter opens full-screen detail instead.
+		// Resizing from narrow to wide does NOT auto-show; user presses 'd'.
+		// But resizing within split view (pane too narrow -> fits) does auto-show.
+		if !m.isSplitView {
+			m.treeDetailHidden = true
+			m.detailHiddenByNarrow = true
+			if m.treeViewActive && m.focused == focusDetail {
+				m.focused = focusTree
+			}
+		} else if m.detailPaneWidth() < MinDetailPaneWidth {
 			m.treeDetailHidden = true
 			if m.treeViewActive && m.focused == focusDetail {
 				m.focused = focusTree
 			}
-		} else if m.isSplitView {
-			// Re-show detail when the terminal is wide enough again
+		} else if !m.detailHiddenByNarrow {
+			// Auto-show detail when pane fits again (but not after narrow->wide)
 			m.treeDetailHidden = false
 		}
 
@@ -3954,9 +3969,22 @@ func (m Model) handleTreeKeys(msg tea.KeyMsg) Model {
 	case "F":
 		// Toggle follow mode (bd-c0c)
 		m.tree.ToggleFollowMode()
+	case "O":
+		// Toggle occur mode (bd-sjs.2) - uses current search pattern
+		if m.tree.IsOccurMode() {
+			m.tree.ExitOccurMode()
+			m.syncTreeToDetail()
+		} else if m.tree.SearchQuery() != "" {
+			m.tree.EnterOccurMode(m.tree.SearchQuery())
+			m.syncTreeToDetail()
+		} else {
+			m.statusMsg = "Search with / first, then O for occur mode"
+			m.statusIsError = false
+		}
 	case "d":
 		// Toggle detail panel visibility (bd-80u)
 		m.treeDetailHidden = !m.treeDetailHidden
+		m.detailHiddenByNarrow = false // User took manual control (bd-6eg)
 		if m.treeDetailHidden && m.focused == focusDetail {
 			m.focused = focusTree
 		}
@@ -3964,8 +3992,11 @@ func (m Model) handleTreeKeys(msg tea.KeyMsg) Model {
 			m.syncTreeToDetail()
 		}
 	case "esc":
-		// First escape exits XRay, then clears tree filter, then exits tree view (bd-kob, bd-0rc)
-		if m.tree.IsXRayMode() {
+		// Escape hierarchy: occur, XRay, tree filter, then exit tree view (bd-sjs.2, bd-kob, bd-0rc)
+		if m.tree.IsOccurMode() {
+			m.tree.ExitOccurMode()
+			m.syncTreeToDetail()
+		} else if m.tree.IsXRayMode() {
 			m.tree.ExitXRay()
 			m.syncTreeToDetail()
 		} else if m.tree.GetFilter() != "" && m.tree.GetFilter() != "all" {
@@ -4333,10 +4364,10 @@ func gitRemoteToWebURL(remote string) string {
 }
 
 // openBrowserURL opens a URL in the default browser (bv-xf4p)
-// Set BV_NO_BROWSER=1 to suppress browser opening (useful for tests).
+// Set BW_NO_BROWSER=1 to suppress browser opening (useful for tests).
 func openBrowserURL(url string) error {
 	// Skip browser opening in test mode or when explicitly disabled
-	if os.Getenv("BV_NO_BROWSER") != "" || os.Getenv("BV_TEST_MODE") != "" {
+	if os.Getenv("BW_NO_BROWSER") != "" || os.Getenv("BW_TEST_MODE") != "" {
 		return nil
 	}
 
@@ -5321,14 +5352,24 @@ func (m *Model) renderHelpOverlay() string {
 
 	treeSection := []struct{ key, desc string }{
 		{"j/k/↕", "Move up/down"},
-		{"h/←", "Collapse / parent"},
-		{"l/→", "Expand / child"},
-		{"Enter", "Toggle expand"},
+		{"h", "Collapse / parent"},
+		{"l", "Expand / child"},
+		{"←/→", "Page back/forward"},
+		{"Enter/Spc", "Toggle expand"},
+		{"g/G", "Top / bottom"},
+		{"p", "Jump to parent"},
 		{"X/Z", "Expand / collapse all"},
+		{"Tab", "Cycle node visibility"},
+		{"1-9", "Expand to level N"},
+		{"d", "Toggle detail panel"},
 		{"o/c/r/a", "Filter: open/closed/ready/all"},
-		{"s", "Cycle sort mode"},
+		{"s", "Sort popup"},
 		{"/", "Search tree"},
 		{"n/N", "Next/prev match"},
+		{"O", "Occur (search filter)"},
+		{"x", "XRay drill-down"},
+		{"b/B", "Bookmark / cycle"},
+		{"m/M", "Mark / unmark all"},
 	}
 
 	statusSection := []struct{ key, desc string }{
@@ -5396,13 +5437,47 @@ func (m *Model) renderHelpOverlay() string {
 	// Combine title and body
 	content := lipgloss.JoinVertical(lipgloss.Center, titleBar, "", body)
 
+	// Apply scroll offset: split into lines, window visible portion
+	contentLines := strings.Split(content, "\n")
+	totalLines := len(contentLines)
+	availableHeight := m.height - 6 // border (2) + padding (2) + footer hint (1) + margin (1)
+	if availableHeight < 10 {
+		availableHeight = 10
+	}
+
+	// Clamp scroll offset
+	maxScroll := totalLines - availableHeight
+	if maxScroll < 0 {
+		maxScroll = 0
+	}
+	if m.helpScroll > maxScroll {
+		m.helpScroll = maxScroll
+	}
+
+	// Build scroll hint
+	scrollHint := ""
+	if maxScroll > 0 {
+		scrollHint = subtitleStyle.Render(fmt.Sprintf("  j/k scroll (%d/%d)", m.helpScroll+1, maxScroll+1))
+	}
+
+	// Window the content
+	startLine := m.helpScroll
+	endLine := startLine + availableHeight
+	if endLine > totalLines {
+		endLine = totalLines
+	}
+	visibleContent := strings.Join(contentLines[startLine:endLine], "\n")
+	if scrollHint != "" {
+		visibleContent += "\n" + scrollHint
+	}
+
 	// Outer container
 	containerStyle := t.Renderer.NewStyle().
 		Border(lipgloss.DoubleBorder()).
 		BorderForeground(t.Primary).
 		Padding(1, 2)
 
-	helpBox := containerStyle.Render(content)
+	helpBox := containerStyle.Render(visibleContent)
 
 	// Center in viewport
 	return lipgloss.Place(

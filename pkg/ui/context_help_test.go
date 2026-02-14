@@ -293,7 +293,7 @@ func TestContextHelpListShortcutsMatchModel(t *testing.T) {
 	}{
 		{"j/k", "vertical navigation"},
 		{"Enter", "view details"},
-		{"g/G", "jump to top/bottom"},
+		{"G", "jump to bottom"},
 		{"/", "search"},
 	}
 

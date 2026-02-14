@@ -17,12 +17,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Dicklesworthstone/beads_viewer/pkg/version"
+	"github.com/vanderheijden86/beadwork/pkg/version"
 )
 
 const (
-	repoOwner = "Dicklesworthstone"
-	repoName  = "beads_viewer"
+	repoOwner = "vanderheijden86"
+	repoName  = "beadwork"
 	baseURL   = "https://api.github.com/repos/" + repoOwner + "/" + repoName
 )
 
@@ -57,7 +57,7 @@ func CheckForUpdates() (string, string, error) {
 	client := &http.Client{
 		Timeout: 2 * time.Second,
 	}
-	return checkForUpdates(client, "https://api.github.com/repos/Dicklesworthstone/beads_viewer/releases/latest")
+	return checkForUpdates(client, "https://api.github.com/repos/Dicklesworthstone/beadwork/releases/latest")
 }
 
 func checkForUpdates(client *http.Client, url string) (string, string, error) {
@@ -66,7 +66,7 @@ func checkForUpdates(client *http.Client, url string) (string, string, error) {
 		return "", "", err
 	}
 	// GitHub recommends sending a UA; some endpoints 403 without it.
-	req.Header.Set("User-Agent", "beads-viewer-update-check")
+	req.Header.Set("User-Agent", "beadwork-update-check")
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -316,7 +316,7 @@ func GetLatestRelease() (*Release, error) {
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("User-Agent", "beads-viewer-updater")
+	req.Header.Set("User-Agent", "beadwork-updater")
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -375,7 +375,7 @@ func downloadFile(url, destPath string, expectedSize int64) error {
 	if err != nil {
 		return err
 	}
-	req.Header.Set("User-Agent", "beads-viewer-updater")
+	req.Header.Set("User-Agent", "beadwork-updater")
 
 	resp, err := client.Do(req)
 	if err != nil {

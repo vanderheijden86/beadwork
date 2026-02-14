@@ -3,7 +3,7 @@ package ui
 import (
 	"testing"
 
-	"github.com/Dicklesworthstone/beads_viewer/pkg/model"
+	"github.com/vanderheijden86/beadwork/pkg/model"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -148,5 +148,67 @@ func TestHistoryViewKeys(t *testing.T) {
 
 	if m.historyView.GetMinConfidence() == initialConf {
 		t.Fatalf("expected confidence to change after 'c' key")
+	}
+}
+
+// TestNarrowWindowTreeDetailHidden verifies that in a narrow window (width <= SplitViewThreshold),
+// treeDetailHidden is true so Enter opens full-screen detail instead of toggling expand (bd-6eg).
+func TestNarrowWindowTreeDetailHidden(t *testing.T) {
+	issues := []model.Issue{
+		{ID: "1", Title: "Test issue", Status: model.StatusOpen},
+	}
+	m := NewModel(issues, nil, "")
+
+	// Narrow window: below SplitViewThreshold (100)
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 30})
+	m = updated.(Model)
+
+	if !m.treeDetailHidden {
+		t.Fatal("expected treeDetailHidden=true in narrow window")
+	}
+	if m.focused != focusTree {
+		t.Fatalf("expected focusTree, got %v", m.focused)
+	}
+
+	// Enter should open detail-only view (not toggle expand)
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = updated.(Model)
+
+	if m.focused != focusDetail {
+		t.Fatalf("expected Enter to open detail view in narrow window, got focus %v", m.focused)
+	}
+
+	// Esc should return to tree
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	m = updated.(Model)
+
+	if m.focused != focusTree {
+		t.Fatalf("expected Esc to return to tree, got focus %v", m.focused)
+	}
+}
+
+// TestResizeNarrowToWideStaysManual verifies that resizing from narrow to wide
+// does NOT auto-show the detail panel (bd-6eg).
+func TestResizeNarrowToWideStaysManual(t *testing.T) {
+	issues := []model.Issue{
+		{ID: "1", Title: "Test issue", Status: model.StatusOpen},
+	}
+	m := NewModel(issues, nil, "")
+
+	// Start narrow
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 30})
+	m = updated.(Model)
+
+	if !m.treeDetailHidden {
+		t.Fatal("expected treeDetailHidden=true in narrow window")
+	}
+
+	// Resize to wide
+	updated, _ = m.Update(tea.WindowSizeMsg{Width: 140, Height: 40})
+	m = updated.(Model)
+
+	// Should stay hidden - user must press d to restore
+	if !m.treeDetailHidden {
+		t.Fatal("expected treeDetailHidden to stay true after resize to wide (manual mode)")
 	}
 }

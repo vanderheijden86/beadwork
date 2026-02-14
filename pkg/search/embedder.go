@@ -21,9 +21,9 @@ const (
 const DefaultEmbeddingDim = 384
 
 const (
-	EnvSemanticEmbedder = "BV_SEMANTIC_EMBEDDER"
-	EnvSemanticModel    = "BV_SEMANTIC_MODEL"
-	EnvSemanticDim      = "BV_SEMANTIC_DIM"
+	EnvSemanticEmbedder = "BW_SEMANTIC_EMBEDDER"
+	EnvSemanticModel    = "BW_SEMANTIC_MODEL"
+	EnvSemanticDim      = "BW_SEMANTIC_DIM"
 )
 
 // EmbeddingConfig captures embedder selection/configuration.

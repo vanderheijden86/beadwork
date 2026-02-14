@@ -106,7 +106,7 @@ func (ctx *TriageContext) GetBlockerDepth(id string) int {
 
 ### 2.3 HIGH: Phase 2 Blocking for Robot Mode
 
-**Location**: `cmd/bv/main.go:2418`, `pkg/analysis/triage.go:335-337`
+**Location**: `cmd/bw/main.go:2418`, `pkg/analysis/triage.go:335-337`
 
 **Current**: Robot mode waits for ALL Phase 2 metrics:
 ```go
@@ -139,7 +139,7 @@ stats.WaitForMetrics(opts.RequiredMetrics)  // Only wait for what we need
 
 ### 2.4 HIGH: JSON Pretty-Printing Overhead
 
-**Location**: `cmd/bv/main.go:2524`
+**Location**: `cmd/bw/main.go:2524`
 
 **Current**:
 ```go

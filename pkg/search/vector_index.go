@@ -14,7 +14,7 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/Dicklesworthstone/beads_viewer/pkg/util/topk"
+	"github.com/vanderheijden86/beadwork/pkg/util/topk"
 )
 
 const (

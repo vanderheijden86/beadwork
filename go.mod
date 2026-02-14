@@ -1,4 +1,4 @@
-module github.com/Dicklesworthstone/beads_viewer
+module github.com/vanderheijden86/beadwork
 
 // Keep this in sync with CI (see .github/workflows/ci.yml) and the minimum
 // version available in common dev environments.

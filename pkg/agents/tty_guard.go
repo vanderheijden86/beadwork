@@ -19,7 +19,7 @@ func init() {
 		return
 	}
 
-	if !shouldSuppressTTYQueries(os.Args, os.Getenv("BV_ROBOT") == "1", os.Getenv("BV_TEST_MODE") != "") {
+	if !shouldSuppressTTYQueries(os.Args, os.Getenv("BW_ROBOT") == "1", os.Getenv("BW_TEST_MODE") != "") {
 		return
 	}
 

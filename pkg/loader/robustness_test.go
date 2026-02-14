@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/Dicklesworthstone/beads_viewer/pkg/loader"
+	"github.com/vanderheijden86/beadwork/pkg/loader"
 )
 
 func TestLoadIssuesRobustness(t *testing.T) {

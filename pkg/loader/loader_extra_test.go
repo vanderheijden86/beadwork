@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Dicklesworthstone/beads_viewer/pkg/loader"
+	"github.com/vanderheijden86/beadwork/pkg/loader"
 )
 
 func TestParseIssuesWithOptions_LineTooLong(t *testing.T) {

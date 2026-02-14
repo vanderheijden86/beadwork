@@ -17,8 +17,8 @@ func TestRobotSearchContract(t *testing.T) {
 	cmd := exec.Command(bv, "--search", "interstellarkraken", "--robot-search")
 	cmd.Dir = env
 	cmd.Env = append(os.Environ(),
-		"BV_SEMANTIC_EMBEDDER=hash",
-		"BV_SEMANTIC_DIM=2048",
+		"BW_SEMANTIC_EMBEDDER=hash",
+		"BW_SEMANTIC_DIM=2048",
 	)
 	out, err := cmd.CombinedOutput()
 	if err != nil {

@@ -45,19 +45,19 @@ type HooksByPhase struct {
 
 // ExportContext contains information passed to hooks via environment variables
 type ExportContext struct {
-	ExportPath   string    // BV_EXPORT_PATH: Output file path
-	ExportFormat string    // BV_EXPORT_FORMAT: 'markdown' or 'json'
-	IssueCount   int       // BV_ISSUE_COUNT: Number of issues exported
-	Timestamp    time.Time // BV_TIMESTAMP: Export timestamp (RFC3339)
+	ExportPath   string    // BW_EXPORT_PATH: Output file path
+	ExportFormat string    // BW_EXPORT_FORMAT: 'markdown' or 'json'
+	IssueCount   int       // BW_ISSUE_COUNT: Number of issues exported
+	Timestamp    time.Time // BW_TIMESTAMP: Export timestamp (RFC3339)
 }
 
 // ToEnv converts export context to environment variables
 func (c ExportContext) ToEnv() []string {
 	return []string{
-		fmt.Sprintf("BV_EXPORT_PATH=%s", c.ExportPath),
-		fmt.Sprintf("BV_EXPORT_FORMAT=%s", c.ExportFormat),
-		fmt.Sprintf("BV_ISSUE_COUNT=%d", c.IssueCount),
-		fmt.Sprintf("BV_TIMESTAMP=%s", c.Timestamp.Format(time.RFC3339)),
+		fmt.Sprintf("BW_EXPORT_PATH=%s", c.ExportPath),
+		fmt.Sprintf("BW_EXPORT_FORMAT=%s", c.ExportFormat),
+		fmt.Sprintf("BW_ISSUE_COUNT=%d", c.IssueCount),
+		fmt.Sprintf("BW_TIMESTAMP=%s", c.Timestamp.Format(time.RFC3339)),
 	}
 }
 

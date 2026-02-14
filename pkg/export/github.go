@@ -592,10 +592,10 @@ func DeleteRepository(repoFullName string, confirm bool) error {
 }
 
 // OpenInBrowser opens a URL in the default browser.
-// Set BV_NO_BROWSER=1 to suppress browser opening (useful for tests).
+// Set BW_NO_BROWSER=1 to suppress browser opening (useful for tests).
 func OpenInBrowser(url string) error {
 	// Skip browser opening in test mode or when explicitly disabled
-	if os.Getenv("BV_NO_BROWSER") != "" || os.Getenv("BV_TEST_MODE") != "" {
+	if os.Getenv("BW_NO_BROWSER") != "" || os.Getenv("BW_TEST_MODE") != "" {
 		return nil
 	}
 

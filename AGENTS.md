@@ -1,6 +1,6 @@
 > **PREREQUISITE**: Read and follow `~/.cursor/AGENTS.md` first. It contains baseline instructions (beads workflow, commit strategy, progress reporting) that apply to ALL projects. The instructions below are project-specific and supplement those global rules.
 
-# AGENTS.md — beads_viewer
+# AGENTS.md — beadwork
 
 ## RULE 0 - THE FUNDAMENTAL OVERRIDE PEROGATIVE
 
@@ -336,9 +336,9 @@ bv --search "login oauth" --search-mode hybrid --robot-search
 ```
 
 Env defaults:
-- `BV_SEARCH_MODE` (text|hybrid)
-- `BV_SEARCH_PRESET` (default|bug-hunting|sprint-planning|impact-first|text-only)
-- `BV_SEARCH_WEIGHTS` (JSON string, overrides preset)
+- `BW_SEARCH_MODE` (text|hybrid)
+- `BW_SEARCH_PRESET` (default|bug-hunting|sprint-planning|impact-first|text-only)
+- `BW_SEARCH_WEIGHTS` (JSON string, overrides preset)
 
 ---
 
@@ -378,14 +378,14 @@ bv --export-pages ./bv-pages --pages-title "Nightly Build"
 
 ### Never Open Browsers
 
-**Tests must NEVER automatically open a browser.** All browser-opening functions check `BV_NO_BROWSER` and `BV_TEST_MODE` environment variables. These are set globally via `TestMain` in:
+**Tests must NEVER automatically open a browser.** All browser-opening functions check `BW_NO_BROWSER` and `BW_TEST_MODE` environment variables. These are set globally via `TestMain` in:
 - `tests/e2e/common_test.go`
 - `pkg/export/main_test.go`
 - `pkg/ui/main_test.go`
 
 When adding new browser-opening code, always check these env vars first:
 ```go
-if os.Getenv("BV_NO_BROWSER") != "" || os.Getenv("BV_TEST_MODE") != "" {
+if os.Getenv("BW_NO_BROWSER") != "" || os.Getenv("BW_TEST_MODE") != "" {
     return nil
 }
 ```
@@ -562,7 +562,7 @@ rg -l -t go 'sync.Mutex' | xargs ast-grep run -l Go -p 'mu.Lock()'
 **warp_grep usage:**
 ```
 mcp__morph-mcp__warp_grep(
-  repoPath: "/path/to/beads_viewer",
+  repoPath: "/path/to/beadwork",
   query: "How does the correlation package detect orphan commits?"
 )
 ```

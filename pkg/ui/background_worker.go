@@ -1,4 +1,4 @@
-// Package ui provides the terminal user interface for beads_viewer.
+// Package ui provides the terminal user interface for beadwork.
 // This file implements the BackgroundWorker for off-thread data processing.
 package ui
 
@@ -20,12 +20,12 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/Dicklesworthstone/beads_viewer/pkg/analysis"
-	dbg "github.com/Dicklesworthstone/beads_viewer/pkg/debug"
-	"github.com/Dicklesworthstone/beads_viewer/pkg/loader"
-	"github.com/Dicklesworthstone/beads_viewer/pkg/model"
-	"github.com/Dicklesworthstone/beads_viewer/pkg/recipe"
-	"github.com/Dicklesworthstone/beads_viewer/pkg/watcher"
+	"github.com/vanderheijden86/beadwork/pkg/analysis"
+	dbg "github.com/vanderheijden86/beadwork/pkg/debug"
+	"github.com/vanderheijden86/beadwork/pkg/loader"
+	"github.com/vanderheijden86/beadwork/pkg/model"
+	"github.com/vanderheijden86/beadwork/pkg/recipe"
+	"github.com/vanderheijden86/beadwork/pkg/watcher"
 )
 
 // WorkerState represents the current state of the background worker.
@@ -273,16 +273,16 @@ func NewBackgroundWorker(cfg WorkerConfig) (*BackgroundWorker, error) {
 	}()
 
 	if cfg.DebounceDelay == 0 {
-		cfg.DebounceDelay = envDurationMilliseconds("BV_DEBOUNCE_MS", 200*time.Millisecond)
+		cfg.DebounceDelay = envDurationMilliseconds("BW_DEBOUNCE_MS", 200*time.Millisecond)
 	}
 	if cfg.MessageBuffer <= 0 {
-		cfg.MessageBuffer = envPositiveIntOr("BV_CHANNEL_BUFFER", 8)
+		cfg.MessageBuffer = envPositiveIntOr("BW_CHANNEL_BUFFER", 8)
 	}
 	if cfg.HeartbeatInterval == 0 {
-		cfg.HeartbeatInterval = envDurationSeconds("BV_HEARTBEAT_INTERVAL_S", 5*time.Second)
+		cfg.HeartbeatInterval = envDurationSeconds("BW_HEARTBEAT_INTERVAL_S", 5*time.Second)
 	}
 	if cfg.WatchdogInterval == 0 {
-		cfg.WatchdogInterval = envDurationSeconds("BV_WATCHDOG_INTERVAL_S", 10*time.Second)
+		cfg.WatchdogInterval = envDurationSeconds("BW_WATCHDOG_INTERVAL_S", 10*time.Second)
 	}
 	if cfg.HeartbeatTimeout == 0 {
 		cfg.HeartbeatTimeout = 30 * time.Second
@@ -294,10 +294,10 @@ func NewBackgroundWorker(cfg WorkerConfig) (*BackgroundWorker, error) {
 		cfg.MaxRecoveries = 3
 	}
 
-	logLevel := parseWorkerLogLevel(os.Getenv("BV_WORKER_LOG_LEVEL"))
-	metricsEnabled := envBool("BV_WORKER_METRICS")
-	tracePath := strings.TrimSpace(os.Getenv("BV_WORKER_TRACE"))
-	logJSON := os.Getenv("BV_ROBOT") == "1"
+	logLevel := parseWorkerLogLevel(os.Getenv("BW_WORKER_LOG_LEVEL"))
+	metricsEnabled := envBool("BW_WORKER_METRICS")
+	tracePath := strings.TrimSpace(os.Getenv("BW_WORKER_TRACE"))
+	logJSON := os.Getenv("BW_ROBOT") == "1"
 
 	idleGCConfig := IdleGCConfig{
 		Enabled:     true,
@@ -552,7 +552,7 @@ func (w *BackgroundWorker) Start() error {
 	})
 
 	// Avoid mutating global GC percent in tests (it can interfere with parallel test execution).
-	if os.Getenv("BV_TEST_MODE") != "" {
+	if os.Getenv("BW_TEST_MODE") != "" {
 		idleGCGCPercent = 0
 	}
 
@@ -1622,7 +1622,7 @@ func countJSONLLines(path string) (int, error) {
 }
 
 func envMaxLineSizeBytes() int {
-	mb, ok := envPositiveInt("BV_MAX_LINE_SIZE_MB")
+	mb, ok := envPositiveInt("BW_MAX_LINE_SIZE_MB")
 	if !ok {
 		return 0
 	}

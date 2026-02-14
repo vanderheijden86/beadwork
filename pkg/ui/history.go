@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Dicklesworthstone/beads_viewer/pkg/cass"
-	"github.com/Dicklesworthstone/beads_viewer/pkg/correlation"
+	"github.com/vanderheijden86/beadwork/pkg/cass"
+	"github.com/vanderheijden86/beadwork/pkg/correlation"
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/lipgloss"
 )

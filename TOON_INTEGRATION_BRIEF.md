@@ -1,4 +1,4 @@
-# TOON Integration Brief: beads_viewer (bv)
+# TOON Integration Brief: beadwork (bv)
 
 **Bead:** bd-19e
 **Author:** RedStone (claude-code / opus-4.5)
@@ -13,13 +13,13 @@
 
 | File | Key Functions/Types | Purpose |
 |------|-------------------|---------|
-| `cmd/bv/main.go:6583-6592` | `newRobotEncoder(w io.Writer)` | Central JSON encoder factory |
-| `cmd/bv/main.go:57-169` | 25+ `--robot-*` flags | Robot mode flag definitions |
+| `cmd/bw/main.go:6583-6592` | `newRobotEncoder(w io.Writer)` | Central JSON encoder factory |
+| `cmd/bw/main.go:57-169` | 25+ `--robot-*` flags | Robot mode flag definitions |
 
 ### Current Encoding Pattern
 
 ```go
-// cmd/bv/main.go:6583-6592
+// cmd/bw/main.go:6583-6592
 func newRobotEncoder(w io.Writer) *json.Encoder {
     encoder := json.NewEncoder(w)
     if os.Getenv("BV_PRETTY_JSON") == "1" {
@@ -86,7 +86,7 @@ type TriageResult struct {
 
 ## 2. Proposed OutputFormat & CLI Flag Placement
 
-### New Global Flag (`cmd/bv/main.go`)
+### New Global Flag (`cmd/bw/main.go`)
 
 ```go
 // Add near line 57 with other robot flags
@@ -244,7 +244,7 @@ TOON format applies only to robot mode stdout output when `--format toon` is spe
 
 ## 5. Doc Insertion Points
 
-### --help Output (`cmd/bv/main.go`)
+### --help Output (`cmd/bw/main.go`)
 
 Add to flag definitions:
 ```go
@@ -365,7 +365,7 @@ unblocks: 3
 |------|--------|
 | `pkg/robot/toon.go` | NEW: toon_rust `tru` wrapper (see `templates/toon_go_template.go`) |
 | `pkg/robot/format.go` | NEW: Format enum, Encode function |
-| `cmd/bv/main.go` | Add `--format` flag, modify `newRobotEncoder` |
+| `cmd/bw/main.go` | Add `--format` flag, modify `newRobotEncoder` |
 
 ### Phase 2: Incremental Rollout
 

@@ -239,6 +239,51 @@ func TestShortcutsSidebarScrollIndicators(t *testing.T) {
 	}
 }
 
+func TestShortcutsSidebarTreeContextIncludesEmacsShortcuts(t *testing.T) {
+	theme := Theme{
+		Renderer:  lipgloss.DefaultRenderer(),
+		Primary:   lipgloss.AdaptiveColor{Light: "#00ff00", Dark: "#00ff00"},
+		Secondary: lipgloss.AdaptiveColor{Light: "#888888", Dark: "#888888"},
+		Base:      lipgloss.NewStyle(),
+	}
+	sidebar := NewShortcutsSidebar(theme)
+	sidebar.SetSize(34, 50)
+	sidebar.SetContext("tree")
+
+	view := sidebar.View()
+
+	// New emacs-inspired shortcuts should be listed in tree context
+	for _, expected := range []string{"Occur"} {
+		if !strings.Contains(view, expected) {
+			t.Errorf("Expected tree context to include %q shortcut", expected)
+		}
+	}
+}
+
+func TestShortcutsSidebarNeedsScroll(t *testing.T) {
+	theme := Theme{
+		Renderer:  lipgloss.DefaultRenderer(),
+		Primary:   lipgloss.AdaptiveColor{Light: "#00ff00", Dark: "#00ff00"},
+		Secondary: lipgloss.AdaptiveColor{Light: "#888888", Dark: "#888888"},
+		Base:      lipgloss.NewStyle(),
+	}
+
+	sidebar := NewShortcutsSidebar(theme)
+	sidebar.SetContext("graph") // Few items
+
+	// Large height - content should fit
+	sidebar.SetSize(34, 100)
+	if sidebar.NeedsScroll() {
+		t.Error("Expected NeedsScroll=false when content fits in large height")
+	}
+
+	// Small height - content should overflow
+	sidebar.SetSize(34, 10)
+	if !sidebar.NeedsScroll() {
+		t.Error("Expected NeedsScroll=true when height is small")
+	}
+}
+
 func TestShortcutsSidebarNoIndicatorsWhenFits(t *testing.T) {
 	theme := Theme{
 		Renderer:  lipgloss.DefaultRenderer(),

@@ -1,8 +1,9 @@
 beads_reference/
+/bw
 /bv
 /main
 *.test
-cmd/bv/bv
+cmd/bw/bw
 .DS_Store
 
 # Build artifacts
@@ -17,8 +18,10 @@ coverage.html
 benchmarks/baseline.txt
 benchmarks/current.txt
 
-# Local BV state and reports
+# Local BW state and reports
+.bw/
 .bv/
+beads_report_beadwork_*.md
 beads_report_beads_viewer_*.md
 
 # Nix build artifacts
@@ -26,11 +29,14 @@ result
 result-*
 
 # Rust/WASM build artifacts
+bw-graph-wasm/target/
+bw-graph-wasm/pkg/
 bv-graph-wasm/target/
 bv-graph-wasm/pkg/
 pkg/export/wasm_scorer/target/
 pkg/export/wasm_scorer/pkg/
 node_modules/
+beadwork_graph*.html
 beads_viewer_graph*.html
 test-results/
 

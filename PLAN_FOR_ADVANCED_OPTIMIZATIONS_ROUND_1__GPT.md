@@ -9,7 +9,7 @@ Accordingly, this plan uses a strict workflow:
 **Baseline → Profile → Hotspot proof → Opportunity matrix → Minimal diff → Guardrails**
 
 Primary scope:
-- `cmd/bv` (CLI + robot protocol)
+- `cmd/bw` (CLI + robot protocol)
 - `pkg/analysis` (graph + metrics + scoring)
 - `pkg/loader` (JSONL loading)
 - `pkg/ui` (TUI; background worker + snapshot builder)
@@ -67,7 +67,7 @@ G) **Regression guardrails**: benchmarks/thresholds or CI hooks to prevent backs
    - unified triage: `pkg/analysis/triage.go` (`ComputeTriageFromAnalyzer`)
    - priority tuning + feedback: `pkg/analysis/priority.go`, `pkg/analysis/feedback.go`
 4) **Presentation**:
-   - robot JSON: `cmd/bv/main.go` (`--robot-*`)
+   - robot JSON: `cmd/bw/main.go` (`--robot-*`)
    - TUI snapshot pipeline: `pkg/ui/background_worker.go` → `pkg/ui/snapshot.go` (build snapshot, run Phase 2, swap pointer)
 
 ### 1B) Two-phase analysis contract (critical for “responsiveness”)
@@ -118,7 +118,7 @@ For synthetic datasets we copy the JSONL into a temp BEADS_DIR with a single `is
 ### 2D) Build (no overwriting repo artifacts)
 Exact command:
 ```bash
-go build -o /tmp/bv_round1 ./cmd/bv
+go build -o /tmp/bv_round1 ./cmd/bw
 ```
 
 ### 2E) Latency distribution + throughput (p50/p95/p99)

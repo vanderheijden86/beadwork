@@ -42,7 +42,7 @@ This document captures a rigorous performance analysis of beads_viewer following
    - Priority tuning: `pkg/analysis/priority.go`, `pkg/analysis/feedback.go`
 
 4. **Presentation**:
-   - Robot JSON: `cmd/bv/main.go` (`--robot-*`)
+   - Robot JSON: `cmd/bw/main.go` (`--robot-*`)
    - TUI snapshot: `pkg/ui/background_worker.go` → `pkg/ui/snapshot.go`
 
 ### 1B) Two-Phase Analysis Contract

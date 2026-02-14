@@ -3,7 +3,7 @@
 This guide outlines the best practices for Go development within this project, modeled after high-quality TUI applications.
 
 ## 1. Project Structure
-- **cmd/**: Contains the main applications. Each subdirectory should be a main package (e.g., `cmd/bv/main.go`).
+- **cmd/**: Contains the main applications. Each subdirectory should be a main package (e.g., `cmd/bw/main.go`).
 - **pkg/**: Library code organized by domain. This project uses `pkg/` for all packages:
   - **pkg/ui/**: User Interface components (Bubble Tea models, views).
   - **pkg/model/**: Domain models and data structures.

@@ -6,9 +6,9 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/Dicklesworthstone/beads_viewer/pkg/loader"
-	"github.com/Dicklesworthstone/beads_viewer/pkg/search"
-	"github.com/Dicklesworthstone/beads_viewer/pkg/ui"
+	"github.com/vanderheijden86/beadwork/pkg/loader"
+	"github.com/vanderheijden86/beadwork/pkg/search"
+	"github.com/vanderheijden86/beadwork/pkg/ui"
 )
 
 func TestTUIHybridSearchSmoke(t *testing.T) {

@@ -63,8 +63,8 @@ This matrix identifies **12 high-impact optimization opportunities** based on CP
 
 | ID | Opportunity | Location | Est. Savings | Effort | Score |
 |----|-------------|----------|--------------|--------|-------|
-| **O1** | JSON pretty-print opt-out | `cmd/bv/main.go:2524` | 10-25ms | Low | **4.5** |
-| **O2** | Selective Phase 2 waiting | `cmd/bv/main.go:2418` | 50-200ms | Medium | **4.0** |
+| **O1** | JSON pretty-print opt-out | `cmd/bw/main.go:2524` | 10-25ms | Low | **4.5** |
+| **O2** | Selective Phase 2 waiting | `cmd/bw/main.go:2418` | 50-200ms | Medium | **4.0** |
 | **O3** | Memoize GetOpenBlockers/GetBlockerDepth | `pkg/analysis/triage.go:608,1073,1352` | 15-30ms | Low | **4.0** |
 | **O4** | High-perf JSON library (sonic/go-json) | `pkg/loader/loader.go:324-350` | 65-120ms | Medium | **3.5** |
 

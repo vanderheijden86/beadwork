@@ -10,8 +10,8 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/Dicklesworthstone/beads_viewer/pkg/analysis"
-	"github.com/Dicklesworthstone/beads_viewer/pkg/model"
+	"github.com/vanderheijden86/beadwork/pkg/analysis"
+	"github.com/vanderheijden86/beadwork/pkg/model"
 )
 
 // ============================================================================
@@ -208,7 +208,7 @@ func TestGenerateMarkdown_TOCAnchorsMatchHeadings(t *testing.T) {
 
 func TestGenerateMarkdown_TOCAnchorsDisambiguateSlugCollisions(t *testing.T) {
 	issues := []model.Issue{
-		{ID: "BV_1", Title: "Same Title", Status: model.StatusOpen, IssueType: model.TypeBug},
+		{ID: "BW_1", Title: "Same Title", Status: model.StatusOpen, IssueType: model.TypeBug},
 		{ID: "BV-1", Title: "Same Title", Status: model.StatusOpen, IssueType: model.TypeBug},
 	}
 

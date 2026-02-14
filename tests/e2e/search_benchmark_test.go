@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Dicklesworthstone/beads_viewer/pkg/search"
+	"github.com/vanderheijden86/beadwork/pkg/search"
 )
 
 type benchmarkMetricsLoader struct {
