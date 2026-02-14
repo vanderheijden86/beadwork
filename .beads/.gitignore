@@ -36,6 +36,7 @@ beads.right.meta.json
 # These files are machine-specific and should not be shared across clones
 .sync.lock
 .jsonl.lock
+.bv.lock
 sync_base.jsonl
 export-state/
 
