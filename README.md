@@ -1,12 +1,27 @@
-# Beads Viewer (bv)
+# Beadwork (bw) — a community fork of Beads Viewer
 
-![Release](https://img.shields.io/github/v/release/vanderheijden86/beadwork?style=for-the-badge&color=bd93f9)
 ![Go Version](https://img.shields.io/github/go-mod/go-version/vanderheijden86/beadwork?style=for-the-badge&color=6272a4)
 ![License](https://img.shields.io/badge/License-MIT-50fa7b?style=for-the-badge)
-![Build Status](https://img.shields.io/github/actions/workflow/status/vanderheijden86/beadwork/ci.yml?style=for-the-badge&logo=github)
-[![Coverage](https://codecov.io/gh/vanderheijden86/beadwork/branch/main/graph/badge.svg)](https://codecov.io/gh/vanderheijden86/beadwork)
 
-> **The elegant, keyboard-driven terminal interface for the [Beads](https://github.com/steveyegge/beads) issue tracker.**
+> **A community-maintained fork of [beads_viewer](https://github.com/Dicklesworthstone/beads_viewer), the terminal interface for the [Beads](https://github.com/steveyegge/beads) issue tracker.**
+
+## Why this fork?
+
+The original [beads_viewer](https://github.com/Dicklesworthstone/beads_viewer) by [@Dicklesworthstone](https://github.com/Dicklesworthstone) is a great tool, but the maintainer does not accept pull requests. Contributions, bug fixes, and new features submitted by the community go unmerged.
+
+**Beadwork** exists so that community contributions have a place to land. If you want to fix a bug, add a feature, or improve the codebase, PRs are welcome here.
+
+### What's different from the original?
+
+- **Accepts contributions**: PRs are reviewed and merged
+- **Renamed binary**: `bw` instead of `bv` to avoid conflicts if you have both installed
+- **Tree view with split pane**: added a tree view that shows the issue hierarchy alongside a detail panel
+- **Sort improvements**: persistent sort order, sort indicator in the header
+- **Ongoing development**: active bug fixes and UX improvements that aren't available upstream
+
+### What's the same?
+
+All the core functionality from beads_viewer is preserved: list view, kanban board, graph view, insights dashboard, robot mode for AI agents, and the full graph analysis engine (PageRank, betweenness, HITS, critical path, and more).
 
 <div align="center" style="margin: 1.2em 0;">
   <table>
@@ -35,47 +50,17 @@
 
 ## Installation
 
-### Recommended: Homebrew (macOS/Linux)
+Requires [Go 1.22+](https://go.dev/dl/).
 
 ```bash
-brew install dicklesworthstone/tap/bv
+git clone https://github.com/vanderheijden86/beadwork.git
+cd beadwork
+make install
 ```
 
-This method provides:
-- Automatic updates via `brew upgrade`
-- Dependency management
-- Easy uninstall via `brew uninstall`
+This installs the `bw` binary to your `$GOPATH/bin`. Make sure that directory is on your `PATH`.
 
-### Windows: Scoop
-
-```powershell
-scoop bucket add dicklesworthstone https://github.com/Dicklesworthstone/scoop-bucket
-scoop install dicklesworthstone/bv
-```
-
-### Alternative: Direct Download
-
-Download the latest release for your platform (tar.gz assets):
-- [Linux x86_64](https://github.com/vanderheijden86/beadwork/releases/latest/download/bv_0.13.0_linux_amd64.tar.gz)
-- [Linux ARM64](https://github.com/vanderheijden86/beadwork/releases/latest/download/bv_0.13.0_linux_arm64.tar.gz)
-- [macOS Intel](https://github.com/vanderheijden86/beadwork/releases/latest/download/bv_0.13.0_darwin_amd64.tar.gz)
-- [macOS ARM](https://github.com/vanderheijden86/beadwork/releases/latest/download/bv_0.13.0_darwin_arm64.tar.gz)
-- [Windows](https://github.com/vanderheijden86/beadwork/releases/latest/download/bv_0.13.0_windows_amd64.tar.gz)
-
-> Note: Asset names include the release version. If a link 404s, open the latest release page and download the matching asset.
-
-### Alternative: Install Script
-
-**Linux/macOS:**
-```bash
-curl -fsSL "https://raw.githubusercontent.com/vanderheijden86/beadwork/main/install.sh?$(date +%s)" | bash
-```
-
-**Windows (PowerShell):**
-```powershell
-irm "https://raw.githubusercontent.com/vanderheijden86/beadwork/main/install.ps1" | iex
-```
-> **Note:** Windows requires Go 1.21+ ([download](https://go.dev/dl/)). For best display, use Windows Terminal with a [Nerd Font](https://www.nerdfonts.com/).
+For best display, use a terminal with a [Nerd Font](https://www.nerdfonts.com/).
 
 ---
 
