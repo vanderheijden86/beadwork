@@ -1,0 +1,2668 @@
+# User Guide
+
+← [Back to README](../README.md)
+
+> **Credit:** The TUI interface, views, and all features described here were originally designed and implemented by [@Dicklesworthstone](https://github.com/Dicklesworthstone) in [beads_viewer](https://github.com/Dicklesworthstone/beads_viewer). Beadwork is a community fork that builds on this foundation.
+
+Complete guide to beadwork's interactive TUI, covering all views, features, keyboard shortcuts, configuration, and troubleshooting.
+
+---
+
+## 💡 TL;DR
+
+`bw` is a high-performance **Terminal User Interface (TUI)** for browsing and managing tasks in projects that use the **Beads** issue tracking system. 
+
+**Why you'd care:**
+*   **Speed:** Browse thousands of issues instantly with zero network latency.
+*   **Focus:** Stay in your terminal and use Vim-style keys (`j`/`k`) to navigate.
+*   **Intelligence:** It visualizes your project as a **dependency graph**, automatically highlighting bottlenecks, cycles, and critical paths that traditional list-based trackers miss.
+*   **AI-Ready:** It provides structured, pre-computed insights for AI coding agents, acting as a "brain" for your project's task management.
+
+---
+
+## 📖 The Core Experience
+
+At its heart, `bw` is about **viewing your work nicely**.
+
+### ⚡ Fast, Fluid Browsing
+No web page loads, no heavy clients. `bw` starts instantly and lets you fly through your issue backlog using standard Vim keys (`j`/`k`).
+*   **Split-View Dashboard:** On wider screens, see your list on the left and full details on the right.
+*   **Markdown Rendering:** Issue descriptions, comments, and notes are beautifully rendered with syntax highlighting, headers, and lists.
+*   **Instant Filtering:** Zero-latency filtering. Press `o` for Open, `c` for Closed, or `r` for Ready (unblocked) tasks.
+*   **Live Reload:** Watches `.beads/beads.jsonl` and refreshes lists, details, and insights automatically when the file changes—no restart needed.
+
+### 🔎 Rich Context
+Don't just read the title. `bw` gives you the full picture:
+*   **Comments & History:** Scroll through the full conversation history of any task.
+*   **Metadata:** Instantly see Assignees, Labels, Priority badges, and creation dates.
+*   **Search:** Powerful fuzzy search (`/`) finds issues by ID, title, or content instantly.
+
+### 🎯 Focused Workflows
+*   **Kanban Board:** Press `b` to switch to a columnar view (Open, In Progress, Blocked, Closed) to visualize flow.
+*   **Visual Graph:** Press `g` to explore the dependency tree visually.
+*   **Insights:** Press `i` to see graph metrics and bottlenecks.
+*   **History View:** Press `h` to see the timeline of changes, correlating git commits with bead modifications. On wider terminals, enjoy a responsive three-pane layout showing commits, affected beads, and details.
+*   **Ultra-Wide Mode:** On large monitors, the list expands to show extra columns like sparklines and label tags.
+
+### 🛠️ Quick Actions
+*   **Export:** Press `E` to export all issues to a timestamped Markdown file with Mermaid diagrams.
+*   **Graph Export (CLI):** `bw --robot-graph` outputs the dependency graph as JSON, DOT (Graphviz), or Mermaid format. Use `--graph-format=dot` for rendering with Graphviz, or `--graph-root=ID --graph-depth=3` to extract focused subgraphs.
+*   **Copy:** Press `C` to copy the selected issue as formatted Markdown to your clipboard.
+*   **Edit:** Press `O` to open the `.beads/beads.jsonl` file in your preferred GUI editor.
+*   **Time-Travel:** Press `t` to compare against any git revision, or `T` for quick HEAD~5 comparison. Combined with History view (`h`), you can navigate to any commit and see exactly what changed.
+
+### 🔌 Automation Hooks
+Configure pre- and post-export hooks in `.bv/hooks.yaml` to run validations, notifications, or uploads. Defaults: pre-export hooks fail fast on errors (`on_error: fail`), post-export hooks log and continue (`on_error: continue`). Empty commands are ignored with a warning for safety. Hook env includes `BW_EXPORT_PATH`, `BW_EXPORT_FORMAT`, `BW_ISSUE_COUNT`, `BW_TIMESTAMP`, plus any custom `env` entries.
+
+---
+## 📸 Graph Export (`--robot-graph`)
+
+Export the dependency graph in multiple formats for visualization, documentation, or integration with other tools:
+
+```bash
+bw --robot-graph                              # JSON (default)
+bw --robot-graph --graph-format=dot           # Graphviz DOT
+bw --robot-graph --graph-format=mermaid       # Mermaid diagram
+
+# Focused subgraph extraction
+bw --robot-graph --graph-root=bv-123          # Subgraph from specific root
+bw --robot-graph --graph-root=bv-123 --graph-depth=3  # Limited depth
+```
+
+### Output Formats
+
+| Format | Use Case | Rendering |
+|--------|----------|-----------|
+| `json` | Programmatic processing, custom visualization | Parse with jq or code |
+| `dot` | High-quality static images | `dot -Tpng file.dot -o graph.png` |
+| `mermaid` | Embed in Markdown, GitHub rendering | Paste into docs |
+
+### Subgraph Extraction
+
+For large projects, extract focused views around specific issues:
+
+- **`--graph-root=ID`**: Start from a specific issue and include all its dependencies and dependents
+- **`--graph-depth=N`**: Limit traversal to N levels (0 = unlimited)
+
+### JSON Schema
+
+```json
+{
+  "nodes": [
+    { "id": "bv-123", "title": "Fix auth", "status": "open", "priority": 1 }
+  ],
+  "edges": [
+    { "from": "bv-124", "to": "bv-123", "type": "blocks" }
+  ],
+  "metadata": {
+    "data_hash": "abc123",
+    "node_count": 45,
+    "edge_count": 62
+  }
+}
+```
+
+## 🌌 Interactive Graph Visualization (`--export-graph`)
+
+For deep exploration of complex dependency structures, `bw` generates **self-contained HTML visualizations** powered by a force-directed graph engine. Unlike static exports, these are fully interactive—pan, zoom, filter, and drill into individual beads without any server or dependencies.
+
+```bash
+# Generate interactive HTML graph
+bw --export-graph graph.html                    # Export to specific file
+bw --export-graph                               # Auto-generate timestamped filename
+bw --export-graph --graph-title "Q4 Sprint"     # Custom title
+bw --export-graph --graph-include-closed        # Include closed issues
+```
+
+### Why Interactive Graph Visualization?
+
+Traditional list-based views show tasks in isolation. The interactive graph reveals the **hidden structure** of your project:
+
+- **Dependency Chains**: See at a glance which tasks are blocking others, and trace critical paths through your backlog
+- **Bottleneck Detection**: Nodes sized by PageRank/betweenness instantly reveal which items have outsized impact
+- **Cluster Discovery**: Force-directed layout naturally groups related work, exposing team boundaries or feature clusters
+- **Context Switching**: Hover over any node to see full details—description, design notes, acceptance criteria—without leaving the visualization
+
+### What's Included in the Export
+
+Each HTML file is **completely self-contained** (typically 400KB-1MB depending on project size):
+
+| Component | Description |
+|-----------|-------------|
+| **Full Bead Data** | Title, description, design, acceptance criteria, notes, labels, timestamps |
+| **Graph Metrics** | PageRank, betweenness, critical path score, slack, hub/authority scores |
+| **Triage Analysis** | Complete triage recommendations with scores and reasons |
+| **Git Correlation** | Commit history linked to each bead (when available) |
+| **Dependency Map** | Full blocked-by/blocks relationships with visual edges |
+
+### Interface Overview
+
+The visualization provides a rich, keyboard-driven interface:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  📊 Project Graph | [Search...] | Layout ▾ | Filters ▾ | 🔥 📋 ⭐ ☀️ ❓    │
+├──────────────────────┬──────────────────────────────────────────────────────┤
+│                      │                                                      │
+│   Bead Details       │              Force-Directed Graph                    │
+│   ═══════════════    │                                                      │
+│   ID: bv-xyz         │         ●───────●                                    │
+│   Title: Feature X   │        /│\      │                                    │
+│                      │       ● ● ●     ●───●                                │
+│   Description:       │         │           │                                │
+│   [markdown...]      │         ●───────────●                                │
+│                      │                                                      │
+│   Graph Metrics:     │              ┌──────────────────┐                    │
+│   PageRank: 2.34%    │              │ Low ▰▰▰▰ High   │  <- Heatmap Legend │
+│   Betweenness: 0.12  │              └──────────────────┘                    │
+│   Critical Path: 4.0 │         ┌─────────────┐                              │
+│                      │         │ Mini-map    │                              │
+│   Blocked By: [...]  │         └─────────────┘                              │
+│   Blocks: [...]      │                                                      │
+└──────────────────────┴──────────────────────────────────────────────────────┘
+```
+
+### Visual Encoding
+
+Nodes encode multiple dimensions of information simultaneously:
+
+| Visual Property | Meaning |
+|-----------------|---------|
+| **Color** | Status: 🟢 Open, 🟠 In Progress, 🔴 Blocked, ⚫ Closed |
+| **Size** | Configurable metric (PageRank, betweenness, critical path, in-degree) |
+| **Shape** | Type: ● Feature, ▲ Bug, ■ Task, ◆ Epic |
+| **Glow** | Golden halo on hover shows connected subgraph (2-hop neighbors) |
+| **Edge Color** | Pink edges indicate critical path connections |
+
+### Keyboard Shortcuts
+
+The visualization is fully keyboard-driven:
+
+| Key | Action | Key | Action |
+|-----|--------|-----|--------|
+| `?` | Help overlay | `D` | Dock/detach detail panel |
+| `F` | Fit all in view | `L` | Toggle light/dark mode |
+| `R` | Reset to defaults | `H` | Toggle heatmap coloring |
+| `Space` | Fullscreen | `T` | Top nodes panel |
+| `Esc` | Clear/cancel | `G` | Triage panel |
+| `1-4` | Layout modes | `Y` | Recently viewed |
+| `P` | Path finder mode | | |
+
+### Features
+
+**Filtering & Search**
+- **Full-text search**: Find beads by ID, title, or content with live preview
+- **Status filter**: Open, In Progress, Blocked, Closed
+- **Type filter**: Feature, Bug, Task, Epic
+- **Priority filter**: P0 (Critical) through P4 (Backlog)
+- **Label filter**: Dynamically populated from your data
+
+**Navigation**
+- **Path Finder**: Press `P`, then click two nodes to find and highlight the shortest path between them
+- **Recently Viewed**: Press `Y` to see your navigation history and jump back to previous nodes
+- **Mini-map**: Overview in the corner shows your current viewport position
+
+**Panels**
+- **Docked Detail Panel**: Left sidebar shows full bead information on hover (default)
+- **Floating Mode**: Press `D` to detach the panel for floating tooltip-style display
+- **Triage Panel**: Shows top recommendations with scores and reasoning
+- **Top Nodes**: Lists highest PageRank nodes for quick navigation
+
+**Customization**
+- **Layout Modes**: Force-directed (default), DAG top-down, DAG left-right, Radial
+- **Size Metric**: Choose what determines node size (PageRank, betweenness, critical path, in-degree)
+- **Light/Dark Mode**: Full theme support with proper contrast
+- **Preferences Saved**: Theme and layout choices persist via localStorage
+
+### Use Cases
+
+| Scenario | How the Graph Helps |
+|----------|---------------------|
+| **Sprint Planning** | Identify which items unblock the most downstream work |
+| **Stakeholder Updates** | Share a single HTML file—no setup required to view |
+| **Architecture Review** | Spot unexpected dependencies between features |
+| **Onboarding** | New team members can explore the codebase's work structure |
+| **Retrospectives** | Visualize completed work and remaining blockers |
+
+### Example Workflow
+
+```bash
+# 1. Generate the visualization
+bw --export-graph sprint_review.html --graph-title "Sprint 42 Review"
+
+# 2. Open in browser
+open sprint_review.html    # macOS
+xdg-open sprint_review.html  # Linux
+start sprint_review.html   # Windows
+
+# 3. Share with team
+# The HTML file is self-contained—just send it or host anywhere
+```
+
+### Technical Notes
+
+- **No Server Required**: Everything runs client-side in the browser
+- **Offline Capable**: Works completely offline once opened
+- **Modern Browsers**: Tested on Chrome, Firefox, Safari, Edge
+- **Performance**: Handles 500+ nodes smoothly with WebGL-accelerated rendering
+- **File Size**: Typically 400KB-1MB depending on project size and content
+
+## 📄 The Status Report Engine
+
+`bw` isn't just for personal browsing; it's a communication tool. The `--export-md` flag generates a **Management-Ready Status Report** that converts your repo state into a polished document suitable for stakeholders.
+
+### 1. The "Hybrid Document" Architecture
+The exporter (`pkg/export/markdown.go`) constructs a document that bridges human readability and visual data:
+*   **Summary at a Glance:** Top-level statistics (Total, Open, Blocked, Closed) give immediate health context.
+*   **Embedded Graph:** It injects the full dependency graph as a Mermaid diagram *right into the document*. On platforms like GitHub or GitLab, this renders as an interactive chart.
+*   **Anchor Navigation:** A generated Table of Contents uses URL-friendly slugs (`#core-123-refactor-login`) to link directly to specific issue details, allowing readers to jump between the high-level graph and low-level specs.
+
+### 2. Semantic Formatting
+We don't just dump JSON values. The exporter applies specific formatting rules to ensure the report looks professional:
+*   **Metadata Tables:** Key fields (Assignee, Priority, Status) are aligned in GFM (GitHub Flavored Markdown) tables with emoji indicators.
+*   **Conversation threading:** Comments are rendered as blockquotes (`>`) with relative timestamps, preserving the flow of discussion distinct from the technical spec.
+*   **Intelligent Sorting:** The report doesn't list issues ID-sequentially. It applies the same priority logic as the TUI: **Open Critical** issues appear first, ensuring the reader focuses on what matters now.
+
+## ⏳ Time-Travel: Snapshot Diffing & Git History
+
+One of `bw`'s most powerful capabilities is **Time-Travel**—the ability to compare your project's state across any two points in git history. This transforms `bw` from a "viewer" into a **progress tracking and regression detection system**.
+
+### The Snapshot Model
+`bw` captures the complete state of your project at any moment:
+
+```mermaid
+graph LR
+    %%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#e8f5e9', 'primaryTextColor': '#2e7d32', 'primaryBorderColor': '#81c784', 'lineColor': '#90a4ae'}}}%%
+
+    subgraph "Git History"
+        A["HEAD~10<br/><small>10 commits ago</small>"]
+        B["HEAD~5<br/><small>5 commits ago</small>"]
+        C["HEAD<br/><small>Current</small>"]
+    end
+
+    subgraph "Snapshots"
+        D["Snapshot A<br/><small>45 issues, 3 cycles</small>"]
+        E["Snapshot B<br/><small>52 issues, 1 cycle</small>"]
+        F["Snapshot C<br/><small>58 issues, 0 cycles</small>"]
+    end
+
+    A --> D
+    B --> E
+    C --> F
+    D -.->|"diff"| E
+    E -.->|"diff"| F
+
+    style D fill:#ffcdd2,stroke:#e57373,stroke-width:2px
+    style E fill:#fff3e0,stroke:#ffb74d,stroke-width:2px
+    style F fill:#c8e6c9,stroke:#81c784,stroke-width:2px
+```
+
+### What Gets Tracked
+The `SnapshotDiff` captures every meaningful change:
+
+| Category | Tracked Changes |
+|----------|-----------------|
+| **Issues** | New, Closed, Reopened, Removed, Modified |
+| **Fields** | Title, Status, Priority, Tags, Dependencies |
+| **Graph** | New Cycles, Resolved Cycles |
+| **Metrics** | Δ PageRank, Δ Betweenness, Δ Density |
+
+### Git History Integration (`pkg/loader/git.go`)
+The `GitLoader` enables loading issues from **any git revision**:
+
+```go
+loader := NewGitLoader("/path/to/repo")
+
+// Load from various references
+current, _ := loader.LoadAt("HEAD")
+lastWeek, _ := loader.LoadAt("HEAD~7")
+release, _ := loader.LoadAt("v1.0.0")
+byDate, _ := loader.LoadAt("main@{2024-01-15}")
+```
+
+**Cache Architecture:**
+- Revisions are resolved to commit SHAs for stable caching
+- Thread-safe `sync.RWMutex` protects concurrent access
+- 5-minute TTL prevents stale data while avoiding redundant git calls
+
+### Use Cases
+1. **Sprint Retrospectives:** "How many issues did we close this sprint?"
+2. **Regression Detection:** "Did we accidentally reintroduce a dependency cycle?"
+3. **Trend Analysis:** "Is our graph density increasing? Are we creating too many dependencies?"
+4. **Release Notes:** "Generate a diff of all changes between v1.0 and v2.0"
+
+## 🍳 Recipe System: Declarative View Configuration
+
+Instead of memorizing CLI flags or repeatedly setting filters, `bw` supports **Recipes**—YAML-based view configurations that can be saved, shared, and version-controlled.
+
+### Recipe Structure
+```yaml
+# .beads/recipes/sprint-review.yaml
+name: sprint-review
+description: "Issues touched in the current sprint"
+
+filters:
+  status: [open, in_progress, closed]
+  updated_after: "14d"              # Relative time: 14 days ago
+  exclude_tags: [backlog, icebox]
+
+sort:
+  field: updated
+  direction: desc
+  secondary:
+    field: priority
+    direction: asc
+
+view:
+  columns: [id, title, status, priority, updated]
+  show_metrics: true
+  max_items: 50
+
+export:
+  format: markdown
+  include_graph: true
+```
+
+### Filter Capabilities
+
+| Filter | Type | Examples |
+|--------|------|----------|
+| `status` | Array | `[open, closed, blocked, in_progress]` |
+| `priority` | Array | `[0, 1]` (P0 and P1 only) |
+| `tags` | Array | `[frontend, urgent]` |
+| `exclude_tags` | Array | `[wontfix, duplicate]` |
+| `created_after` | Relative/ISO | `"7d"`, `"2w"`, `"2024-01-01"` |
+| `updated_before` | Relative/ISO | `"30d"`, `"1m"` |
+| `actionable` | Boolean | `true` = no open blockers |
+| `has_blockers` | Boolean | `true` = waiting on dependencies |
+| `id_prefix` | String | `"bv-"` for project filtering |
+| `title_contains` | String | Substring search |
+
+### Built-in Recipes
+`bw` ships with 11 pre-configured recipes:
+
+| Recipe | Purpose |
+|--------|---------|
+| `default` | All open issues sorted by priority |
+| `actionable` | Ready to work (no blockers) |
+| `recent` | Updated in last 7 days |
+| `blocked` | Waiting on dependencies |
+| `high-impact` | Top PageRank scores |
+| `stale` | Open but untouched for 30+ days |
+| `triage` | Sorted by computed triage score (impact + unblocking potential) |
+| `closed` | Recently closed issues |
+| `release-cut` | Closed in last 14 days (for changelog generation) |
+| `quick-wins` | Easy P2/P3 items with no blockers |
+| `bottlenecks` | High betweenness nodes (project bottlenecks) |
+
+### Using Recipes
+```bash
+# Interactive picker (press 'R' in TUI)
+bw
+
+# Direct recipe invocation
+bw --recipe actionable
+bw --recipe high-impact
+
+# Custom recipe file
+bw --recipe .beads/recipes/sprint-review.yaml
+```
+
+---
+
+## 🎯 Composite Impact Scoring
+
+Traditional issue trackers sort by a single dimension—usually priority. `bw` computes a **multi-factor Impact Score** that blends graph-theoretic metrics with temporal and priority signals.
+
+### The Scoring Formula
+$$
+\text{Impact} = 0.30 \cdot \text{PageRank} + 0.30 \cdot \text{Betweenness} + 0.20 \cdot \text{BlockerRatio} + 0.10 \cdot \text{Staleness} + 0.10 \cdot \text{PriorityBoost}
+$$
+
+### Component Breakdown
+
+| Component | Weight | What It Measures |
+|-----------|--------|------------------|
+| **PageRank** | 30% | Recursive dependency importance |
+| **Betweenness** | 30% | Bottleneck/bridge position |
+| **BlockerRatio** | 20% | Direct dependents (In-Degree) |
+| **Staleness** | 10% | Days since last update (aging) |
+| **PriorityBoost** | 10% | Human-assigned priority |
+
+### Why These Weights?
+- **60% Graph Metrics:** The structure of dependencies is the primary driver of true importance.
+- **20% Blocker Ratio:** Direct dependents matter for immediate unblocking.
+- **10% Staleness:** Old issues deserve attention; they may be forgotten blockers.
+- **10% Priority:** Human judgment is valuable but can be outdated or politically biased.
+
+### Score Output
+```json
+{
+  "issue_id": "CORE-123",
+  "title": "Refactor auth module",
+  "score": 0.847,
+  "breakdown": {
+    "pagerank": 0.27,
+    "betweenness": 0.25,
+    "blocker_ratio": 0.18,
+    "staleness": 0.07,
+    "priority_boost": 0.08
+  }
+}
+```
+
+### Priority Recommendations
+`bw` generates **actionable recommendations** when the computed impact score diverges significantly from the human-assigned priority:
+
+> ⚠️ **CORE-123** has Impact Score 0.85 but Priority P3.
+> *Reason: High PageRank (foundational dependency) + High Betweenness (bottleneck)*
+> **Recommendation:** Consider escalating to P1.
+
+### Priority Hints Overlay
+
+Press `p` in the list view to toggle **Priority Hints**—inline visual indicators showing which issues have misaligned priorities:
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│  OPEN     CORE-123 ⬆ Database schema migration       P3  🟢 │
+│  OPEN     UI-456     Login page styling              P2  🟢 │
+│  BLOCKED  API-789  ⬇ Legacy endpoint wrapper         P1  🔴 │
+└──────────────────────────────────────────────────────────────┘
+        ⬆ = Impact suggests higher priority (red arrow)
+        ⬇ = Impact suggests lower priority (teal arrow)
+```
+
+This provides at-a-glance feedback on whether your priority assignments match the computed graph importance.
+
+---
+
+## 🛤️ Parallel Execution Planning
+
+When you ask "What should I work on next?", `bw` doesn't just pick the highest-priority item. It generates a **complete execution plan** that respects dependencies and identifies opportunities for parallel work.
+
+### Track-Based Planning
+The planner uses **Union-Find** to identify connected components in the dependency graph, grouping related issues into independent "tracks" that can be worked on concurrently.
+
+```mermaid
+graph TD
+    %%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#e8f5e9', 'lineColor': '#90a4ae'}}}%%
+
+    subgraph track_a ["🅰️ Track A: Auth System"]
+        A1["AUTH-001<br/>P1 · Unblocks 3"]:::actionable
+        A2["AUTH-002"]:::blocked
+        A3["AUTH-003"]:::blocked
+    end
+
+    subgraph track_b ["🅱️ Track B: UI Polish"]
+        B1["UI-101<br/>P2 · Unblocks 1"]:::actionable
+        B2["UI-102"]:::blocked
+    end
+
+    subgraph track_c ["🅲 Track C: Independent"]
+        C1["DOCS-001<br/>P3 · Unblocks 0"]:::actionable
+    end
+
+    A1 --> A2
+    A2 --> A3
+    B1 --> B2
+
+    classDef actionable fill:#c8e6c9,stroke:#81c784,stroke-width:2px,color:#2e7d32
+    classDef blocked fill:#ffcdd2,stroke:#e57373,stroke-width:2px,color:#c62828
+
+    linkStyle 0,1,2 stroke:#81c784,stroke-width:2px
+```
+
+### Plan Output (`--robot-plan`)
+```json
+{
+  "tracks": [
+    {
+      "track_id": "track-A",
+      "reason": "Independent work stream",
+      "items": [
+        { "id": "AUTH-001", "priority": 1, "unblocks": ["AUTH-002", "AUTH-003", "API-005"] }
+      ]
+    },
+    {
+      "track_id": "track-B",
+      "reason": "Independent work stream",
+      "items": [
+        { "id": "UI-101", "priority": 2, "unblocks": ["UI-102"] }
+      ]
+    }
+  ],
+  "total_actionable": 3,
+  "total_blocked": 5,
+  "summary": {
+    "highest_impact": "AUTH-001",
+    "impact_reason": "Unblocks 3 tasks",
+    "unblocks_count": 3
+  }
+}
+```
+
+### The Algorithm
+1. **Identify Actionable Issues:** Filter to non-closed issues with no open blockers.
+2. **Compute Unblocks:** For each actionable issue, calculate what becomes unblocked if it's completed.
+3. **Find Connected Components:** Use Union-Find to group issues by their dependency relationships.
+4. **Build Tracks:** Create parallel tracks from each component, sorted by priority within each track.
+5. **Compute Summary:** Identify the single highest-impact issue (most downstream unblocks).
+
+### Benefits for AI Agents
+- **Deterministic:** Same input always produces same plan (no LLM hallucination).
+- **Parallelism-Aware:** Multiple agents can grab different tracks without conflicts.
+- **Impact-Ranked:** The `highest_impact` field tells agents exactly where to start.
+
+---
+
+## 🔬 Insights Dashboard: Interactive Graph Analysis
+
+The Insights Dashboard (`i`) transforms abstract graph metrics into an **interactive exploration interface**. Instead of just showing numbers, it lets you drill into *why* a bead scores high and *what* that means for your project.
+
+### The 6-Panel Layout
+
+```
+┌─────────────────────┬─────────────────────┬─────────────────────┐
+│  🚧 Bottlenecks     │  🏛️ Keystones       │  🌐 Influencers     │
+│  Betweenness        │  Impact Depth       │  Eigenvector        │
+│  ─────────────────  │  ─────────────────  │  ─────────────────  │
+│  ▸ 0.45 AUTH-001    │    12.0 CORE-123    │    0.82 API-007     │
+│    0.38 API-005     │    10.0 DB-001      │    0.71 AUTH-001    │
+└─────────────────────┴─────────────────────┴─────────────────────┘
+┌─────────────────────┬─────────────────────┬─────────────────────┐
+│  🛰️ Hubs            │  📚 Authorities     │  🔄 Cycles          │
+│  HITS Hub Score     │  HITS Auth Score    │  Circular Deps      │
+│  ─────────────────  │  ─────────────────  │  ─────────────────  │
+│    0.67 EPIC-100    │    0.91 UTIL-050    │  ⚠ A → B → C → A    │
+│    0.54 FEAT-200    │    0.78 LIB-010     │  ⚠ X → Y → X        │
+└─────────────────────┴─────────────────────┴─────────────────────┘
+```
+
+### Panel Descriptions
+
+| Panel | Metric | What It Shows | Actionable Insight |
+|-------|--------|---------------|-------------------|
+| **🚧 Bottlenecks** | Betweenness | Beads on many shortest paths | Prioritize to unblock parallel work |
+| **🏛️ Keystones** | Impact Depth | Deep in dependency chains | Complete first—delays cascade |
+| **🌐 Influencers** | Eigenvector | Connected to important beads | Review carefully before changes |
+| **🛰️ Hubs** | HITS Hub | Aggregate many dependencies | Track for milestone completion |
+| **📚 Authorities** | HITS Authority | Depended on by many hubs | Stabilize early—breaking ripples |
+| **🔄 Cycles** | Tarjan SCC | Circular dependency loops | Must resolve—logical impossibility |
+
+### The Detail Panel: Calculation Proofs
+
+When you select a bead, the right-side **Detail Panel** shows not just the score, but the *proof*—the actual beads and values that contributed:
+
+```
+─── CALCULATION PROOF ───
+BW(v) = Σ (σst(v) / σst) for all s≠v≠t
+
+Betweenness Score: 0.452
+
+Beads depending on this (5):
+  ↓ UI-Login: Implement login form
+  ↓ UI-Dashboard: User dashboard
+  ↓ API-Auth: Authentication endpoint
+  ... +2 more
+
+This depends on (2):
+  ↑ DB-Schema: User table migration
+  ↑ CORE-Config: Environment setup
+
+This bead lies on many shortest paths between
+other beads, making it a critical junction.
+```
+
+### Dashboard Navigation
+
+| Key | Action |
+|-----|--------|
+| `Tab` / `Shift+Tab` | Move between panels |
+| `j` / `k` | Navigate within panel |
+| `Enter` | Focus selected bead in main view |
+| `e` | Toggle explanations |
+| `i` | Exit dashboard |
+
+---
+
+## 📋 Kanban Board: Visual Workflow State
+
+The Kanban Board (`b`) provides a **columnar workflow view** with intelligent swimlane grouping, visual dependency indicators, and rich card details. Empty columns automatically collapse to maximize screen real estate.
+
+### Swimlane Grouping Modes
+
+Press `s` to cycle through three grouping modes:
+
+| Mode | Columns | Use Case |
+|------|---------|----------|
+| **Status** (default) | Open \| In Progress \| Blocked \| Closed | Workflow state tracking |
+| **Priority** | P0 Critical \| P1 High \| P2 Medium \| P3+ Other | Urgency-based triage |
+| **Type** | Bug \| Feature \| Task \| Epic | Work categorization |
+
+The current mode is shown in the status bar. Each mode uses distinct column colors for quick visual identification.
+
+### Visual Dependency Indicators
+
+Card borders are **color-coded** to show dependency status at a glance:
+
+```
+┌─ 🔴 RED ──────────────────┐    ┌─ 🟡 YELLOW ─────────────────┐
+│ BLOCKED                    │    │ HIGH-IMPACT                  │
+│ This card has unresolved   │    │ This card blocks others.     │
+│ dependencies. Work on      │    │ Completing it will unblock   │
+│ blockers first.            │    │ downstream work.             │
+└────────────────────────────┘    └──────────────────────────────┘
+
+┌─ 🟢 GREEN ────────────────┐    ┌─ ⬜ DEFAULT ─────────────────┐
+│ READY TO WORK              │    │ NORMAL                       │
+│ Open issue with no         │    │ Standard priority, no        │
+│ blockers. Pick this up!    │    │ blocking relationships.      │
+└────────────────────────────┘    └──────────────────────────────┘
+```
+
+Search matches overlay with **purple** (current match) or **blue** (other matches) borders.
+
+### Rich 4-Line Card Format
+
+Each card displays comprehensive metadata in a compact format:
+
+```
+┌────────────────────────────────────┐
+│ 🐛 P1 BUG-1234           3d       │  ← Line 1: Type, Priority, ID, Age
+│ Fix authentication timeout         │  ← Line 2: Title (truncated)
+│ 👤alice  ⛔3  →2  🏷️2             │  ← Line 3: Assignee, Blockers, Blocks, Labels
+│ auth, backend, critical            │  ← Line 4: Label names
+└────────────────────────────────────┘
+```
+
+| Element | Meaning |
+|---------|---------|
+| **Type Icon** | 🐛 Bug, ✨ Feature, 📝 Task, 🎯 Epic, 🔧 Chore |
+| **Priority** | P0 (red), P1 (red), P2 (muted), P3+ (gray) |
+| **Age Color** | 🟢 <7d (fresh), 🟡 7-30d (aging), 🔴 >30d (stale) |
+| **⛔N** | Blocked by N issues |
+| **→N** | Blocks N downstream issues |
+| **🏷️N** | Has N labels |
+
+### Column Statistics
+
+Each column header shows aggregate statistics:
+
+```
+┌─────────────────────────────────────┐
+│  IN PROGRESS (5)  🔥2 ⚠️1          │
+└─────────────────────────────────────┘
+         │          │   │
+         │          │   └── ⚠️ Blocked items in this column
+         │          └────── 🔥 P0/P1 critical items
+         └───────────────── Total count
+```
+
+### Inline Card Expansion
+
+Press `d` to expand the selected card inline, showing:
+- Full issue description
+- All blocking dependencies (with titles)
+- All downstream dependents
+- Complete label list
+- Comments preview
+
+Navigation (`j`/`k`) auto-collapses expanded cards for smooth browsing.
+
+### Detail Panel
+
+Press `Tab` to open a **side panel** with the full issue detail view (on wide terminals). Scroll with `Ctrl+J`/`Ctrl+K`.
+
+### Board Navigation
+
+| Key | Action |
+|-----|--------|
+| **Movement** | |
+| `h` / `l` | Move between columns |
+| `j` / `k` | Move within column |
+| `gg` / `G` | Jump to top/bottom of column |
+| `0` / `$` | First/last item in column |
+| `H` / `L` | Jump to first/last column |
+| `1-4` | Jump directly to column 1-4 |
+| `Ctrl+D` / `Ctrl+U` | Page down/up |
+| **Grouping & Display** | |
+| `s` | Cycle swimlane mode (Status → Priority → Type) |
+| `e` | Toggle empty column visibility |
+| `d` | Expand/collapse inline card detail |
+| `Tab` | Toggle side detail panel |
+| **Search** | |
+| `/` | Start search |
+| `n` / `N` | Next/previous search match |
+| `Esc` | Cancel search |
+| **Filtering** | |
+| `o` | Filter: Open only |
+| `c` | Filter: Closed only |
+| `r` | Filter: Ready (no blockers) |
+| **Actions** | |
+| `y` | Copy issue ID to clipboard |
+| `V` | Preview related cass sessions (if cass installed) |
+| `Enter` | Focus selected bead in detail view |
+| `b` | Exit board view |
+
+---
+
+## 🔄 List Sorting: Multi-Dimensional Organization
+
+Press `s` to cycle through **five distinct sort modes**, giving you instant control over how issues are organized. The current sort mode is displayed in the status bar.
+
+### Sort Modes
+
+| Mode | Key Display | Ordering Logic | Use Case |
+|------|-------------|----------------|----------|
+| **Default** | `Default` | Priority (asc) → Created (desc) | Standard priority-driven workflow |
+| **Created ↑** | `Created ↑` | Creation date ascending (oldest first) | Audit: find long-standing issues |
+| **Created ↓** | `Created ↓` | Creation date descending (newest first) | Review: see recently created work |
+| **Priority** | `Priority` | Priority only (P0 → P4) | Pure priority triage |
+| **Updated** | `Updated` | Last update descending (newest first) | Activity tracking: see active issues |
+
+### Design Philosophy
+
+The sort system uses a **stable secondary sort** to ensure deterministic ordering. When primary sort values are equal, issues fall back to ID ordering for consistency across sessions. This prevents the "shuffling list" problem where equal-priority items randomly reorder.
+
+### Status Bar Indicator
+
+```
+┌────────────────────────────────────────────────────────────┐
+│  📋 ISSUES                                    [Created ↓]  │
+├────────────────────────────────────────────────────────────┤
+│  OPEN   FEAT-789  Add dark mode toggle           P2  🟢   │
+│  OPEN   BUG-456   Fix login race condition       P1  🟢   │
+│  OPEN   TASK-123  Update documentation           P3  🟢   │
+└────────────────────────────────────────────────────────────┘
+```
+
+The `[Created ↓]` badge instantly communicates the active sort mode without requiring you to remember which mode you're in.
+
+---
+
+## 🌲 Hierarchical Tree View: Parent-Child Visualization
+
+Press `E` to open the **Hierarchical Tree View**—a collapsible tree that visualizes parent-child relationships between issues. Unlike the Graph View which shows all dependency types, the Tree View focuses exclusively on **structural hierarchy**: which issues are "part of" other issues.
+
+### Why Parent-Child Matters
+
+In complex projects, issues often have two distinct relationship types:
+- **Blocking dependencies** (`blocks`/`blocked_by`): Task B cannot start until Task A completes
+- **Parent-child relationships** (`parent`): Feature X contains Tasks A, B, and C as sub-work
+
+The Tree View renders only parent-child relationships, creating a work breakdown structure (WBS) that answers questions like:
+- "What sub-tasks make up this epic?"
+- "Which feature does this bug belong to?"
+- "How is work decomposed across the project?"
+
+### Tree Layout
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  🌲 TREE VIEW                                           3 roots · 12 nodes  │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  ▾ 🎯 P1 EPIC-100   Auth System Overhaul                        ● open     │
+│  │ ├─ ▸ ✨ P1 FEAT-101   Implement OAuth2 flow                  ● open     │
+│  │ │   └─ • 📝 P2 TASK-102   Add token refresh logic            ○ closed   │
+│  │ └─ • 🐛 P0 BUG-103   Fix session timeout race               ⚠ blocked  │
+│  │                                                                          │
+│  ▾ 🎯 P2 EPIC-200   UI Polish Sprint                            ● open     │
+│  │ ├─ • ✨ P2 FEAT-201   Dark mode support                      ● open     │
+│  │ └─ • ✨ P3 FEAT-202   Responsive layout                      ● open     │
+│  │                                                                          │
+│  • 📝 P3 TASK-300   Update documentation                        ● open     │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Visual Encoding
+
+| Element | Meaning |
+|---------|---------|
+| **▾ / ▸** | Expanded / Collapsed (has children) |
+| **•** | Leaf node (no children) |
+| **├─ / └─** | Tree branch connectors |
+| **Type Icon** | 🎯 Epic, ✨ Feature, 🐛 Bug, 📝 Task, 🔧 Chore |
+| **Priority** | P0 (critical red), P1 (high), P2 (medium gray), P3+ (muted) |
+| **Status Dot** | ● Open (green), ◐ In Progress (yellow), ⚠ Blocked (red), ○ Closed (gray) |
+
+### Tree Building Algorithm
+
+The tree construction uses a **parent-child only** filter with intelligent root detection:
+
+1. **Filter Dependencies**: Only `DepParentChild` type dependencies are considered; blocking and related dependencies are ignored
+2. **Build Index**: Create a parent → children mapping for efficient traversal
+3. **Identify Roots**: Issues with no parent (or whose parent doesn't exist in the dataset) become root nodes
+4. **Recursive Build**: Depth-first traversal with cycle detection prevents infinite loops
+5. **Sort Children**: Within each parent, children are sorted by: Priority (ascending) → Type (epic > feature > bug > task) → Creation Date (newest first)
+
+**Handling Edge Cases:**
+- **Orphan References**: If an issue references a parent that doesn't exist, it becomes a root node (not silently dropped)
+- **Cycles**: Detected during traversal; cyclic nodes are rendered without recursing further
+- **Deep Hierarchies**: No depth limit—the tree faithfully represents arbitrarily nested structures
+
+### Tree Navigation
+
+| Key | Action |
+|-----|--------|
+| **Movement** | |
+| `j` / `k` / `↓` / `↑` | Move cursor down / up |
+| `g` / `G` | Jump to first / last node |
+| `Ctrl+D` / `Ctrl+U` | Page down / up (half viewport) |
+| **Expand/Collapse** | |
+| `Enter` / `Space` | Toggle expand/collapse on current node |
+| `l` / `→` | Expand node, or move to first child if already expanded |
+| `h` / `←` | Collapse node, or jump to parent if already collapsed |
+| `o` | Expand all nodes in the tree |
+| `O` | Collapse all nodes in the tree |
+| **Integration** | |
+| `Tab` | Sync selection to detail panel (in split view) |
+| `E` / `Esc` | Exit tree view, return to list |
+
+### Use Cases
+
+| Scenario | How Tree View Helps |
+|----------|---------------------|
+| **Sprint Planning** | Expand epics to see all sub-work and estimate scope |
+| **Progress Tracking** | Collapse completed branches, focus on open work |
+| **Onboarding** | New team members understand project structure at a glance |
+| **Refactoring** | See which tasks fall under a feature before restructuring |
+| **Status Meetings** | Walk through the hierarchy top-down for stakeholder updates |
+
+### Tree vs. Graph View
+
+| Aspect | Tree View (`E`) | Graph View (`g`) |
+|--------|-----------------|------------------|
+| **Relationships** | Parent-child only | All dependency types |
+| **Layout** | Indented hierarchy | Force-directed / DAG |
+| **Focus** | Work breakdown structure | Dependency flow |
+| **Navigation** | Vim-style (j/k/h/l) | Viewport panning |
+| **Best For** | "What's inside this epic?" | "What blocks this task?" |
+
+Both views complement each other: use Tree View to understand structure, Graph View to understand flow.
+
+---
+
+## 🎯 Actionable Plan View: Parallel Execution Tracks
+
+Press `a` to open the **Actionable Plan View**—a structured display of work items grouped into independent execution tracks. This view transforms abstract graph analysis into a concrete "what to work on next" interface.
+
+### Why Tracks Matter
+
+Traditional priority lists show tasks in a single ordered queue. But in complex dependency graphs, some work streams are completely independent—working on one doesn't affect another. The Actionable Plan View identifies these **parallel tracks** using Union-Find connected component analysis, letting multiple agents or team members work concurrently without stepping on each other.
+
+### Visual Layout
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  🎯 ACTIONABLE PLAN                                      3 tracks · 8 items  │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  ━━━ Track A: Auth System ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  │
+│                                                                             │
+│  ▸ 🎯 P1 AUTH-001   Implement OAuth2 flow                    unblocks 3    │
+│    ✨ P2 AUTH-002   Add token refresh                        unblocks 1    │
+│                                                                             │
+│  ━━━ Track B: UI Polish ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  │
+│                                                                             │
+│    📝 P2 UI-101     Dark mode toggle                         unblocks 2    │
+│    📝 P3 UI-102     Responsive layout                        unblocks 0    │
+│                                                                             │
+│  ━━━ Track C: Independent ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  │
+│                                                                             │
+│    📝 P3 DOCS-001   Update API documentation                 unblocks 0    │
+│                                                                             │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  Highest Impact: AUTH-001 (unblocks 3)                                      │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### What Makes an Item "Actionable"
+
+An issue appears in the Actionable Plan when:
+1. **Status is open or in_progress** (not closed)
+2. **No open blockers** exist (all blocking dependencies are closed)
+
+This ensures every item in the view can be started immediately without waiting on anything else.
+
+### Unblock Analysis
+
+Each item shows an **unblocks count**—the number of other issues that would become actionable if this item were completed. High unblock counts indicate **force multipliers**: completing them unlocks a cascade of downstream work.
+
+The **Highest Impact** summary at the bottom identifies the single item that, when completed, unblocks the most additional work. This is your optimal "next thing to pick up."
+
+### Navigation
+
+| Key | Action |
+|-----|--------|
+| `j` / `k` | Move between items (across tracks) |
+| `Enter` | Focus selected item in detail view |
+| `a` / `Esc` | Exit actionable view |
+
+### Use Cases
+
+| Scenario | How Actionable View Helps |
+|----------|---------------------------|
+| **Solo Development** | Always know the highest-impact next task |
+| **Team Standup** | Each person claims a different track |
+| **AI Agent Dispatch** | Agents grab `highest_impact` deterministically |
+| **Sprint Planning** | Estimate work by counting actionable items per track |
+
+---
+
+## 🔀 Flow Matrix View: Cross-Label Dependency Analysis
+
+Press `f` to open the **Flow Matrix View**—an interactive dashboard visualizing how labels (domains/teams) depend on each other. This reveals cross-team bottlenecks that aren't visible in single-issue views.
+
+### Why Cross-Label Flow Matters
+
+In large projects, work is often organized by labels: `frontend`, `backend`, `api`, `auth`, `infra`. Dependencies between issues create implicit dependencies between *labels*. The Flow Matrix exposes these patterns:
+
+- **Which team is blocking others the most?**
+- **Which domain is waiting on the most external work?**
+- **Where are the cross-team coordination bottlenecks?**
+
+### Visual Layout
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  🔀 FLOW MATRIX                                             5 labels · 23 deps │
+├───────────────────────────────────────────┬─────────────────────────────────┤
+│  LABELS                                   │  DETAIL                          │
+│  ─────────────────────────────────────    │  ─────────────────────────────   │
+│                                           │                                  │
+│  ▸ 🔴 api      ━━━━━━━━━━ 0.72           │  Label: api                      │
+│       outgoing: 8 → [auth, db, infra]    │  ──────────────────────          │
+│       incoming: 3 ← [frontend, mobile]   │                                  │
+│                                           │  Bottleneck Score: 0.72         │
+│    🟡 auth     ━━━━━━━━   0.58           │  (top 20% = critical)            │
+│       outgoing: 4 → [db]                 │                                  │
+│       incoming: 5 ← [api, frontend]      │  Outgoing Dependencies:          │
+│                                           │    → auth (3 issues)             │
+│    🟢 frontend ━━━━━     0.31            │    → db (4 issues)               │
+│       outgoing: 2 → [api]                │    → infra (1 issue)             │
+│       incoming: 0                        │                                  │
+│                                           │  Incoming Dependencies:          │
+│    🟢 db       ━━━       0.22            │    ← frontend (2 issues)         │
+│       outgoing: 0                        │    ← mobile (1 issue)            │
+│       incoming: 7 ← [api, auth]          │                                  │
+│                                           │  Critical Path: YES              │
+└───────────────────────────────────────────┴─────────────────────────────────┘
+```
+
+### Bottleneck Score
+
+The bottleneck score (0.0–1.0) measures how much a label blocks cross-domain work:
+
+$$
+\text{Bottleneck} = \frac{\text{Outgoing Deps}}{\text{Total Cross-Label Deps}} \times \text{Criticality Weight}
+$$
+
+| Score | Color | Meaning |
+|-------|-------|---------|
+| 0.7 – 1.0 | 🔴 Red | Critical bottleneck—prioritize unblocking |
+| 0.4 – 0.7 | 🟡 Yellow | Moderate blocking—monitor closely |
+| 0.0 – 0.4 | 🟢 Green | Healthy flow—no coordination issues |
+
+### Drilldown Mode
+
+Press `Enter` on a label to drill down into the specific issues creating cross-label dependencies:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  🔀 FLOW MATRIX > api → auth                                    3 issues    │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│    🐛 P1 API-123   Auth endpoint returns 500         blocks AUTH-456       │
+│    ✨ P2 API-456   Add OAuth scope validation        blocks AUTH-789       │
+│    📝 P2 API-789   Token refresh rate limiting       blocks AUTH-101       │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Navigation
+
+| Key | Action |
+|-----|--------|
+| `j` / `k` | Move between labels |
+| `Tab` | Toggle focus between labels list and detail panel |
+| `Enter` | Drill down into cross-label issues |
+| `Esc` | Exit drilldown / Exit view |
+| `f` / `q` | Exit flow matrix view |
+
+### Robot Command
+
+```bash
+bw --robot-label-flow | jq '.flow.bottleneck_labels'
+```
+
+---
+
+## 🎪 Attention View: Label Priority Ranking
+
+Press `]` to open the **Attention View**—a ranked table of labels by attention score, helping you identify which project areas need focus.
+
+### Attention Score Formula
+
+The attention score combines multiple signals to surface neglected or problematic areas:
+
+$$
+\text{Attention} = \frac{\text{PageRank}_{\text{avg}} \times \text{Staleness} \times \text{BlockImpact}}{\text{Velocity} + \epsilon}
+$$
+
+| Component | What It Measures |
+|-----------|------------------|
+| **PageRank (avg)** | Average importance of issues in this label |
+| **Staleness** | How long since issues were updated (higher = more stale) |
+| **Block Impact** | How many issues are blocked within this label |
+| **Velocity** | Completion rate (issues closed per week) |
+
+High attention scores indicate labels that are both important and neglected—they need intervention.
+
+### Visual Layout
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  🎪 ATTENTION VIEW                                                          │
+├──────┬────────────┬───────────┬─────────────────────────────────────────────┤
+│ Rank │ Label      │ Attention │ Reason                                      │
+├──────┼────────────┼───────────┼─────────────────────────────────────────────┤
+│  1   │ api        │    2.45   │ blocked=5 stale=3 vel=0.8                   │
+│  2   │ auth       │    1.89   │ blocked=2 stale=4 vel=1.2                   │
+│  3   │ infra      │    1.23   │ blocked=1 stale=6 vel=0.5                   │
+│  4   │ frontend   │    0.67   │ blocked=0 stale=1 vel=3.5                   │
+│  5   │ docs       │    0.34   │ blocked=0 stale=2 vel=2.1                   │
+└──────┴────────────┴───────────┴─────────────────────────────────────────────┘
+```
+
+### Interpreting Results
+
+- **High Attention + Low Velocity**: Area is stuck—investigate blockers
+- **High Attention + High Stale**: Work forgotten—resurface and reprioritize
+- **Low Attention + High Velocity**: Healthy area—keep momentum
+- **High Blocked Count**: Dependencies creating bottleneck
+
+### Navigation
+
+| Key | Action |
+|-----|--------|
+| `j` / `k` | Move between labels |
+| `]` / `Esc` | Exit attention view |
+
+### Robot Command
+
+```bash
+bw --robot-label-attention --attention-limit=10
+```
+
+---
+
+## 📚 Shortcuts Sidebar: Persistent Keyboard Reference
+
+Press `;` (semicolon) or `F2` to toggle the **Shortcuts Sidebar**—a persistent panel showing context-aware keyboard shortcuts alongside your current view.
+
+### Why a Sidebar (Not Just Help)?
+
+The `?` help overlay shows shortcuts but blocks your view. The shortcuts sidebar stays visible while you work, perfect for:
+- Learning keyboard shortcuts without interrupting your flow
+- Quick reference during complex navigation
+- Teaching new users while pair programming
+
+### Context Awareness
+
+The sidebar automatically filters shortcuts to show only those relevant to your current view:
+
+| Context | Shown Sections |
+|---------|----------------|
+| List View | Navigation, Filters, Views, Actions |
+| Board View | Navigation, Board-specific, Swimlanes |
+| Graph View | Navigation, Panning, Zoom |
+| Insights | Navigation, Panels, Toggles |
+| History | Navigation, View Modes, Timeline |
+
+### Visual Layout
+
+```
+┌──────────────────────────────────────────────┬──────────────────────┐
+│                                              │  ⌨️ SHORTCUTS         │
+│                                              │  ──────────────────  │
+│               Main Content Area              │                      │
+│                                              │  Navigation          │
+│           (List, Board, Graph, etc.)         │  j/k    Move ↓/↑     │
+│                                              │  G/gg   End/Start    │
+│                                              │  ^d/^u  Page ↓/↑     │
+│                                              │                      │
+│                                              │  Views               │
+│                                              │  b      Board        │
+│                                              │  g      Graph        │
+│                                              │  i      Insights     │
+│                                              │                      │
+│                                              │  ; to hide           │
+└──────────────────────────────────────────────┴──────────────────────┘
+```
+
+### Sidebar Controls
+
+| Key | Action |
+|-----|--------|
+| `;` or `F2` | Toggle sidebar visibility |
+| `Ctrl+J` | Scroll sidebar down (when visible) |
+| `Ctrl+K` | Scroll sidebar up (when visible) |
+
+The sidebar occupies a fixed 34-character width on the right edge of the terminal.
+
+---
+
+## 🎓 Interactive Tutorial System
+
+Press `` ` `` (backtick) to open the **Interactive Tutorial**—a comprehensive multi-page walkthrough that teaches all bv features through rich, styled content.
+
+### Tutorial Architecture
+
+The tutorial uses a **component-based rendering system** that produces beautiful terminal output:
+
+| Component | Purpose | Example |
+|-----------|---------|---------|
+| **Section** | Styled headers with underlines | `## Navigation` |
+| **Paragraph** | Flowing text with proper wrapping | Explanation text |
+| **KeyTable** | Aligned key-description pairs | `j/k` → Move up/down |
+| **Tip** | Highlighted advice boxes | 💡 TIP: Press g to jump... |
+| **Warning** | Alert boxes for important notes | ⚠️ WARN: This action... |
+| **Code** | Syntax-highlighted code blocks | `bw --robot-triage` |
+| **Bullet** | Styled bullet lists | • First item |
+| **Tree** | Hierarchical structure display | Directory trees |
+| **StatusFlow** | Visual workflow diagrams | Open → In Progress → Closed |
+| **InfoBox** | Bordered information panels | Feature highlights |
+
+### Tutorial Sections
+
+The tutorial covers these topics in depth:
+
+1. **Introduction** — What bv is and why it exists
+2. **Core Concepts** — Beads, dependencies, labels, priorities
+3. **List View** — Navigation, filtering, sorting
+4. **Board View** — Kanban workflows, swimlanes
+5. **Graph View** — Dependency visualization
+6. **Tree View** — Parent-child hierarchies
+7. **Insights Dashboard** — Graph metrics deep dive
+8. **History View** — Git correlation
+9. **Robot Protocol** — AI agent integration
+10. **Workflows** — Triage, planning, sprint management
+
+### Progress Tracking
+
+The tutorial automatically tracks which pages you've viewed:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  📖 TUTORIAL                                           Page 3/10 · 30% ████░░░░│
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  ## List View Navigation                                                    │
+│  ─────────────────────────                                                  │
+│                                                                             │
+│  The list view is your home base. Navigate with vim-style keys:             │
+│                                                                             │
+│    j / k       Move down / up                                               │
+│    g / G       Jump to top / bottom                                         │
+│    Ctrl+D/U    Page down / up                                               │
+│                                                                             │
+│  ╭──────────────────────────────────────────────────────────────────────╮   │
+│  │ 💡 TIP  Press `/` to search, then type any part of an issue title   │   │
+│  ╰──────────────────────────────────────────────────────────────────────╯   │
+│                                                                             │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  ← h previous │ l next → │ t TOC │ q close                                  │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+Progress persists across sessions, so you can close bv and resume where you left off.
+
+### Tutorial Navigation
+
+| Key | Action |
+|-----|--------|
+| `h` / `l` or `←` / `→` | Previous / Next page |
+| `j` / `k` | Scroll content up / down |
+| `t` | Toggle Table of Contents |
+| `g` / `G` | First / Last page |
+| `q` / `Esc` | Close tutorial |
+
+### Context-Sensitive Filtering
+
+When you open the tutorial from a specific view (e.g., press `` ` `` while in Board view), the tutorial can filter to show only pages relevant to that context. This provides focused learning without overwhelming new users.
+
+### Quick Reference vs. Full Tutorial
+
+bw provides two help levels:
+
+| Feature | Key | Purpose |
+|---------|-----|---------|
+| **Quick Reference** | `?` | Compact keyboard shortcuts for current view |
+| **Full Tutorial** | `` ` `` | Multi-page walkthrough with examples |
+| **Shortcuts Sidebar** | `;` | Persistent reference while working |
+
+From Quick Reference, press `Space` to jump directly into the full tutorial.
+
+---
+## 📜 History View: Bead-to-Commit Correlation
+
+Press `h` to open the **History View**—an interactive timeline that correlates beads with their related git commits. This bridges the gap between "what work was planned" and "what code was actually written."
+
+### The Correlation Engine
+
+The `pkg/correlation` package implements a **multi-strategy correlation system** that infers relationships between beads and commits using several techniques:
+
+```mermaid
+graph TD
+    %%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#e8f5e9', 'lineColor': '#90a4ae'}}}%%
+
+    subgraph strategies ["🔍 Correlation Strategies"]
+        E["Explicit Mentions<br/><small>Commit contains bead ID</small>"]
+        T["Temporal Proximity<br/><small>Commit near bead events</small>"]
+        C["Co-Commit Analysis<br/><small>Files changed together</small>"]
+        P["Path Matching<br/><small>File paths match bead scope</small>"]
+    end
+
+    subgraph scorer ["📊 Confidence Scorer"]
+        S["Multi-Factor Scoring<br/><small>Weighted combination</small>"]
+    end
+
+    subgraph output ["📈 Output"]
+        H["BeadHistory<br/><small>Events + Commits + Milestones</small>"]
+    end
+
+    E --> S
+    T --> S
+    C --> S
+    P --> S
+    S --> H
+
+    classDef strategy fill:#e3f2fd,stroke:#90caf9,stroke-width:2px,color:#1565c0
+    classDef score fill:#fff8e1,stroke:#ffcc80,stroke-width:2px,color:#e65100
+    classDef out fill:#e8f5e9,stroke:#a5d6a7,stroke-width:2px,color:#2e7d32
+
+    class E,T,C,P strategy
+    class S score
+    class H out
+```
+
+### Correlation Strategies
+
+| Strategy | Weight | How It Works |
+|----------|--------|--------------|
+| **Explicit Mentions** | High | Commit message contains bead ID (e.g., `fix(auth): resolve race condition [BV-123]`) |
+| **Temporal Proximity** | Medium | Commit timestamp falls within bead's active lifecycle window |
+| **Co-Commit Analysis** | Medium | Files frequently modified together suggest shared purpose |
+| **Path Matching** | Low | File paths match bead's label scope (e.g., `pkg/auth/*` for `auth` label) |
+
+### Confidence Scoring
+
+Each correlation receives a **confidence score** (0.0–1.0) computed by:
+
+$$
+\text{Confidence} = w_1 \cdot \text{Explicit} + w_2 \cdot \text{Temporal} + w_3 \cdot \text{CoCommit} + w_4 \cdot \text{Path}
+$$
+
+Default weights: Explicit=0.5, Temporal=0.25, CoCommit=0.15, Path=0.10
+
+### History View Layout
+
+The History View uses a **responsive three-pane layout** that adapts to terminal width:
+
+| Width | Layout |
+|-------|--------|
+| **< 100** | Single pane: List with inline details |
+| **100-160** | Two panes: List + Detail |
+| **> 160** | Three panes: List + Timeline + Detail |
+
+**Wide Terminal (3-pane) Layout:**
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│  📜 HISTORY VIEW                                          [Bead Mode] [≥ 0.5]   │
+├───────────────────────┬───────────────────┬─────────────────────────────────────┤
+│  BEADS                │  TIMELINE         │  COMMIT DETAIL                      │
+│  ─────────────────    │  ─────────────    │  ─────────────────────────          │
+│ ▸ BV-123 (3 commits)  │    ┃              │  abc1234 - Fix auth race            │
+│   🎯 BV-456 (1)       │   ━╋━ Jan 15      │  Author: alice@example.com          │
+│   🔗 BV-789 (5)       │    ┃   ▪▪▪        │  Date:   2025-01-15 14:32           │
+│   📁 BV-100 (2)       │   ━╋━ Jan 14      │  Confidence: 0.85 (explicit)        │
+│                       │    ┃   ▪          │                                      │
+│                       │   ━╋━ Jan 13      │  Files changed:                      │
+│                       │    ┃   ▪▪▪▪▪      │    M pkg/auth/session.go            │
+└───────────────────────┴───────────────────┴─────────────────────────────────────┘
+```
+
+### Timeline Panel (`t` Toggle)
+
+Press `t` to show/hide the **Timeline Panel**—a visual density chart of project activity:
+
+- **Vertical axis**: Time (newest at top)
+- **Horizontal bars**: Activity density (commits per day)
+- **Bar magnitude**: ▪ = 1-2, ▪▪ = 3-5, ▪▪▪ = 6-10, ▪▪▪▪ = 11+
+- **Highlights**: Selected bead's commits are marked with `━`
+
+Click or navigate to a date to filter the view to that time period.
+
+### Causality Markers
+
+Each bead-commit correlation shows its **detection method** as a visual marker:
+
+| Marker | Meaning | Confidence |
+|--------|---------|------------|
+| **🎯 Direct** | Commit message explicitly mentions bead ID | High (0.8-1.0) |
+| **🔗 Temporal** | Commit falls within bead's active lifecycle | Medium (0.4-0.7) |
+| **📁 File** | Commit touches files associated with bead | Low (0.2-0.5) |
+
+### View Modes
+
+Press `v` to toggle between two view modes:
+
+| Mode | Shows | Use Case |
+|------|-------|----------|
+| **Bead Mode** (default) | Beads grouped with their correlated commits | "What commits relate to this task?" |
+| **Git Mode** | Commits chronologically with correlated beads | "What tasks did this commit touch?" |
+
+### File-Centric Drill-Down (`f` Key)
+
+Press `f` to switch to **File Mode**—a tree view of changed files grouped by directory:
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│  📁 FILE MODE                                              [12 files]   │
+├─────────────────────────────────────────────────────────────────────────┤
+│  ▼ pkg/auth/                                                            │
+│      session.go       42 changes   BV-123, BV-456                       │
+│      token.go         18 changes   BV-123                               │
+│      middleware.go    8 changes    BV-789                               │
+│  ▼ pkg/api/                                                             │
+│      handler.go       25 changes   BV-100                               │
+│      routes.go        12 changes   BV-100, BV-456                       │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+Navigate to a file and press `Enter` to see all beads and commits that touched it.
+
+### History Navigation
+
+| Key | Action |
+|-----|--------|
+| **Navigation** | |
+| `j` / `k` | Move in primary pane (beads or commits) |
+| `J` / `K` | Move in secondary pane (commits or detail) |
+| `Tab` | Cycle focus: List → Timeline → Detail |
+| `Enter` | Expand/collapse or drill into selection |
+| **View Modes** | |
+| `v` | Toggle Bead Mode ↔ Git Mode |
+| `f` | Toggle File-centric drill-down |
+| `t` | Toggle Timeline panel visibility |
+| **Filtering** | |
+| `c` | Cycle confidence threshold (0.0 → 0.3 → 0.5 → 0.7) |
+| `/` | Search commits or beads |
+| **Actions** | |
+| `y` | Copy selected commit SHA to clipboard |
+| `o` | Open commit in browser (GitHub/GitLab) |
+| `V` | Preview cass sessions for selected bead |
+| `Esc` | Return to list view |
+
+### Robot Command: `--robot-history`
+
+```bash
+bw --robot-history                          # Full history report
+bw --robot-history --bead-history BV-123    # Single bead focus
+bw --robot-history --history-since '30 days ago'
+bw --robot-history --min-confidence 0.7     # High-confidence only
+```
+
+**Output Schema:**
+```json
+{
+  "stats": {
+    "total_beads": 58,
+    "beads_with_commits": 42,
+    "total_commits": 156,
+    "avg_cycle_time_hours": 72.5,
+    "method_distribution": {
+      "explicit": 89,
+      "temporal": 45,
+      "cocommit": 22
+    }
+  },
+  "histories": {
+    "BV-123": {
+      "events": [...],
+      "commits": [...],
+      "milestones": [...],
+      "cycle_time_hours": 48.2
+    }
+  },
+  "commit_index": {
+    "abc1234": ["BV-123", "BV-456"]
+  }
+}
+```
+
+---
+
+## 🔗 Correlation Analysis: Impact Network & Related Work
+
+Beyond simple bead-to-commit correlation, `bw` provides **deep analysis** of how beads relate to each other through shared code changes. This helps identify hidden dependencies, find related work, and understand the true impact of changes.
+
+### Impact Network Graph
+
+The Impact Network visualizes **implicit relationships** between beads based on:
+
+```mermaid
+graph LR
+    %%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#e3f2fd', 'lineColor': '#90a4ae'}}}%%
+
+    subgraph connections ["🔗 Edge Types"]
+        SC["Shared Commit<br/><small>Same commit touches both beads</small>"]
+        SF["Shared File<br/><small>Both beads modify same files</small>"]
+        DEP["Dependency<br/><small>Explicit blocker relationship</small>"]
+    end
+
+    classDef edge fill:#fff8e1,stroke:#ffcc80,stroke-width:2px
+    class SC,SF,DEP edge
+```
+
+| Edge Type | Weight | Meaning |
+|-----------|--------|---------|
+| **Shared Commit** | High | A single commit references both beads (strong coupling) |
+| **Shared File** | Medium | Both beads touched the same source file |
+| **Dependency** | Explicit | Direct blocking relationship from issue tracker |
+
+### Network Clusters
+
+`bw` automatically detects **clusters** of tightly-connected beads using community detection:
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│  🔗 IMPACT NETWORK                                        [3 clusters]  │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│  ┌─── Cluster 1: Auth Module ───┐     ┌─── Cluster 2: API Layer ───┐   │
+│  │  BV-123 ←──→ BV-456          │     │  BV-789 ←──→ BV-100        │   │
+│  │    ↕           ↕              │     │    ↕                        │   │
+│  │  BV-321 ←──→ BV-654          │────→│  BV-111                     │   │
+│  └──────────────────────────────┘     └─────────────────────────────┘   │
+│                                                                         │
+│  Central bead: BV-123 (highest degree)                                 │
+│  Internal connectivity: 0.85 (tightly coupled)                         │
+│  External edges: 1 (to API layer cluster)                              │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### File-to-Bead Lookup
+
+Find all beads that have touched a specific file using `--robot-file-beads`:
+
+```bash
+bw --robot-file-beads pkg/ui/board.go
+```
+
+Returns beads sorted by recency with commit details:
+
+```json
+{
+  "file_path": "pkg/ui/board.go",
+  "total_beads": 21,
+  "open_beads": [],
+  "closed_beads": [
+    {
+      "bead_id": "bv-v67w",
+      "title": "Board: Integration & Polish",
+      "status": "closed",
+      "commit_shas": ["abc123"],
+      "last_touch": "2025-12-18T00:19:21-05:00",
+      "total_changes": 17
+    }
+  ]
+}
+```
+
+**Use cases:**
+- **Code ownership**: "Who has worked on this file recently?"
+- **Impact analysis**: "What work items are affected by this file?"
+- **Bug investigation**: "What changes might have introduced this regression?"
+
+### Orphan Commit Detection
+
+Find commits that should be linked to beads but aren't using `--robot-orphans`:
+
+```bash
+bw --robot-orphans
+```
+
+Returns candidate commits with probable bead matches:
+
+```json
+{
+  "stats": {
+    "total_commits": 500,
+    "correlated_count": 242,
+    "orphan_count": 258,
+    "orphan_ratio": 0.516
+  },
+  "candidates": [
+    {
+      "sha": "abc1234",
+      "message": "feat: add auth caching",
+      "suspicion_score": 100,
+      "probable_beads": [
+        {
+          "bead_id": "bv-xyz",
+          "confidence": 65,
+          "reasons": ["touches file pkg/auth/cache.go", "same author worked on bead nearby"]
+        }
+      ]
+    }
+  ]
+}
+```
+
+**Use cases:**
+- **Hygiene**: Find commits that slipped through without proper linking
+- **Audit**: Ensure all code changes are tracked to work items
+- **Correlation improvement**: Train the system by confirming/rejecting suggestions
+
+### Related Work Discovery
+
+For any bead, `bw` can find **related work** across four dimensions:
+
+| Relation Type | How Detected | Example |
+|---------------|--------------|---------|
+| **File Overlap** | Both beads modify same source files | "BV-123 and BV-456 both touch `session.go`" |
+| **Commit Overlap** | Both beads referenced in same commit | "BV-123 and BV-456 fixed in commit `abc123`" |
+| **Dependency Cluster** | Both in same tightly-connected subgraph | "BV-123 is in the Auth cluster with BV-456" |
+| **Concurrent** | Active during the same time window | "BV-123 and BV-456 both worked on last week" |
+
+Each relation includes a **relevance score** (0-100) indicating strength.
+
+### Robot Commands
+
+```bash
+# Get the full impact network (use "all" for complete graph)
+bw --robot-impact-network all
+
+# Get subnetwork focused on specific bead (default depth=2, max=3)
+bw --robot-impact-network bv-123 --network-depth 2
+
+# Find related work for a bead
+bw --robot-related bv-123
+
+# Include closed beads in related work results
+bw --robot-related bv-123 --related-include-closed
+
+# Tune related work thresholds
+bw --robot-related bv-123 --related-min-relevance 30 --related-max-results 20
+
+# Analyze causal chain for a bead (timeline, blockers, insights)
+bw --robot-causality bv-123
+
+# Find beads that touched a file
+bw --robot-file-beads pkg/auth/session.go
+
+# Find orphan commits (unlinked to beads)
+bw --robot-orphans
+```
+
+### Causal Chain Analysis
+
+The `--robot-causality` command reveals **why a bead took as long as it did** by reconstructing its timeline of events:
+
+| Event Type | Description |
+|------------|-------------|
+| `created` | Bead was opened |
+| `claimed` | Work started (status → in_progress) |
+| `commit` | Code commit linked to bead |
+| `blocked` | Bead became blocked by another bead |
+| `unblocked` | Blocking dependency was resolved |
+| `closed` | Bead was completed |
+| `reopened` | Bead was reopened after closure |
+
+**Insights provided:**
+- **Blocked percentage**: How much time was spent waiting on dependencies
+- **Critical path**: The chain of events determining minimum completion time
+- **Longest gap**: Identifies stalled periods needing investigation
+- **Recommendations**: Actionable suggestions (e.g., "Consider breaking into smaller beads")
+
+**Causality Output Schema:**
+```json
+{
+  "generated_at": "2025-01-15T14:32:00Z",
+  "data_hash": "abc123...",
+  "chain": {
+    "bead_id": "bv-123",
+    "title": "Implement auth caching",
+    "status": "closed",
+    "events": [
+      {"id": 1, "type": "created", "timestamp": "2025-01-10T10:00:00Z"},
+      {"id": 2, "type": "claimed", "timestamp": "2025-01-10T11:00:00Z", "caused_by_id": 1},
+      {"id": 3, "type": "blocked", "timestamp": "2025-01-11T09:00:00Z", "blocker_id": "bv-456"},
+      {"id": 4, "type": "unblocked", "timestamp": "2025-01-12T16:00:00Z"},
+      {"id": 5, "type": "commit", "timestamp": "2025-01-13T10:00:00Z", "commit_sha": "abc1234"},
+      {"id": 6, "type": "closed", "timestamp": "2025-01-13T17:00:00Z"}
+    ],
+    "edge_count": 5,
+    "total_time": "79h0m0s",
+    "is_complete": true
+  },
+  "insights": {
+    "total_duration": "79h0m0s",
+    "blocked_duration": "31h0m0s",
+    "active_duration": "48h0m0s",
+    "blocked_percentage": 39.2,
+    "blocked_periods": [
+      {"start_time": "2025-01-11T09:00:00Z", "end_time": "2025-01-12T16:00:00Z", "blocker_id": "bv-456"}
+    ],
+    "commit_count": 1,
+    "critical_path_desc": "created → claimed → blocked → unblocked → commit → closed",
+    "summary": "Bead took 79h total; 39% blocked by bv-456",
+    "recommendations": ["Consider unblocking bv-456 earlier to reduce wait time"]
+  }
+}
+```
+
+### Correlation Feedback System
+
+Train the correlation engine by confirming or rejecting its suggestions:
+
+```bash
+# Explain why a correlation exists
+bw --robot-explain-correlation abc1234:bv-xyz
+
+# Confirm a correct correlation (boosts confidence)
+bw --robot-confirm-correlation abc1234:bv-xyz
+
+# Reject an incorrect correlation (removes it)
+bw --robot-reject-correlation abc1234:bv-xyz
+
+# View feedback statistics
+bw --robot-correlation-stats
+```
+
+**Feedback Stats Output:**
+```json
+{
+  "total_feedback": 15,
+  "confirmed": 12,
+  "rejected": 3,
+  "accuracy_rate": 0.80,
+  "avg_confirm_conf": 0.85,
+  "avg_reject_conf": 0.42
+}
+```
+
+This feedback loop improves correlation accuracy over time—confirmed correlations strengthen pattern recognition, while rejections help eliminate false positives.
+
+**Impact Network Output Schema:**
+```json
+{
+  "generated_at": "2025-01-15T14:32:00Z",
+  "data_hash": "abc123...",
+  "stats": {
+    "total_nodes": 58,
+    "total_edges": 142,
+    "cluster_count": 5,
+    "avg_degree": 4.9,
+    "density": 0.086,
+    "isolated_nodes": 3
+  },
+  "clusters": [
+    {
+      "cluster_id": 1,
+      "bead_ids": ["BV-123", "BV-456", "BV-321"],
+      "label": "Auth Module",
+      "internal_connectivity": 0.85,
+      "central_bead": "BV-123",
+      "shared_files": ["pkg/auth/session.go", "pkg/auth/token.go"]
+    }
+  ],
+  "edges": [
+    {"from_bead": "BV-123", "to_bead": "BV-456", "edge_type": "shared_commit", "weight": 5}
+  ]
+}
+```
+
+---
+
+## 🤖 Cass Integration: AI Session Correlation (Optional)
+
+`bw` optionally integrates with [**cass**](https://github.com/Dicklesworthstone/cass) (Claude Agent Session Store)—a tool that captures and indexes coding sessions from AI assistants like Claude. When cass is installed, `bw` automatically enhances its correlation capabilities with session-based insights.
+
+### How It Works
+
+```mermaid
+graph LR
+    %%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#e8f5e9', 'lineColor': '#90a4ae'}}}%%
+
+    CASS["🤖 cass<br/><small>Session Store</small>"]
+    BV["⚡ bv<br/><small>Issue Viewer</small>"]
+    CORR["🔗 Enhanced<br/>Correlation"]
+
+    CASS --> BV
+    BV --> CORR
+
+    classDef tool fill:#e3f2fd,stroke:#90caf9,stroke-width:2px
+    class CASS,BV,CORR tool
+```
+
+**Graceful Degradation:** If cass is not installed, `bw` works normally—no errors, broken UI, or loading states. Cass features simply become unavailable.
+
+### Detection & Status
+
+`bw` automatically detects cass on startup:
+
+| Status | Indicator | Meaning |
+|--------|-----------|---------|
+| **Healthy** | 🤖 in status bar | cass is installed, indexed, and ready |
+| **Needs Index** | ⚠️ in status bar | cass installed but needs `cass index` |
+| **Not Installed** | (none) | cass not in PATH—features hidden |
+
+### Session Preview Modal (`V` Key)
+
+Press `V` on any bead to open the **Session Preview Modal**—a view of AI coding sessions that may have contributed to that issue:
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│  🤖 Related Coding Sessions for BV-123                                  │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│  ▸ Session 1 (claude-opus-4)                         Dec 15, 2:30 PM   │
+│    "Implementing session refresh timeout handling..."                   │
+│    Confidence: 0.92 (explicit mention)                                  │
+│                                                                         │
+│    Session 2 (claude-opus-4)                         Dec 14, 10:15 AM  │
+│    "Refactoring token validation middleware..."                         │
+│    Confidence: 0.67 (file overlap)                                      │
+│                                                                         │
+│    Session 3 (claude-opus-4)                         Dec 13, 4:45 PM   │
+│    "Adding retry logic to auth service..."                              │
+│    Confidence: 0.45 (temporal)                                          │
+│                                                                         │
+├─────────────────────────────────────────────────────────────────────────┤
+│  j/k: Navigate   y: Copy search command   Enter: View full session      │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+**Session Correlation Methods:**
+
+| Method | Weight | Meaning |
+|--------|--------|---------|
+| **Explicit** | 0.9-1.0 | Session mentions bead ID directly |
+| **File Overlap** | 0.5-0.8 | Session touched files associated with bead |
+| **Temporal** | 0.3-0.6 | Session occurred during bead's active lifecycle |
+| **Keyword** | 0.2-0.5 | Session contains keywords from bead title/description |
+
+### Status Bar Indicator
+
+When cass is healthy, the status bar shows agent activity:
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│  📋 437 issues  •  🤖 claude-opus-4 (active)  •  Last: 5m ago          │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+| State | Display | Meaning |
+|-------|---------|---------|
+| **Active** | 🤖 agent-name | Session in progress within last 15 minutes |
+| **Idle** | 💤 | No recent sessions |
+
+### Installing Cass
+
+```bash
+# Install cass (see https://github.com/Dicklesworthstone/cass for full docs)
+brew install dicklesworthstone/tap/cass   # macOS
+# or
+cargo install cass                         # From source
+
+# Index your coding sessions
+cass index
+
+# Verify integration
+bw  # Look for 🤖 in status bar
+```
+
+### Cass-Enhanced History View
+
+When cass is available, the History View gains additional capabilities:
+
+- **Session Timeline**: `V` key shows sessions alongside commits
+- **Agent Attribution**: See which AI assistant contributed to changes
+- **Enhanced Search**: Search across both commits and sessions
+
+---
+
+## 📅 Sprint Dashboard: Burndown & Progress Tracking
+
+Press `P` (uppercase) to open the **Sprint Dashboard**—a comprehensive view of sprint progress with burndown visualization, scope change tracking, and at-risk detection.
+
+### Dashboard Layout
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│  📅 Sprint: January 2025                                                │
+│  ───────────────────────────────────────────────────────────────────    │
+│  Dates:     Jan 6 → Jan 20                                              │
+│  Remaining: 5 days                                                      │
+│                                                                         │
+│  ══════════════════════════════════════════════════════════════════    │
+│                          PROGRESS                                       │
+│  ══════════════════════════════════════════════════════════════════    │
+│                                                                         │
+│  Total: 24 beads    Closed: 18 (75%)    Remaining: 6                    │
+│  [████████████████████░░░░░░] 75%                                       │
+│                                                                         │
+│  ══════════════════════════════════════════════════════════════════    │
+│                          BURNDOWN                                       │
+│  ══════════════════════════════════════════════════════════════════    │
+│                                                                         │
+│  24 ┤ ·                                                                 │
+│  20 ┤  ·····                                                            │
+│  16 ┤       ····▸                                                       │
+│  12 ┤            ╲    (ideal)                                           │
+│   8 ┤             ╲                                                     │
+│   4 ┤              ╲                                                    │
+│   0 ┼──────────────────────────────────────────────────────────────    │
+│     Jan 6          Jan 13                Jan 20                         │
+│                                                                         │
+│  Legend: · = Actual    ╲ = Ideal    ▸ = Today                           │
+│                                                                         │
+│  ══════════════════════════════════════════════════════════════════    │
+│                       SCOPE CHANGES                                     │
+│  ══════════════════════════════════════════════════════════════════    │
+│                                                                         │
+│  Jan 8:  +2 beads added (BV-456, BV-457)                                │
+│  Jan 10: -1 bead removed (BV-100 moved to backlog)                      │
+│                                                                         │
+│  ══════════════════════════════════════════════════════════════════    │
+│                        AT-RISK ITEMS                                    │
+│  ══════════════════════════════════════════════════════════════════    │
+│                                                                         │
+│  ⚠ BV-789 (P0 Critical) - Blocked for 3 days                           │
+│  ⚠ BV-234 (P1 High) - No activity for 5 days                           │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### Burndown Calculation
+
+The burndown chart implements a **scope-aware algorithm** that tracks not just completion velocity but also scope changes:
+
+1. **Ideal Burn Rate:** `Total Beads / Sprint Duration`
+2. **Actual Burn Rate:** `Closed Beads / Days Elapsed`
+3. **Scope Events:** Added/removed beads create discontinuities in the ideal line
+
+When beads are added mid-sprint, the burndown recalculates the ideal trajectory from that point forward, providing a realistic view of progress rather than a misleading "behind schedule" indicator.
+
+### At-Risk Detection
+
+Items are flagged as at-risk based on multiple heuristics:
+
+| Signal | Threshold | Reason |
+|--------|-----------|--------|
+| **Blocked Duration** | > 2 days | Dependency bottleneck |
+| **No Activity** | > 4 days | Potentially stuck or forgotten |
+| **High Priority Blocked** | P0/P1 blocked | Critical path impediment |
+| **Dependencies Not Closing** | Blockers still open | Cascading delay risk |
+
+### Robot Commands
+
+```bash
+bw --robot-sprint-list                # List all sprints
+bw --robot-sprint-show sprint-1       # Details for specific sprint
+bw --robot-burndown current           # Burndown for active sprint
+bw --robot-burndown sprint-1          # Burndown for specific sprint
+```
+
+**Burndown Output:**
+```json
+{
+  "sprint_id": "sprint-1",
+  "total_days": 14,
+  "elapsed_days": 9,
+  "remaining_days": 5,
+  "total_issues": 24,
+  "completed_issues": 18,
+  "remaining_issues": 6,
+  "ideal_burn_rate": 1.71,
+  "actual_burn_rate": 2.0,
+  "projected_complete": "2025-01-18",
+  "on_track": true,
+  "scope_changes": [
+    {"date": "2025-01-08", "delta": 2, "reason": "Added BV-456, BV-457"}
+  ]
+}
+```
+
+---
+
+## 🏷️ Label Analytics: Domain-Centric Health Monitoring
+
+Press `L` (uppercase) to open the **Label Dashboard**—a table view showing health metrics for each label in your project. This enables **domain-driven prioritization** by surfacing which areas of your codebase need attention.
+
+### Label Dashboard Layout
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│  🏷️ LABEL HEALTH                                                        │
+├──────────────┬────────┬────────┬────────┬────────┬────────┬────────────┤
+│  Label       │ Health │ Status │ Open   │ Blocked│ Stale  │ Velocity   │
+├──────────────┼────────┼────────┼────────┼────────┼────────┼────────────┤
+│  🔴 api      │  0.32  │ CRIT   │   12   │   5    │   3    │   0.8/wk   │
+│  🟡 auth     │  0.58  │ WARN   │    8   │   2    │   1    │   2.1/wk   │
+│  🟢 ui       │  0.85  │ OK     │    4   │   0    │   0    │   4.2/wk   │
+│  🟢 docs     │  0.92  │ OK     │    2   │   0    │   0    │   1.5/wk   │
+│  🟡 infra    │  0.61  │ WARN   │    6   │   1    │   2    │   1.2/wk   │
+└──────────────┴────────┴────────┴────────┴────────┴────────┴────────────┘
+```
+
+### Health Score Calculation
+
+The label health score combines multiple factors:
+
+$$
+\text{Health} = 1 - \left( w_1 \cdot \frac{\text{Blocked}}{\text{Open}} + w_2 \cdot \frac{\text{Stale}}{\text{Open}} + w_3 \cdot (1 - \text{VelocityScore}) \right)
+$$
+
+| Component | Weight | Meaning |
+|-----------|--------|---------|
+| **Blocked Ratio** | 0.4 | High blocked count indicates bottlenecks |
+| **Stale Ratio** | 0.3 | Stale issues suggest neglect |
+| **Velocity Inverse** | 0.3 | Low throughput indicates capacity issues |
+
+### Health Levels
+
+| Level | Score Range | Indicator | Action |
+|-------|-------------|-----------|--------|
+| **Critical** | 0.0 – 0.4 | 🔴 | Immediate attention required |
+| **Warning** | 0.4 – 0.7 | 🟡 | Monitor closely |
+| **Healthy** | 0.7 – 1.0 | 🟢 | On track |
+
+### Robot Commands for Label Analysis
+
+**`--robot-label-health`**: Per-label health metrics
+```bash
+bw --robot-label-health
+bw --robot-label-health | jq '.results.labels[] | select(.health_level == "critical")'
+```
+
+**`--robot-label-flow`**: Cross-label dependency flow matrix
+```bash
+bw --robot-label-flow
+bw --robot-label-flow | jq '.flow.bottleneck_labels'
+```
+
+**`--robot-label-attention`**: Attention-ranked labels for prioritization
+```bash
+bw --robot-label-attention --attention-limit=5
+```
+
+### Label-Scoped Analysis
+
+Use `--label` to scope any robot command to a specific label's subgraph:
+
+```bash
+bw --robot-insights --label api    # Graph metrics for api-labeled issues only
+bw --robot-plan --label backend    # Execution plan for backend domain
+bw --robot-priority --label auth   # Priority recommendations for auth work
+```
+
+This enables **domain isolation**: analyze and plan within a bounded context rather than the entire project graph.
+
+### Flow Matrix: Cross-Label Dependencies
+
+The flow matrix reveals how labels depend on each other:
+
+```
+          → api  → auth  → ui   → docs
+api         -      3       2      0
+auth        1      -       0      1
+ui          4      2       -      0
+docs        0      0       0      -
+```
+
+Read as: "api has 3 issues that depend on auth issues." High values indicate coupling between domains; the `bottleneck_labels` field highlights labels that block the most cross-domain work.
+
+---
+
+## 🌐 Static Site Export: Shareable Dashboards
+
+`bw` can generate **self-contained static websites** for sharing project status with stakeholders who don't have terminal access.
+
+### Interactive Wizard
+
+```bash
+bw --pages
+```
+
+Launches an interactive wizard that guides you through:
+1. **Export**: Generate the static bundle
+2. **Preview**: Local server at `http://localhost:9000` (or next available port)
+3. **Deploy**: Push to GitHub Pages with automatic repository creation
+
+### Direct Export
+
+```bash
+bw --export-pages ./bv-pages                    # Export to directory
+bw --export-pages ./bv-pages --pages-title "Sprint 42 Status"
+bw --export-pages ./bv-pages --pages-exclude-closed   # Omit closed issues
+bw --export-pages ./bv-pages --pages-exclude-history  # Omit git history
+
+# Preview an existing bundle without regenerating
+bw --preview-pages ./bv-pages                   # Serve at localhost:9000 (or next available port)
+```
+
+### Optional: Hybrid Search WASM Scorer
+
+For very large datasets, you can build an optional WASM scorer used by the static viewer.
+
+```bash
+# Build once (requires wasm-pack)
+./scripts/build_hybrid_wasm.sh
+
+# Or build during export
+BW_BUILD_HYBRID_WASM=1 bv --export-pages ./bv-pages
+```
+
+If the `wasm/` assets are missing, the viewer automatically falls back to the JS scorer.
+
+### What Gets Generated
+
+```
+./bv-pages/
+├── index.html              # Main dashboard with Alpine.js + Tailwind
+├── beads.sqlite3           # Full SQLite database (~2MB for 400+ issues)
+├── data/
+│   ├── graph_layout.json   # Pre-computed positions + metrics (~82KB)
+│   ├── meta.json           # Export metadata
+│   ├── triage.json         # Triage recommendations
+│   └── history.json        # Bead-commit correlation data
+└── vendor/
+    ├── d3.v7.min.js        # Visualization library
+    ├── force-graph.min.js  # Graph rendering
+    └── bv_graph.js         # WASM graph engine
+```
+
+### Graph Visualization: 16x Faster Render
+
+The export uses a **hybrid architecture** for instant graph loading:
+
+| Component | Size | Purpose |
+|-----------|------|---------|
+| `graph_layout.json` | ~82KB | Pre-computed node positions + graph metrics |
+| `beads.sqlite3` | ~2MB | Full issue data for detail pane, search, tables |
+
+**How it works:**
+1. Browser loads tiny `graph_layout.json` first (~100ms over broadband)
+2. Graph renders instantly with pre-computed `fx`/`fy` fixed positions
+3. SQLite loads in parallel for search and detail functionality
+4. Force simulation is completely bypassed—no jittering, no layout delay
+
+**Performance comparison:**
+
+| Metric | Without Pre-compute | With Pre-compute |
+|--------|---------------------|------------------|
+| Initial load | 4+ seconds | ~250ms |
+| Force simulation | 2+ seconds | 0ms (skipped) |
+| Graph data | 914KB (redundant) | 82KB (compact) |
+
+### Detail Pane
+
+Click any node to open a **400px sliding detail pane**:
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                              │ ╭─────────────────────────╮          │
+│                              │ │ BV-123: Auth refactor   │          │
+│       [Interactive Graph]    │ │ ─────────────────────── │          │
+│                              │ │ Priority: P1 (High)     │          │
+│             ⬤               │ │ Type: Feature           │          │
+│            /│\               │ │ Status: In Progress     │          │
+│           / │ \              │ │                         │          │
+│          ⬤  ⬤  ⬤           │ │ **Description**         │          │
+│                              │ │ Refactor auth module... │          │
+│                              │ │                         │          │
+│                              │ │ ⛔ 3 blockers           │          │
+│                              │ │ 📤 blocks 5 issues      │          │
+│                              │ ╰─────────────────────────╯          │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+**Detail pane includes:**
+- Full issue title and description (markdown rendered)
+- Priority, type, status with visual indicators
+- **Blockers count** ("⛔ 3 blockers")—issues that must complete first
+- **Blocks count** ("📤 blocks 5 issues")—downstream work waiting on this
+- PageRank, betweenness metrics (from pre-computed data)
+
+### Features
+
+- **Full-Text Search**: SQLite FTS5 powers instant search across all issue titles and descriptions. Results appear as you type—no server required.
+- **Interactive Graph**: Visualize dependencies with D3.js force-graph, featuring zoom, pan, and node selection
+- **Detail Pane**: Click any node to see full issue details with dependency info
+- **Triage View**: Same recommendations as `--robot-triage`
+- **Offline Support**: Works without network after initial load
+- **Mobile Responsive**: Adapts to phone/tablet screens with touch-friendly interactions
+
+### Technical Notes
+
+The static export uses a **hybrid architecture** combining:
+
+1. **Pure-Go SQLite** ([modernc.org/sqlite](https://modernc.org/sqlite)):
+   - No C compiler required—works on any system without CGO
+   - Cross-platform bundle generation
+   - FTS5 full-text search built-in
+
+2. **Pre-computed Graph Layout**:
+   - BFS hierarchical layout with depth-based X positioning
+   - Node positions stored as `[x, y]` pairs
+   - Metrics stored as compact 5-element arrays: `[pagerank, betweenness, inDegree, outDegree, inCycle]`
+   - ~91% size reduction vs. full graph JSON
+
+3. **WASM Graph Engine** (`bv_graph.js`):
+   - Client-side cycle detection
+   - Efficient neighbor lookups
+   - Path finding for blocker chains
+
+### Deployment Options
+
+| Platform | Command | Notes |
+|----------|---------|-------|
+| **GitHub Pages** | `bw --pages` (wizard) | Auto-creates `gh-pages` branch |
+| **Cloudflare Pages** | `bw --export-pages ./dist` + CF dashboard | Connect to git repo |
+| **Any Static Host** | `bw --export-pages ./dist` | Netlify, Vercel, S3, etc. |
+
+---
+
+## 🚨 Alerts System: Proactive Health Monitoring
+
+The Alerts System surfaces potential problems before they become blockers. It combines **drift detection** (changes from baseline) with **proactive analysis** (pattern-based warnings).
+
+### Alert Types
+
+| Type | Trigger | Severity | Example |
+|------|---------|----------|---------|
+| `stale_issue` | No updates in 30+ days | Warning | "BV-123 hasn't been touched since Oct 15" |
+| `blocking_cascade` | Issue blocks 5+ others | Critical | "AUTH-001 is blocking 8 downstream tasks" |
+| `priority_mismatch` | Low priority but high PageRank | Warning | "BV-456 has P3 but ranks #2 in PageRank" |
+| `cycle_introduced` | New circular dependency | Critical | "Cycle detected: A → B → C → A" |
+| `scope_creep` | 20%+ increase in open issues | Info | "Open issues grew from 45 to 58 this week" |
+
+### TUI Integration
+
+Press `!` to open the **Alerts Panel**:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  🚨 ALERTS (3 active)                               [!] close │
+├─────────────────────────────────────────────────────────────┤
+│  ⚠️  WARNING: bv-123 stale for 45 days                       │
+│  🔴 CRITICAL: bv-456 blocks 8 tasks (cascade risk)           │
+│  ℹ️  INFO: Open issues increased 23% this sprint             │
+├─────────────────────────────────────────────────────────────┤
+│  j/k navigate • Enter jump to issue • d dismiss • q close   │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Robot Integration
+
+```bash
+# Get all alerts as JSON
+bw --robot-alerts
+
+# Filter by severity (info, warning, critical)
+bw --robot-alerts --severity=critical
+
+# Filter by type
+bw --robot-alerts --alert-type=blocking_cascade
+
+# Filter by affected label
+bw --robot-alerts --alert-label=backend
+```
+
+### Output Schema
+
+```json
+{
+  "alerts": [
+    {
+      "type": "blocking_cascade",
+      "severity": "critical",
+      "issue_id": "bv-456",
+      "message": "Blocks 8 downstream tasks",
+      "blocked_ids": ["bv-101", "bv-102", "..."],
+      "suggested_action": "Prioritize completion or break into smaller tasks"
+    }
+  ],
+  "summary": {
+    "total": 3,
+    "critical": 1,
+    "warning": 1,
+    "info": 1
+  }
+}
+```
+
+---
+
+## 🤖 Complete CLI Reference
+## 🏢 Multi-Repository Workspace Support
+
+For monorepo and multi-package architectures, `bw` provides **workspace configuration** that unifies issues across multiple repositories into a single coherent view.
+
+### Workspace Configuration (`.bv/workspace.yaml`)
+
+```yaml
+# .bv/workspace.yaml - Multi-repo workspace definition
+name: my-workspace
+
+repos:
+  - name: api
+    path: services/api
+    prefix: "api-"        # Issues become api-AUTH-123
+    beads_path: .beads    # Optional per-repo override (defaults to .beads)
+
+  - name: web
+    path: apps/web
+    prefix: "web-"        # Issues become web-UI-456
+
+  - name: shared
+    path: packages/shared
+    prefix: "lib-"        # Issues become lib-UTIL-789
+
+discovery:
+  enabled: true
+  patterns:
+    - "*"                 # Direct children
+    - "packages/*"        # npm/pnpm workspaces
+    - "apps/*"            # Next.js/Turborepo
+    - "services/*"        # Microservices
+    - "libs/*"            # Library packages
+  exclude:
+    - node_modules
+    - vendor
+    - .git
+  max_depth: 2
+
+defaults:
+  beads_path: .beads      # Where to find beads.jsonl in each repo
+```
+
+### ID Namespacing
+
+When working across repositories, issues are automatically namespaced:
+
+| Local ID | Repo Prefix | Namespaced ID |
+|----------|-------------|---------------|
+| `AUTH-123` | `api-` | `api-AUTH-123` |
+| `UI-456` | `web-` | `web-UI-456` |
+| `UTIL-789` | `lib-` | `lib-UTIL-789` |
+
+### Cross-Repository Dependencies
+
+The workspace system enables **cross-repo blocking relationships**:
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  web-UI-456 (apps/web)                                  │
+│  "Implement OAuth login page"                           │
+│                                                         │
+│  blocks: api-AUTH-123, lib-UTIL-789                     │
+└─────────────────────────────────────────────────────────┘
+         │                      │
+         ▼                      ▼
+┌─────────────────┐    ┌─────────────────┐
+│ api-AUTH-123    │    │ lib-UTIL-789    │
+│ (services/api)  │    │ (packages/lib)  │
+│ "Auth endpoint" │    │ "Token utils"   │
+└─────────────────┘    └─────────────────┘
+```
+
+### Filtering Within a Workspace
+
+Use `--repo` to scope the view (and robot outputs) to a specific repository prefix. Matching is case-insensitive and accepts common separators (`-`, `:`, `_`); it also honors the `source_repo` field when present.
+
+### Supported Monorepo Layouts
+
+| Layout | Pattern | Example Projects |
+|--------|---------|------------------|
+| **npm/pnpm workspaces** | `packages/*` | Lerna, Turborepo |
+| **Next.js apps** | `apps/*` | Vercel monorepos |
+| **Microservices** | `services/*` | Backend platforms |
+| **Go modules** | `modules/*` | Multi-module Go |
+| **Flat** | `*` | Simple monorepos |
+
+### ID Resolution
+
+The `IDResolver` handles cross-repo references intelligently:
+
+```go
+resolver := NewIDResolver(config, "api")
+
+// From api repo context:
+resolver.Resolve("AUTH-123")      // → {Namespace: "api-", LocalID: "AUTH-123"}
+resolver.Resolve("web-UI-456")    // → {Namespace: "web-", LocalID: "UI-456"}
+resolver.IsCrossRepo("web-UI-456") // → true
+resolver.DisplayID("api-AUTH-123") // → "AUTH-123" (local, strip prefix)
+resolver.DisplayID("web-UI-456")   // → "web-UI-456" (cross-repo, keep prefix)
+```
+
+---
+
+## ⏰ Interactive Time-Travel Mode
+
+Beyond CLI diff commands, `bw` supports **interactive time-travel** within the TUI itself. This mode overlays diff badges on your issue list, letting you visually explore what changed.
+
+### Activating Time-Travel Mode
+
+Press `t` in the main list view to enter time-travel mode with a custom revision prompt:
+
+```
+┌──────────────────────────────────────────┐
+│  ⏱️  Time-Travel Mode                    │
+│                                          │
+│  Compare current state with a            │
+│  historical revision                     │
+│                                          │
+│  ⏱️  Revision: HEAD~5█                   │
+│                                          │
+│  Examples: HEAD~5, main, v1.0.0,         │
+│           2024-01-01, abc123             │
+│                                          │
+│  Press Enter to compare, Esc to cancel   │
+└──────────────────────────────────────────┘
+```
+
+For quick access, press `T` (uppercase) to instantly compare against `HEAD~5` without the prompt.
+
+### Diff Badges
+
+Once activated, issues display visual badges indicating their diff status:
+
+| Badge | Meaning | Color |
+|-------|---------|-------|
+| `[NEW]` | Issue created since baseline | Green |
+| `[CLOSED]` | Issue closed since baseline | Gray |
+| `[MODIFIED]` | Issue fields changed | Yellow |
+| `[REOPENED]` | Issue reopened since baseline | Orange |
+
+### Visual Example
+
+```
+┌────────────────────────────────────────────────────────────┐
+│  📋 ISSUES (since HEAD~5)                          58 total │
+├────────────────────────────────────────────────────────────┤
+│  [NEW]      ✨ FEAT-789  Add dark mode toggle      P2  🟢  │
+│  [NEW]      🐛 BUG-456   Fix login race condition  P1  🟢  │
+│  [MODIFIED] 📝 TASK-123  Update documentation     P3  🟡  │
+│             ✨ FEAT-100  OAuth integration        P1  🟢  │
+│  [CLOSED]   🐛 BUG-001   Memory leak in parser    P0  ⚫  │
+└────────────────────────────────────────────────────────────┘
+```
+
+### Time-Travel Summary Panel
+
+The footer shows aggregate statistics:
+
+```
+─────────────────────────────────────────────────────────────
+📊 Changes: +3 new  ✓2 closed  ~1 modified  ↺0 reopened
+Health: ↑ improving (density: -0.02, cycles: -1)
+─────────────────────────────────────────────────────────────
+```
+
+### Time-Travel Navigation
+
+| Key | Action |
+|-----|--------|
+| `t` | Enter time-travel (custom revision prompt) |
+| `T` | Quick time-travel (HEAD~5) |
+| `t` (while in time-travel) | Exit time-travel mode |
+| `n` | Jump to next changed issue |
+| `N` | Jump to previous changed issue |
+
+---
+
+## 🧪 Quality Assurance & Robustness
+## 🔄 The Zero-Friction Update Engine
+
+`bw` includes a proactive, non-intrusive update check to ensure you never miss a feature. We believe tools should maintain themselves without interrupting your flow.
+
+### Design & Implementation
+The updater (`pkg/updater/updater.go`) is architected for silence and safety:
+1.  **Non-Blocking Concurrency:** The check runs in a detached goroutine with a strict **2-second timeout**. It never delays your startup time or UI interactivity.
+2.  **Semantic Versioning:** It doesn't just match strings. A custom SemVer comparator ensures you are only notified about strictly *newer* releases, handling complex edge cases like release candidates vs. stable builds.
+3.  **Resilience:** It gracefully handles network partitions, GitHub API rate limits (403/429), and timeouts by silently failing. You will never see a crash or error log due to an update check.
+4.  **Unobtrusive Notification:** When an update is found, `bw` doesn't pop a modal. It simply renders a subtle **Update Available** indicator (`⭐`) in the footer, letting you choose when to upgrade.
+
+---
+
+## 🗂️ Data Loading & Self-Healing
+
+Reliability is key. `bw` doesn't assume a perfect environment; it actively handles common file system inconsistencies.
+
+### 1. Intelligent Path Discovery
+The loader (`pkg/loader/loader.go`) doesn't just blindly open `.beads/beads.jsonl`. It employs a priority-based discovery algorithm:
+1.  **Canonical:** Checks for `issues.jsonl` (preferred by beads upstream).
+2.  **Legacy:** Fallback to `beads.jsonl` for backward compatibility.
+3.  **Base:** Checks `beads.base.jsonl` (used by `bd` in daemon mode).
+4.  **Validation:** It skips temporary files like `*.backup` or `deletions.jsonl` to prevent displaying corrupted state.
+
+### 2. Robust Parsing
+The JSONL parser is designed to be **Lossy-Tolerant**.
+*   It uses a buffered scanner (`bufio.NewScanner`) with a generous 10MB line limit to handle massive description blobs.
+*   Malformed lines (e.g., from a merge conflict) are skipped with a warning rather than crashing the application, ensuring you can still view the readable parts of your project even during a bad git merge.
+
+---
+
+## ❓ Troubleshooting & FAQ
+
+**Q: My icons look weird / text is misaligned.**
+*   `bw` requires a terminal with **TrueColor** support and a **Nerd Font** installed.
+*   *Recommended:* [Nerd Fonts](https://www.nerdfonts.com/) (e.g., "JetBrains Mono Nerd Font" or "Hack Nerd Font").
+*   *Terminals:* Windows Terminal, iTerm2, Alacritty, Kitty, WezTerm.
+
+**Q: Live reload isn’t updating (especially on NFS/SMB/SSHFS/FUSE).**
+*   Some filesystems don’t reliably deliver filesystem events. `bw` will try to auto-detect this and switch to polling.
+*   If it still misbehaves, force polling:
+    ```bash
+    BW_FORCE_POLLING=1 bv
+    # or
+    BW_FORCE_POLL=1 bv
+    ```
+
+**Q: I see `polling …` in the footer. Is that bad?**
+No — it just means `bw` is using polling instead of filesystem events for live reload (common on remote filesystems). Polling can add a small delay before updates appear.
+
+**Q: I see `⚠ STALE` / `✗ bg …` / `⚠ worker unresponsive` / `↻ recovered` in the footer.**
+These indicators mean the background worker hasn’t produced a fresh snapshot recently (or needed to self-heal). Try `Ctrl+R`/`F5`, check filesystem permissions/health, or temporarily disable background mode (`BW_BACKGROUND_MODE=0`) to fall back to synchronous reload.
+
+**Q: I see "Cycles Detected" in the dashboard. What now?**
+A: A cycle (e.g., A → B → A) means your project logic is broken; no task can be finished first. Use the Insights Dashboard (`i`) to find the specific cycle members, then use `bd` to remove one of the dependency links (e.g., `bd unblock A --from B`).
+
+**Q: Does this work with Jira/GitHub?**
+A: `bw` is data-agnostic. The Beads data schema supports an `external_ref` field. If you populate your `.beads/beads.jsonl` file with issues from external trackers (e.g., using a custom script or sync tool), `bw` will render them alongside your local tasks. Future versions of the `bd` CLI may support native syncing, but `bw` is ready for that data today.
+
+**Q: What's the difference between "bead" and "issue"?**
+A: They're the same thing! In the Beads ecosystem, the unit of work is called a "bead" (hence the name). However, `bw` uses "issue" in many places since that's the more familiar term for most developers. The CLI flags use both interchangeably: `--robot-file-beads`, `--pages-include-closed` (issues), etc. Think of "bead" as the Beads-specific term and "issue" as the general concept.
+
+---
+
+## 🚀 Usage Guide
+
+Navigate to any project initialized with `bd init` and run:
+
+```bash
+bw
+```
+
+## 🚀 Usage Guide
+
+Navigate to any project initialized with `bd init` and run:
+
+```bash
+bw
+```
+
+### 🎓 Getting Help
+
+bw has a comprehensive built-in help system:
+
+**Quick Reference** (`?`) - Press anywhere to see keyboard shortcuts for your current view. From here, press `Space` to jump directly to the full tutorial.
+
+**Interactive Tutorial** (`` ` `` backtick) - A multi-page walkthrough covering all features:
+- Concepts: beads, dependencies, labels, priorities
+- Views: list, board, graph, tree, insights, history
+- Workflows: AI agent integration, triage, planning
+- Progress is automatically saved—resume where you left off
+
+### Keyboard Control Map
+
+| Context | Key | Action |
+| :--- | :---: | :--- |
+| **Global Navigation** | `j` / `k` | Next / Previous Item |
+| | `g` / `G` | Jump to Top / Bottom |
+| | `Ctrl+D` / `Ctrl+U` | Page Down / Up |
+| | `Tab` | Switch Focus (List ↔ Details) |
+| | `Enter` | Open / Focus Selection |
+| | `q` / `Esc` | Quit / Back |
+| **Filters** | `o` | Show **Open** Issues |
+| | `r` | Show **Ready** (Unblocked) |
+| | `c` | Show **Closed** Issues |
+| | `a` | Show **All** Issues |
+| | `/` | **Search** (Fuzzy) |
+| | `Ctrl+S` | Toggle **Search Mode** (Semantic ↔ Fuzzy) |
+| | `l` | **Label Picker** (quick filter by label) |
+| **List Sorting** | `s` | Cycle Sort Mode (Default → Created ↑ → Created ↓ → Priority → Updated) |
+| **Views** | `b` | Toggle **Kanban Board** |
+| | `i` | Toggle **Insights Dashboard** |
+| | `g` | Toggle **Graph Visualizer** |
+| | `E` | Toggle **Tree View** (parent-child hierarchy) |
+| | `a` | Toggle **Actionable Plan** |
+| | `h` | Toggle **History View** (bead-to-commit correlation) |
+| | `f` | Toggle **Flow Matrix** (cross-label dependencies) |
+| | `[` | Toggle **Label Dashboard** (label health analytics) |
+| | `]` | Toggle **Attention View** (label attention scores) |
+| **Kanban Board** | `h` / `l` | Move Between Columns |
+| | `j` / `k` | Move Within Column |
+| **Insights Dashboard** | `Tab` | Next Panel |
+| | `Shift+Tab` | Previous Panel |
+| | `e` | Toggle Explanations |
+| | `x` | Toggle Calculation Proof |
+| | `m` | Toggle Heatmap Overlay |
+| **Graph View** | `H` / `L` | Scroll Left / Right |
+| | `Ctrl+D` / `Ctrl+U` | Page Down / Up |
+| **Tree View** | `j` / `k` | Move cursor down / up |
+| | `h` / `l` | Collapse/parent or Expand/child |
+| | `Enter` / `Space` | Toggle expand/collapse |
+| | `o` / `O` | Expand all / Collapse all |
+| | `g` / `G` | Jump to top / bottom |
+| **Time-Travel & Analysis** | `t` | Time-Travel Mode (custom revision) |
+| | `T` | Quick Time-Travel (HEAD~5) |
+| | `p` | Toggle Priority Hints Overlay |
+| **Actions** | `x` | Export to Markdown File |
+| | `C` | Copy Issue to Clipboard |
+| | `O` | Open in Editor |
+| **Help & Learning** | `?` | Toggle Help Overlay (keyboard shortcuts) |
+| | `` ` `` | Open Interactive Tutorial (progress saved) |
+| **Global** | `;` | Toggle Shortcuts Sidebar |
+| | `!` | Toggle **Alerts Panel** (proactive warnings) |
+| | `'` | Recipe Picker |
+| | `w` | Repo Picker (workspace mode) |
+
+---
+
+## 🛠️ Configuration
+
+`bw` automatically detects your terminal capabilities to render the best possible UI. It looks for `.beads/beads.jsonl` in your current directory.
+
+### Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `BEADS_DIR` | Custom beads directory path. When set, overrides the default `.beads` directory lookup. | `.beads` in cwd |
+| `BW_BACKGROUND_MODE` | Experimental: enable background snapshot loading for live reload in the TUI (`1`/`0`). | (disabled) |
+| `BW_FORCE_POLLING` | Force polling-based live reload (useful on NFS/SMB/SSHFS/FUSE or any setup where filesystem events are unreliable) (`1`/`0`). | (auto) |
+| `BW_FORCE_POLL` | Alias for `BW_FORCE_POLLING`. | (auto) |
+| `BW_DEBOUNCE_MS` | Debounce window (milliseconds) for live reload events in background mode. | `200` |
+| `BW_CHANNEL_BUFFER` | Background worker message buffer size (worker → UI). | `8` |
+| `BW_HEARTBEAT_INTERVAL_S` | Background worker heartbeat interval (seconds). | `5` |
+| `BW_WATCHDOG_INTERVAL_S` | Background worker watchdog interval (seconds). | `10` |
+| `BW_FRESHNESS_WARN_S` | Snapshot staleness warning threshold (seconds). | `30` |
+| `BW_FRESHNESS_STALE_S` | Snapshot staleness critical threshold (seconds). | `120` |
+| `BW_MAX_LINE_SIZE_MB` | Max JSONL line size in MB (lines larger than this are skipped with a warning). | `10` |
+| `BW_SKIP_PHASE2` | Skip Phase 2 graph metrics (centrality, cycles, critical path) (`1`/`0`). | (disabled) |
+| `BW_PHASE2_TIMEOUT_S` | Override per-metric Phase 2 timeouts (seconds). | (size-based) |
+| `BW_SEMANTIC_EMBEDDER` | Semantic embedding provider for `bw --search` and TUI semantic mode. | `hash` |
+| `BW_SEMANTIC_DIM` | Embedding dimension for semantic search index. | `384` |
+| `BW_SEMANTIC_MODEL` | Provider-specific model name for semantic search (optional). | (empty) |
+
+**Use cases for `BEADS_DIR`:**
+- **Monorepos**: Single beads directory shared across multiple packages
+- **Non-standard layouts**: Projects where `.beads` isn't in the working directory
+- **Testing**: Point to test fixtures without changing directory
+- **Cross-directory access**: View beads from anywhere on the filesystem
+
+```bash
+# Example: Point to a different beads directory
+BEADS_DIR=/path/to/shared/beads bv
+
+# Example: Use in monorepo
+export BEADS_DIR=$(git rev-parse --show-toplevel)/.beads
+```
+
+### Experimental: Background Mode (Live Reload)
+
+The TUI can run live reload using an **experimental background snapshot worker** (moves file I/O + analysis off the UI thread).
+
+**Enable (opt-in):**
+```bash
+BW_BACKGROUND_MODE=1 bv
+bw --background-mode
+```
+
+**Disable / rollback:**
+```bash
+BW_BACKGROUND_MODE=0 bv
+bw --no-background-mode
+```
+
+**User config file (when neither CLI flags nor `BW_BACKGROUND_MODE` are set):**
+```yaml
+# ~/.config/bv/config.yaml
+experimental:
+  background_mode: true
+```
+
+**Precedence:** CLI flags → `BW_BACKGROUND_MODE` → `~/.config/bv/config.yaml`.
+
+**Migration plan (high level):**
+- Phase A (now): opt-in background mode, sync remains default.
+- Phase B: broaden rollout; keep explicit rollback (`--no-background-mode` / `BW_BACKGROUND_MODE=0`).
+- Phase C: flip default when stable; keep sync as fallback for a period.
+- Phase D: remove legacy sync reload path after deprecation window.
+
+**Monitoring plan:** no automatic telemetry today; rely on CI + regression tests and user reports during Phase A/B.
+
+### Status Indicators (Background Mode + Live Reload)
+
+When background mode or live reload is enabled, the footer may display these indicators:
+
+- `◌ metrics…` — Phase 2 metrics are still computing; the UI renders immediately with Phase 1 data.
+- `⚠ 45s ago` — snapshot age warning (data is getting stale).
+- `⚠ STALE: 3m ago` — snapshot is stale.
+- `✗ bg <phase> (3x)` — background worker hit repeated errors building snapshots (phase shown; retry count in parentheses).
+- `↻ recovered xN` — watchdog recovered the background worker N times (transient failures/self-healing).
+- `⚠ worker unresponsive` — watchdog detected the worker is stuck and is recovering.
+- `polling …` — live reload is using polling instead of filesystem events (common on remote filesystems); changes may appear with a small delay.
+
+Tip: `Ctrl+R` (or `F5`) forces a refresh.
+
+### Visual Theme
+The UI uses a visually distinct, high-contrast theme inspired by Dracula Principles to ensure readability.
+*   **Primary:** `#BD93F9` (Purple)
+*   **Status Open:** `#50FA7B` (Green)
+*   **Status Blocked:** `#FF5555` (Red)
