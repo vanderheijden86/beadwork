@@ -7,144 +7,139 @@ import (
 
 	"github.com/vanderheijden86/beadwork/pkg/model"
 
-	"github.com/charmbracelet/bubbles/textarea"
-	"github.com/charmbracelet/bubbles/textinput"
+	"github.com/charmbracelet/huh"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
 
-// EditFieldType defines the type of edit field
-type EditFieldType int
-
-const (
-	EditFieldText EditFieldType = iota
-	EditFieldTextArea
-	EditFieldSelect
-)
-
-// EditField represents a single editable field
-type EditField struct {
-	Label    string
-	Key      string // field name for bd CLI (title, status, priority, etc.)
-	Type     EditFieldType
-	Input    textinput.Model // for text fields
-	TextArea textarea.Model  // for textarea fields
-	Options  []string        // for select fields
-	Selected int             // current selection index for select fields
-	Original string          // original value for dirty detection
-}
-
-// EditModal provides field-by-field issue editing
+// EditModal provides field-by-field issue editing using huh forms
 type EditModal struct {
-	fields       []EditField
-	focusedField int
+	form         *huh.Form
+	theme        Theme
+	issueID      string
+	isCreateMode bool
 	width        int
 	height       int
-	theme        Theme
-	issueID      string // empty for create mode
-	isCreateMode bool
-	dirty        bool   // true if any field changed from original
+
+	// Field value pointers (huh binds to these)
+	title       string
+	status      string
+	priority    string
+	issueType   string
+	assignee    string
+	labels      string
+	description string
+	notes       string
+
+	// Original values for dirty detection (update mode only)
+	originals map[string]string
+
+	// initCmd stores the tea.Cmd from form.Init() called during construction.
+	// Returned by Init() for callers that can propagate cmds.
+	initCmd tea.Cmd
+
 	saveRequested   bool
 	cancelRequested bool
 }
 
 // NewEditModal creates an edit modal pre-populated from an existing issue
 func NewEditModal(issue *model.Issue, theme Theme) EditModal {
-	fields := []EditField{
-		makeTextField("Title", "title", issue.Title, theme),
-		makeSelectField("Status", "status", string(issue.Status), getStatusOptions(), theme),
-		makeSelectField("Priority", "priority", formatPriority(issue.Priority), getPriorityOptions(), theme),
-		makeSelectField("Type", "type", string(issue.IssueType), getTypeOptions(), theme),
-		makeTextField("Assignee", "assignee", issue.Assignee, theme),
-		makeTextField("Labels", "labels", strings.Join(issue.Labels, ", "), theme),
-		makeTextAreaField("Description", "description", issue.Description, theme),
-		makeTextAreaField("Notes", "notes", issue.Notes, theme),
+	m := EditModal{
+		theme:       theme,
+		issueID:     issue.ID,
+		title:       issue.Title,
+		status:      string(issue.Status),
+		priority:    formatPriority(issue.Priority),
+		issueType:   string(issue.IssueType),
+		assignee:    issue.Assignee,
+		labels:      strings.Join(issue.Labels, ", "),
+		description: issue.Description,
+		notes:       issue.Notes,
 	}
 
-	return EditModal{
-		fields:       fields,
-		focusedField: 0,
-		theme:        theme,
-		issueID:      issue.ID,
-		isCreateMode: false,
+	m.originals = map[string]string{
+		"title":       m.title,
+		"status":      m.status,
+		"priority":    m.priority,
+		"type":        m.issueType,
+		"assignee":    m.assignee,
+		"labels":      m.labels,
+		"description": m.description,
+		"notes":       m.notes,
 	}
+
+	m.form = buildEditForm(&m)
+	m.initCmd = m.form.Init()
+	return m
 }
 
 // NewCreateModal creates an edit modal with defaults for creating a new issue
 func NewCreateModal(theme Theme) EditModal {
-	fields := []EditField{
-		makeTextField("Title", "title", "", theme),
-		makeSelectField("Status", "status", "open", getStatusOptions(), theme),
-		makeSelectField("Priority", "priority", "P2", getPriorityOptions(), theme),
-		makeSelectField("Type", "type", "task", getTypeOptions(), theme),
-		makeTextField("Assignee", "assignee", "", theme),
-		makeTextField("Labels", "labels", "", theme),
-		makeTextAreaField("Description", "description", "", theme),
-		makeTextAreaField("Notes", "notes", "", theme),
-	}
-
-	// Focus the title field's input
-	fields[0].Input.Focus()
-
-	return EditModal{
-		fields:       fields,
-		focusedField: 0,
+	m := EditModal{
 		theme:        theme,
 		isCreateMode: true,
+		priority:     "P2",
+		issueType:    "task",
 	}
+
+	m.form = buildCreateForm(&m)
+	m.initCmd = m.form.Init()
+	return m
 }
 
-// makeTextField creates a text input field
-func makeTextField(label, key, value string, theme Theme) EditField {
-	ti := textinput.New()
-	ti.SetValue(value)
-	ti.CharLimit = 200
-	ti.Width = 50
-
-	return EditField{
-		Label:    label,
-		Key:      key,
-		Type:     EditFieldText,
-		Input:    ti,
-		Original: value,
-	}
+func buildEditForm(m *EditModal) *huh.Form {
+	return huh.NewForm(
+		huh.NewGroup(
+			huh.NewInput().Title("Title").Value(&m.title),
+			huh.NewSelect[string]().Title("Status").
+				Options(makeOptions(getStatusOptions())...).
+				Value(&m.status),
+			huh.NewSelect[string]().Title("Priority").
+				Options(makeOptions(getPriorityOptions())...).
+				Value(&m.priority),
+			huh.NewSelect[string]().Title("Type").
+				Options(makeOptions(getTypeOptions())...).
+				Value(&m.issueType),
+			huh.NewInput().Title("Assignee").Value(&m.assignee),
+			huh.NewInput().Title("Labels").Value(&m.labels),
+		),
+		huh.NewGroup(
+			huh.NewText().Title("Description").Value(&m.description).Lines(5),
+			huh.NewText().Title("Notes").Value(&m.notes).Lines(3),
+		),
+	).WithTheme(huh.ThemeDracula()).
+		WithShowHelp(true).
+		WithShowErrors(true)
 }
 
-// makeTextAreaField creates a textarea field
-func makeTextAreaField(label, key, value string, theme Theme) EditField {
-	ta := textarea.New()
-	ta.SetValue(value)
-	ta.SetWidth(50)
-	ta.SetHeight(3)
-	ta.CharLimit = 5000
-
-	return EditField{
-		Label:    label,
-		Key:      key,
-		Type:     EditFieldTextArea,
-		TextArea: ta,
-		Original: value,
-	}
+func buildCreateForm(m *EditModal) *huh.Form {
+	return huh.NewForm(
+		huh.NewGroup(
+			huh.NewInput().Title("Title").Value(&m.title),
+			huh.NewSelect[string]().Title("Priority").
+				Options(makeOptions(getPriorityOptions())...).
+				Value(&m.priority),
+			huh.NewSelect[string]().Title("Type").
+				Options(makeOptions(getTypeOptions())...).
+				Value(&m.issueType),
+			huh.NewInput().Title("Assignee").Value(&m.assignee),
+			huh.NewInput().Title("Labels").Value(&m.labels),
+		),
+		huh.NewGroup(
+			huh.NewText().Title("Description").Value(&m.description).Lines(5),
+			huh.NewText().Title("Notes").Value(&m.notes).Lines(3),
+		),
+	).WithTheme(huh.ThemeDracula()).
+		WithShowHelp(true).
+		WithShowErrors(true)
 }
 
-// makeSelectField creates a select field
-func makeSelectField(label, key, value string, options []string, theme Theme) EditField {
-	selected := 0
-	for i, opt := range options {
-		if opt == value {
-			selected = i
-			break
-		}
+func makeOptions(values []string) []huh.Option[string] {
+	opts := make([]huh.Option[string], len(values))
+	for i, v := range values {
+		opts[i] = huh.NewOption(v, v)
 	}
-
-	return EditField{
-		Label:    label,
-		Key:      key,
-		Type:     EditFieldSelect,
-		Options:  options,
-		Selected: selected,
-		Original: value,
-	}
+	return opts
 }
 
 // getStatusOptions returns the list of valid status values
@@ -172,132 +167,45 @@ func parsePriority(s string) int {
 	return 2 // default
 }
 
+// Init returns the stored init command from form construction.
+// The form is already initialized during NewEditModal/NewCreateModal;
+// this method allows callers that can propagate tea.Cmd to do so.
+func (m EditModal) Init() tea.Cmd {
+	return m.initCmd
+}
+
 // Update handles input for the edit modal
 func (m EditModal) Update(msg tea.Msg) (EditModal, tea.Cmd) {
-	var cmd tea.Cmd
-	var cmds []tea.Cmd
-
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
+		case "ctrl+c":
+			return m, tea.Quit
 		case "ctrl+s":
 			m.saveRequested = true
 			return m, nil
-
 		case "esc":
 			m.cancelRequested = true
 			return m, nil
-
-		case "tab":
-			// Move to next field
-			m.fields[m.focusedField] = m.blurField(m.fields[m.focusedField])
-			m.focusedField = (m.focusedField + 1) % len(m.fields)
-			m.fields[m.focusedField] = m.focusField(m.fields[m.focusedField])
-			return m, nil
-
-		case "shift+tab":
-			// Move to previous field
-			m.fields[m.focusedField] = m.blurField(m.fields[m.focusedField])
-			m.focusedField = (m.focusedField - 1 + len(m.fields)) % len(m.fields)
-			m.fields[m.focusedField] = m.focusField(m.fields[m.focusedField])
-			return m, nil
-
-		case "left", "h":
-			// For select fields, cycle left
-			if m.fields[m.focusedField].Type == EditFieldSelect {
-				field := &m.fields[m.focusedField]
-				field.Selected = (field.Selected - 1 + len(field.Options)) % len(field.Options)
-				m.updateDirtyFlag()
-				return m, nil
-			}
-
-		case "right", "l":
-			// For select fields, cycle right
-			if m.fields[m.focusedField].Type == EditFieldSelect {
-				field := &m.fields[m.focusedField]
-				field.Selected = (field.Selected + 1) % len(field.Options)
-				m.updateDirtyFlag()
-				return m, nil
-			}
-		}
-
-		// Pass key to focused field
-		field := &m.fields[m.focusedField]
-		switch field.Type {
-		case EditFieldText:
-			field.Input, cmd = field.Input.Update(msg)
-			cmds = append(cmds, cmd)
-		case EditFieldTextArea:
-			field.TextArea, cmd = field.TextArea.Update(msg)
-			cmds = append(cmds, cmd)
-		}
-		m.updateDirtyFlag()
-	}
-
-	return m, tea.Batch(cmds...)
-}
-
-// focusField sets focus on the given field
-func (m EditModal) focusField(field EditField) EditField {
-	switch field.Type {
-	case EditFieldText:
-		field.Input.Focus()
-	case EditFieldTextArea:
-		field.TextArea.Focus()
-	}
-	return field
-}
-
-// blurField removes focus from the given field
-func (m EditModal) blurField(field EditField) EditField {
-	switch field.Type {
-	case EditFieldText:
-		field.Input.Blur()
-	case EditFieldTextArea:
-		field.TextArea.Blur()
-	}
-	return field
-}
-
-// updateDirtyFlag checks if any field differs from its original value
-func (m *EditModal) updateDirtyFlag() {
-	m.dirty = false
-	for _, field := range m.fields {
-		if m.getCurrentValue(field) != field.Original {
-			m.dirty = true
-			break
 		}
 	}
-}
 
-// getCurrentValue returns the current value of a field as a string
-func (m EditModal) getCurrentValue(field EditField) string {
-	switch field.Type {
-	case EditFieldText:
-		return field.Input.Value()
-	case EditFieldTextArea:
-		return field.TextArea.Value()
-	case EditFieldSelect:
-		if field.Selected >= 0 && field.Selected < len(field.Options) {
-			return field.Options[field.Selected]
-		}
-		return ""
+	model, cmd := m.form.Update(msg)
+	m.form = model.(*huh.Form)
+
+	// Check if form was completed (user navigated past all fields and submitted)
+	if m.form.State == huh.StateCompleted {
+		m.saveRequested = true
 	}
-	return ""
+
+	return m, cmd
 }
 
 // View renders the edit modal
 func (m EditModal) View() string {
 	r := m.theme.Renderer
 
-	// Calculate box width based on terminal width
-	boxWidth := m.width - 10
-	if boxWidth < 60 {
-		boxWidth = 60
-	}
-	if boxWidth > 80 {
-		boxWidth = 80
-	}
+	formView := m.form.View()
 
 	// Modal header
 	headerStyle := r.NewStyle().
@@ -311,85 +219,19 @@ func (m EditModal) View() string {
 		title = fmt.Sprintf("Edit Issue: %s", m.issueID)
 	}
 
+	boxWidth := m.width - 10
+	if boxWidth < 60 {
+		boxWidth = 60
+	}
+	if boxWidth > 80 {
+		boxWidth = 80
+	}
+
 	var content strings.Builder
 	content.WriteString(headerStyle.Render(title))
 	content.WriteString("\n\n")
+	content.WriteString(formView)
 
-	// Render each field
-	labelStyle := r.NewStyle().
-		Foreground(m.theme.Secondary).
-		Width(12).
-		Align(lipgloss.Right)
-
-	focusedLabelStyle := r.NewStyle().
-		Foreground(m.theme.Primary).
-		Bold(true).
-		Width(12).
-		Align(lipgloss.Right)
-
-	selectStyle := r.NewStyle().
-		Foreground(m.theme.Primary)
-
-	for i, field := range m.fields {
-		isFocused := i == m.focusedField
-
-		// Render label
-		var labelStr string
-		if isFocused {
-			labelStr = focusedLabelStyle.Render(field.Label + ":")
-		} else {
-			labelStr = labelStyle.Render(field.Label + ":")
-		}
-		content.WriteString(labelStr)
-		content.WriteString(" ")
-
-		// Render field value
-		switch field.Type {
-		case EditFieldText:
-			content.WriteString(field.Input.View())
-
-		case EditFieldTextArea:
-			taView := field.TextArea.View()
-			// Indent textarea lines
-			lines := strings.Split(taView, "\n")
-			for idx, line := range lines {
-				if idx > 0 {
-					content.WriteString(strings.Repeat(" ", 13)) // indent to match label width
-				}
-				content.WriteString(line)
-				if idx < len(lines)-1 {
-					content.WriteString("\n")
-				}
-			}
-
-		case EditFieldSelect:
-			val := field.Options[field.Selected]
-			if isFocused {
-				content.WriteString(selectStyle.Render(fmt.Sprintf("< %s >", val)))
-			} else {
-				content.WriteString(val)
-			}
-		}
-
-		content.WriteString("\n")
-		if field.Type == EditFieldTextArea {
-			content.WriteString("\n") // Extra spacing after textarea
-		}
-	}
-
-	// Instructions
-	content.WriteString("\n")
-	subtextStyle := r.NewStyle().
-		Foreground(m.theme.Subtext).
-		Italic(true)
-
-	instructions := "[Tab] Next field   [Ctrl+S] Save   [Esc] Cancel"
-	if m.fields[m.focusedField].Type == EditFieldSelect {
-		instructions = "[←/→] Change   [Tab] Next field   [Ctrl+S] Save   [Esc] Cancel"
-	}
-	content.WriteString(subtextStyle.Render(instructions))
-
-	// Render modal with border
 	boxStyle := r.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(m.theme.Primary).
@@ -404,14 +246,24 @@ func (m EditModal) View() string {
 func (m *EditModal) SetSize(width, height int) {
 	m.width = width
 	m.height = height
+
+	boxWidth := width - 10
+	if boxWidth < 60 {
+		boxWidth = 60
+	}
+	if boxWidth > 80 {
+		boxWidth = 80
+	}
+	// Account for box padding (2 on each side) and border (1 on each side)
+	m.form = m.form.WithWidth(boxWidth - 6)
 }
 
-// IsSaveRequested returns true if ctrl+s was pressed
+// IsSaveRequested returns true if save was requested
 func (m EditModal) IsSaveRequested() bool {
 	return m.saveRequested
 }
 
-// IsCancelRequested returns true if esc was pressed
+// IsCancelRequested returns true if cancel was requested
 func (m EditModal) IsCancelRequested() bool {
 	return m.cancelRequested
 }
@@ -420,20 +272,27 @@ func (m EditModal) IsCancelRequested() bool {
 func (m EditModal) BuildUpdateArgs() map[string]string {
 	args := make(map[string]string)
 
-	for _, field := range m.fields {
-		current := m.getCurrentValue(field)
-		if current != field.Original {
-			key := field.Key
-			// Convert priority display format to bd format
+	fields := map[string]string{
+		"title":       m.title,
+		"status":      m.status,
+		"priority":    m.priority,
+		"type":        m.issueType,
+		"assignee":    m.assignee,
+		"labels":      m.labels,
+		"description": m.description,
+		"notes":       m.notes,
+	}
+
+	for key, val := range fields {
+		if orig, ok := m.originals[key]; ok && val != orig {
 			if key == "priority" {
-				args[key] = fmt.Sprintf("%d", parsePriority(current))
-			} else {
-				// bd update uses --set-labels (not --labels)
-				if key == "labels" {
-					key = "set-labels"
-				}
-				args[key] = current
+				val = fmt.Sprintf("%d", parsePriority(val))
 			}
+			// bd update uses --set-labels (not --labels)
+			if key == "labels" {
+				key = "set-labels"
+			}
+			args[key] = val
 		}
 	}
 
@@ -444,20 +303,22 @@ func (m EditModal) BuildUpdateArgs() map[string]string {
 func (m EditModal) BuildCreateArgs() map[string]string {
 	args := make(map[string]string)
 
-	for _, field := range m.fields {
-		current := m.getCurrentValue(field)
-		if current != "" {
-			key := field.Key
-			// bd create has no --status flag (issues are always created as open)
-			if key == "status" {
-				continue
-			}
-			// Convert priority display format to bd format
+	fields := map[string]string{
+		"title":       m.title,
+		"priority":    m.priority,
+		"type":        m.issueType,
+		"assignee":    m.assignee,
+		"labels":      m.labels,
+		"description": m.description,
+		"notes":       m.notes,
+	}
+
+	for key, val := range fields {
+		if val != "" {
 			if key == "priority" {
-				args[key] = fmt.Sprintf("%d", parsePriority(current))
-			} else {
-				args[key] = current
+				val = fmt.Sprintf("%d", parsePriority(val))
 			}
+			args[key] = val
 		}
 	}
 

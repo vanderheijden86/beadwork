@@ -3215,6 +3215,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.editModal = NewEditModal(issue, m.theme)
 						m.editModal.SetSize(m.width, m.height)
 						m.showEditModal = true
+						return m, m.editModal.Init()
 					}
 					return m, nil
 				}
@@ -3225,7 +3226,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.editModal = NewCreateModal(m.theme)
 				m.editModal.SetSize(m.width, m.height)
 				m.showEditModal = true
-				return m, nil
+				return m, m.editModal.Init()
 
 			case "[", "f3":
 				if m.focused == focusTree && msg.String() == "[" {

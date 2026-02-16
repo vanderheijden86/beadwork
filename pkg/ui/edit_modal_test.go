@@ -32,27 +32,65 @@ func TestNewEditModal_PopulatesFromIssue(t *testing.T) {
 	if modal.isCreateMode {
 		t.Error("Expected edit mode, got create mode")
 	}
+	if modal.title != "Test Issue" {
+		t.Errorf("Expected title %q, got %q", "Test Issue", modal.title)
+	}
+	if modal.status != "in_progress" {
+		t.Errorf("Expected status %q, got %q", "in_progress", modal.status)
+	}
+	if modal.priority != "P1" {
+		t.Errorf("Expected priority %q, got %q", "P1", modal.priority)
+	}
+	if modal.issueType != "bug" {
+		t.Errorf("Expected type %q, got %q", "bug", modal.issueType)
+	}
+	if modal.assignee != "alice" {
+		t.Errorf("Expected assignee %q, got %q", "alice", modal.assignee)
+	}
+	if modal.labels != "frontend, urgent" {
+		t.Errorf("Expected labels %q, got %q", "frontend, urgent", modal.labels)
+	}
+	if modal.description != "A test description" {
+		t.Errorf("Expected description %q, got %q", "A test description", modal.description)
+	}
+	if modal.notes != "Some notes" {
+		t.Errorf("Expected notes %q, got %q", "Some notes", modal.notes)
+	}
+}
 
-	// Check field values
-	expectedValues := map[string]string{
-		"title":       "Test Issue",
-		"status":      "in_progress",
-		"priority":    "P1",
-		"type":        "bug",
-		"assignee":    "alice",
-		"labels":      "frontend, urgent",
-		"description": "A test description",
-		"notes":       "Some notes",
+func TestNewEditModal_StoresOriginals(t *testing.T) {
+	theme := DefaultTheme(lipgloss.DefaultRenderer())
+	issue := &model.Issue{
+		ID:        "test-123",
+		Title:     "Original Title",
+		Status:    model.StatusOpen,
+		Priority:  2,
+		IssueType: model.TypeTask,
+		Assignee:  "alice",
+		Labels:    []string{"frontend"},
 	}
 
-	for _, field := range modal.fields {
-		expected := expectedValues[field.Key]
-		current := modal.getCurrentValue(field)
-		if current != expected {
-			t.Errorf("Field %s: expected %q, got %q", field.Key, expected, current)
+	modal := NewEditModal(issue, theme)
+
+	expected := map[string]string{
+		"title":       "Original Title",
+		"status":      "open",
+		"priority":    "P2",
+		"type":        "task",
+		"assignee":    "alice",
+		"labels":      "frontend",
+		"description": "",
+		"notes":       "",
+	}
+
+	for key, want := range expected {
+		got, ok := modal.originals[key]
+		if !ok {
+			t.Errorf("Missing original for key %q", key)
+			continue
 		}
-		if field.Original != expected {
-			t.Errorf("Field %s original: expected %q, got %q", field.Key, expected, field.Original)
+		if got != want {
+			t.Errorf("Original %q: expected %q, got %q", key, want, got)
 		}
 	}
 }
@@ -67,99 +105,20 @@ func TestNewCreateModal_HasDefaults(t *testing.T) {
 	if modal.issueID != "" {
 		t.Errorf("Expected empty issueID, got %s", modal.issueID)
 	}
-
-	// Check defaults
-	expectedDefaults := map[string]string{
-		"title":       "",
-		"status":      "open",
-		"priority":    "P2",
-		"type":        "task",
-		"assignee":    "",
-		"labels":      "",
-		"description": "",
-		"notes":       "",
+	if modal.title != "" {
+		t.Errorf("Expected empty title, got %q", modal.title)
 	}
-
-	for _, field := range modal.fields {
-		expected := expectedDefaults[field.Key]
-		current := modal.getCurrentValue(field)
-		if current != expected {
-			t.Errorf("Field %s: expected %q, got %q", field.Key, expected, current)
-		}
+	if modal.priority != "P2" {
+		t.Errorf("Expected priority %q, got %q", "P2", modal.priority)
 	}
-}
-
-func TestEditModal_TabNavigation(t *testing.T) {
-	theme := DefaultTheme(lipgloss.DefaultRenderer())
-	modal := NewCreateModal(theme)
-
-	if modal.focusedField != 0 {
-		t.Errorf("Expected initial focus on field 0, got %d", modal.focusedField)
+	if modal.issueType != "task" {
+		t.Errorf("Expected type %q, got %q", "task", modal.issueType)
 	}
-
-	// Tab forward
-	modal, _ = modal.Update(tea.KeyMsg{Type: tea.KeyTab})
-	if modal.focusedField != 1 {
-		t.Errorf("After tab: expected field 1, got %d", modal.focusedField)
+	if modal.assignee != "" {
+		t.Errorf("Expected empty assignee, got %q", modal.assignee)
 	}
-
-	// Tab forward again
-	modal, _ = modal.Update(tea.KeyMsg{Type: tea.KeyTab})
-	if modal.focusedField != 2 {
-		t.Errorf("After 2nd tab: expected field 2, got %d", modal.focusedField)
-	}
-
-	// Shift+Tab backward
-	modal, _ = modal.Update(tea.KeyMsg{Type: tea.KeyShiftTab})
-	if modal.focusedField != 1 {
-		t.Errorf("After shift+tab: expected field 1, got %d", modal.focusedField)
-	}
-
-	// Tab wraps around
-	for i := 0; i < len(modal.fields); i++ {
-		modal, _ = modal.Update(tea.KeyMsg{Type: tea.KeyTab})
-	}
-	if modal.focusedField != 1 {
-		t.Errorf("After full cycle: expected field 1, got %d", modal.focusedField)
-	}
-}
-
-func TestEditModal_SelectFieldNavigation(t *testing.T) {
-	theme := DefaultTheme(lipgloss.DefaultRenderer())
-	modal := NewCreateModal(theme)
-
-	// Navigate to status field (index 1)
-	modal, _ = modal.Update(tea.KeyMsg{Type: tea.KeyTab})
-
-	statusField := &modal.fields[modal.focusedField]
-	if statusField.Key != "status" {
-		t.Fatalf("Expected to focus status field, got %s", statusField.Key)
-	}
-
-	initialSelected := statusField.Selected
-	if modal.getCurrentValue(*statusField) != "open" {
-		t.Errorf("Expected initial status 'open', got %s", modal.getCurrentValue(*statusField))
-	}
-
-	// Right arrow should change selection
-	modal, _ = modal.Update(tea.KeyMsg{Type: tea.KeyRight})
-	statusField = &modal.fields[modal.focusedField]
-	if statusField.Selected == initialSelected {
-		t.Error("Right arrow should change selection")
-	}
-
-	// Left arrow should change back
-	modal, _ = modal.Update(tea.KeyMsg{Type: tea.KeyLeft})
-	statusField = &modal.fields[modal.focusedField]
-	if statusField.Selected != initialSelected {
-		t.Error("Left arrow should change selection back")
-	}
-
-	// h/l keys should work too
-	modal, _ = modal.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'l'}})
-	statusField = &modal.fields[modal.focusedField]
-	if statusField.Selected == initialSelected {
-		t.Error("'l' key should change selection")
+	if modal.labels != "" {
+		t.Errorf("Expected empty labels, got %q", modal.labels)
 	}
 }
 
@@ -179,9 +138,9 @@ func TestEditModal_BuildUpdateArgs_OnlyChanged(t *testing.T) {
 
 	modal := NewEditModal(issue, theme)
 
-	// Change only title and priority
-	modal.fields[0].Input.SetValue("New Title")
-	modal.fields[2].Selected = 0 // Change priority to P0
+	// Change only title and priority via bound fields
+	modal.title = "New Title"
+	modal.priority = "P0"
 
 	args := modal.BuildUpdateArgs()
 
@@ -207,14 +166,43 @@ func TestEditModal_BuildUpdateArgs_OnlyChanged(t *testing.T) {
 	}
 }
 
+func TestEditModal_BuildUpdateArgs_LabelsUsesSetLabels(t *testing.T) {
+	theme := DefaultTheme(lipgloss.DefaultRenderer())
+	issue := &model.Issue{
+		ID:        "test-123",
+		Title:     "Test",
+		Status:    model.StatusOpen,
+		Priority:  2,
+		IssueType: model.TypeTask,
+		Labels:    []string{"frontend"},
+	}
+
+	modal := NewEditModal(issue, theme)
+
+	// Change labels via bound field
+	modal.labels = "frontend, backend"
+
+	args := modal.BuildUpdateArgs()
+
+	// Should use "set-labels" key (not "labels") for bd update
+	if _, exists := args["labels"]; exists {
+		t.Error("BuildUpdateArgs should not use 'labels' key, should use 'set-labels'")
+	}
+	if val, exists := args["set-labels"]; !exists {
+		t.Error("BuildUpdateArgs should use 'set-labels' key for label changes")
+	} else if val != "frontend, backend" {
+		t.Errorf("Expected 'frontend, backend', got %q", val)
+	}
+}
+
 func TestEditModal_BuildCreateArgs_AllNonEmpty(t *testing.T) {
 	theme := DefaultTheme(lipgloss.DefaultRenderer())
 	modal := NewCreateModal(theme)
 
-	// Set some fields
-	modal.fields[0].Input.SetValue("New Issue")
-	modal.fields[4].Input.SetValue("bob")   // assignee
-	modal.fields[5].Input.SetValue("urgent") // labels
+	// Set fields via bound values
+	modal.title = "New Issue"
+	modal.assignee = "bob"
+	modal.labels = "urgent"
 
 	args := modal.BuildCreateArgs()
 
@@ -332,56 +320,34 @@ func TestEditModal_ViewContainsTitle(t *testing.T) {
 	}
 }
 
-func TestEditModal_BuildUpdateArgs_LabelsUsesSetLabels(t *testing.T) {
+func TestEditModal_CtrlC_ReturnsQuit(t *testing.T) {
+	theme := DefaultTheme(lipgloss.DefaultRenderer())
+	modal := NewCreateModal(theme)
+
+	_, cmd := modal.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+
+	// ctrl+c should return tea.Quit command
+	if cmd == nil {
+		t.Error("Ctrl+C should return a non-nil command (tea.Quit)")
+	}
+}
+
+func TestEditModal_BuildUpdateArgs_NoChanges(t *testing.T) {
 	theme := DefaultTheme(lipgloss.DefaultRenderer())
 	issue := &model.Issue{
 		ID:        "test-123",
-		Title:     "Test",
+		Title:     "Original Title",
 		Status:    model.StatusOpen,
 		Priority:  2,
 		IssueType: model.TypeTask,
-		Labels:    []string{"frontend"},
 	}
 
 	modal := NewEditModal(issue, theme)
 
-	// Change labels
-	for i := range modal.fields {
-		if modal.fields[i].Key == "labels" {
-			modal.fields[i].Input.SetValue("frontend, backend")
-			break
-		}
-	}
-
+	// No changes made
 	args := modal.BuildUpdateArgs()
 
-	// Should use "set-labels" key (not "labels") for bd update
-	if _, exists := args["labels"]; exists {
-		t.Error("BuildUpdateArgs should not use 'labels' key, should use 'set-labels'")
-	}
-	if val, exists := args["set-labels"]; !exists {
-		t.Error("BuildUpdateArgs should use 'set-labels' key for label changes")
-	} else if val != "frontend, backend" {
-		t.Errorf("Expected 'frontend, backend', got %q", val)
-	}
-}
-
-func TestEditModal_TextInputUpdates(t *testing.T) {
-	theme := DefaultTheme(lipgloss.DefaultRenderer())
-	modal := NewCreateModal(theme)
-
-	// Focus is on title field initially
-	if modal.fields[0].Key != "title" {
-		t.Fatalf("Expected first field to be title, got %s", modal.fields[0].Key)
-	}
-
-	// Simulate typing
-	for _, r := range "Test" {
-		modal, _ = modal.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
-	}
-
-	titleValue := modal.fields[0].Input.Value()
-	if titleValue != "Test" {
-		t.Errorf("Expected title 'Test', got %s", titleValue)
+	if len(args) != 0 {
+		t.Errorf("Expected no changed fields, got %d: %v", len(args), args)
 	}
 }
