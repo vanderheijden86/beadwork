@@ -423,11 +423,16 @@ func (m EditModal) BuildUpdateArgs() map[string]string {
 	for _, field := range m.fields {
 		current := m.getCurrentValue(field)
 		if current != field.Original {
+			key := field.Key
 			// Convert priority display format to bd format
-			if field.Key == "priority" {
-				args[field.Key] = fmt.Sprintf("%d", parsePriority(current))
+			if key == "priority" {
+				args[key] = fmt.Sprintf("%d", parsePriority(current))
 			} else {
-				args[field.Key] = current
+				// bd update uses --set-labels (not --labels)
+				if key == "labels" {
+					key = "set-labels"
+				}
+				args[key] = current
 			}
 		}
 	}
@@ -442,11 +447,16 @@ func (m EditModal) BuildCreateArgs() map[string]string {
 	for _, field := range m.fields {
 		current := m.getCurrentValue(field)
 		if current != "" {
+			key := field.Key
+			// bd create has no --status flag (issues are always created as open)
+			if key == "status" {
+				continue
+			}
 			// Convert priority display format to bd format
-			if field.Key == "priority" {
-				args[field.Key] = fmt.Sprintf("%d", parsePriority(current))
+			if key == "priority" {
+				args[key] = fmt.Sprintf("%d", parsePriority(current))
 			} else {
-				args[field.Key] = current
+				args[key] = current
 			}
 		}
 	}

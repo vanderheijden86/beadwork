@@ -218,13 +218,13 @@ func TestEditModal_BuildCreateArgs_AllNonEmpty(t *testing.T) {
 
 	args := modal.BuildCreateArgs()
 
-	// Should include title, status, priority, type, assignee, labels
-	// Should NOT include empty description and notes
+	// Should include title, priority, type, assignee, labels
+	// Should NOT include status (bd create has no --status flag) or empty fields
 	if args["title"] != "New Issue" {
 		t.Errorf("Expected title 'New Issue', got %s", args["title"])
 	}
-	if args["status"] != "open" {
-		t.Errorf("Expected status 'open', got %s", args["status"])
+	if _, exists := args["status"]; exists {
+		t.Error("Status should not be in create args (bd create has no --status flag)")
 	}
 	if args["priority"] != "2" { // P2 -> 2
 		t.Errorf("Expected priority '2', got %s", args["priority"])
@@ -329,6 +329,40 @@ func TestEditModal_ViewContainsTitle(t *testing.T) {
 
 	if !strings.Contains(createView, "Create Issue") {
 		t.Error("Create view should contain 'Create Issue' header")
+	}
+}
+
+func TestEditModal_BuildUpdateArgs_LabelsUsesSetLabels(t *testing.T) {
+	theme := DefaultTheme(lipgloss.DefaultRenderer())
+	issue := &model.Issue{
+		ID:        "test-123",
+		Title:     "Test",
+		Status:    model.StatusOpen,
+		Priority:  2,
+		IssueType: model.TypeTask,
+		Labels:    []string{"frontend"},
+	}
+
+	modal := NewEditModal(issue, theme)
+
+	// Change labels
+	for i := range modal.fields {
+		if modal.fields[i].Key == "labels" {
+			modal.fields[i].Input.SetValue("frontend, backend")
+			break
+		}
+	}
+
+	args := modal.BuildUpdateArgs()
+
+	// Should use "set-labels" key (not "labels") for bd update
+	if _, exists := args["labels"]; exists {
+		t.Error("BuildUpdateArgs should not use 'labels' key, should use 'set-labels'")
+	}
+	if val, exists := args["set-labels"]; !exists {
+		t.Error("BuildUpdateArgs should use 'set-labels' key for label changes")
+	} else if val != "frontend, backend" {
+		t.Errorf("Expected 'frontend, backend', got %q", val)
 	}
 }
 
