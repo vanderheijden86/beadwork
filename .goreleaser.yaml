@@ -47,7 +47,7 @@ brews:
       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
     directory: Formula
     homepage: https://github.com/vanderheijden86/beadwork
-    description: "Graph-aware task management TUI for beads projects"
+    description: "Fast, focused TUI viewer and editor for beads projects"
     license: "MIT"
     install: |
       bin.install "bw"

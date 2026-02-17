@@ -74,14 +74,10 @@ jobs:
         while read -r pkg pct; do
           req=
           case "$pkg" in
-            github.com/vanderheijden86/beadwork/pkg/analysis) req=75 ;;
-            github.com/vanderheijden86/beadwork/pkg/export) req=69 ;;
-            github.com/vanderheijden86/beadwork/pkg/recipe) req=90 ;;
             github.com/vanderheijden86/beadwork/pkg/ui) req=55 ;;
             github.com/vanderheijden86/beadwork/pkg/loader) req=80 ;;
             github.com/vanderheijden86/beadwork/pkg/updater) req=55 ;;
             github.com/vanderheijden86/beadwork/pkg/watcher) req=60 ;;
-            github.com/vanderheijden86/beadwork/pkg/workspace) req=85 ;;
           esac
           if [ -z "$req" ]; then
             continue
@@ -114,13 +110,3 @@ jobs:
       env:
         CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
-    - name: Run Quick Benchmarks
-      run: |
-        echo "Running critical benchmarks to catch performance regressions..."
-        go test -bench='BenchmarkFullAnalysis_(Sparse100|Dense100|ManyCycles20)' \
-                -benchmem -count=1 ./pkg/analysis/...
-
-    - name: Verify Timeout Protection
-      run: |
-        echo "Verifying timeout protection prevents hangs..."
-        go test -v -run='TestTimeoutProtection' ./pkg/analysis/... -timeout 30s

@@ -1,14 +1,14 @@
-# Beadwork (bw) vs Beads (bd): Separation of Concerns
+# Beads Viewer (bv) vs Beads (bd): Separation of Concerns
 
-This document maps out what beadwork handles, what beads handles, and where they overlap. The goal is to clarify the boundaries between the two tools.
+This document maps out what the original Beads Viewer (`steveyegge/beads_viewer`) handles versus what Beads (`steveyegge/beads`) handles, and where they overlap. Beadwork (`bw`) is a stripped-down fork of Beads Viewer that keeps only the TUI viewer/editor and removes the analysis, export, and agent protocol layers.
 
 ## Summary
 
 **Beads (bd)** is the issue tracker: it owns the data. Create, update, close, sync, dependencies, labels, comments, and the JSONL/SQLite storage layer.
 
-**Beadwork (bw)** started as a TUI viewer for that data, but has grown into a full analysis and intelligence platform. It reads the same `.beads/issues.jsonl` file and adds graph analysis, AI agent protocols, deployment, search, and project health monitoring on top.
+**Beads Viewer (bv)** started as a TUI viewer for that data, but grew into a full analysis and intelligence platform. It reads the same `.beads/issues.jsonl` file and adds graph analysis, AI agent protocols, deployment, search, and project health monitoring on top.
 
-The result: bw is no longer "just a viewer." It is a project intelligence layer that happens to include a TUI.
+**Beadwork (bw)** is a fork of Beads Viewer that strips it back to a pure TUI viewer/editor. It keeps the interactive views (list, tree, board) and the edit modal, and removes the ~42k lines of analysis, export, correlation, and robot protocol code.
 
 ---
 
@@ -16,7 +16,7 @@ The result: bw is no longer "just a viewer." It is a project intelligence layer 
 
 ### 1. Core Issue CRUD
 
-| Capability | bd | bw |
+| Capability | bd | bv (Beads Viewer) |
 |---|---|---|
 | Create issues | Yes | Yes (edit modal via `bd` CLI) |
 | Update issues | Yes | Yes (edit modal via `bd` CLI) |
@@ -29,13 +29,13 @@ The result: bw is no longer "just a viewer." It is a project intelligence layer 
 | Epics | Yes (manage) | Display only |
 | Search (text) | Yes | Yes (plus semantic/vector search) |
 
-**Verdict**: bd owns CRUD. bw delegates mutations back to `bd` CLI. No overlap in write path.
+**Verdict**: bd owns CRUD. bv delegates mutations back to `bd` CLI. No overlap in write path.
 
 ---
 
-### 2. Views and Visualization (bw only)
+### 2. Views and Visualization (bv only)
 
-These are purely bw concerns with no equivalent in bd:
+These are purely bv concerns with no equivalent in bd:
 
 | Feature | Package | Description |
 |---|---|---|
@@ -47,7 +47,7 @@ These are purely bw concerns with no equivalent in bd:
 
 ---
 
-### 3. Graph Analysis Engine (bw only)
+### 3. Graph Analysis Engine (bv only)
 
 This is the biggest area that goes well beyond "viewing." The analysis engine (~15k lines) computes graph-theoretic metrics over the dependency DAG:
 
@@ -70,13 +70,13 @@ This is the biggest area that goes well beyond "viewing." The analysis engine (~
 | Execution planning | `pkg/analysis/plan.go` | Dependency-respecting work plans |
 | Suggestion engine | `pkg/analysis/suggest_all.go` | Combined suggestions (deps, labels, dupes, cycles) |
 
-**bd has none of this.** bd stores dependencies but does not analyze them. The graph intelligence is entirely bw's domain.
+**bd has none of this.** bd stores dependencies but does not analyze them. The graph intelligence is entirely bv's domain.
 
 ---
 
-### 4. AI Agent Protocol (bw only)
+### 4. AI Agent Protocol (bv only)
 
-The `--robot-*` flags expose bw's analysis as structured JSON for AI agents. This is a major feature area (~30 flags):
+The `--robot-*` flags expose bv's analysis as structured JSON for AI agents. This is a major feature area (~30 flags):
 
 - `--robot-triage`: Unified mega-command with ranked recommendations
 - `--robot-next`: Single top pick for "what should I work on?"
@@ -95,7 +95,7 @@ The `--robot-*` flags expose bw's analysis as structured JSON for AI agents. Thi
 
 ---
 
-### 5. Git-to-Issue Correlation (bw only)
+### 5. Git-to-Issue Correlation (bv only)
 
 | Feature | Package | Description |
 |---|---|---|
@@ -111,7 +111,7 @@ The `--robot-*` flags expose bw's analysis as structured JSON for AI agents. Thi
 
 ---
 
-### 6. Drift Detection and Baselines (bw only)
+### 6. Drift Detection and Baselines (bv only)
 
 | Feature | Package | Description |
 |---|---|---|
@@ -123,7 +123,7 @@ The `--robot-*` flags expose bw's analysis as structured JSON for AI agents. Thi
 
 ---
 
-### 7. Export, Deployment, and Static Sites (bw only)
+### 7. Export, Deployment, and Static Sites (bv only)
 
 | Feature | Package | Description |
 |---|---|---|
@@ -141,7 +141,7 @@ The `--robot-*` flags expose bw's analysis as structured JSON for AI agents. Thi
 
 ---
 
-### 8. Semantic Search (bw only)
+### 8. Semantic Search (bv only)
 
 | Feature | Package | Description |
 |---|---|---|
@@ -155,7 +155,7 @@ The `--robot-*` flags expose bw's analysis as structured JSON for AI agents. Thi
 
 ---
 
-### 9. Project Health and Monitoring (bw only)
+### 9. Project Health and Monitoring (bv only)
 
 | Feature | Package | Description |
 |---|---|---|
@@ -163,13 +163,13 @@ The `--robot-*` flags expose bw's analysis as structured JSON for AI agents. Thi
 | Recipes | `pkg/recipe/` | Saved view/filter configurations |
 | File watching | `pkg/watcher/` | Live-reload on `.beads/` changes |
 | Multi-repo workspaces | `pkg/workspace/` | Aggregate issues across repositories |
-| Self-update | `pkg/updater/` | Check/download new bw versions from GitHub |
+| Self-update | `pkg/updater/` | Check/download new versions from GitHub |
 
 ---
 
 ### 10. Shared Concerns (overlap)
 
-| Concern | bd | bw |
+| Concern | bd | bv |
 |---|---|---|
 | JSONL loading | SQLite + JSONL import | Direct JSONL parse (`pkg/loader/`) |
 | Issue model | Own types | Own types (`pkg/model/`) |
@@ -188,9 +188,9 @@ The data model is independently defined in both projects. They agree on the JSON
                            |
               +------------+------------+
               |                         |
-         Beads (bd)               Beadwork (bw)
+         Beads (bd)            Beads Viewer (bv)
               |                         |
-     Issue tracker CLI          Analysis + TUI platform
+     Issue tracker CLI       Analysis + TUI platform
               |                         |
   - CRUD operations            - Graph engine (15k lines)
   - Dependencies               - 9 graph metrics
@@ -207,134 +207,54 @@ The data model is independently defined in both projects. They agree on the JSON
 
 ---
 
-## What Do We Actually Use? (Usage Audit)
+## What Beadwork Keeps vs Strips
 
-To decide what to keep, we audited the actual workflow: the global CLAUDE.md, CLAUDE-REFERENCE.md, beads plugin (skills, task agent, workflow commands), and daily session patterns.
+Beadwork (`bw`) is a fork of Beads Viewer that strips the intelligence/export layers and keeps the TUI core. The reasoning: the analysis engine, robot protocol, export pipeline, and correlation engine serve a "project intelligence platform" vision that is not needed for a focused TUI viewer/editor.
 
-### Actively Used
+### Kept in Beadwork
 
-| Feature | Evidence | Verdict |
-|---|---|---|
-| **TUI viewer** (list, tree, board views) | Launched interactively as `bw` to browse issues | **KEEP** |
-| **Edit modal** (huh-based forms) | Recently built; edits issues via `bd` CLI from inside the TUI | **KEEP** |
-| **JSONL loader** (`pkg/loader/`) | Core data pipeline, required for anything to work | **KEEP** |
-| **Issue model** (`pkg/model/`) | Core types, required for anything to work | **KEEP** |
-| **File watcher** (`pkg/watcher/`) | Live-reload when `.beads/` changes on disk | **KEEP** (supports the TUI) |
-| **Self-updater** (`pkg/updater/`) | `--check-update` for new versions | **KEEP** (small, useful) |
+| Feature | Package | Lines | Why |
+|---|---|---|---|
+| List view, tree view, board view | `pkg/ui/` | ~10,000 | Core TUI interaction |
+| Edit modal (huh forms) | `pkg/ui/` | ~500 | Issue editing from inside the TUI |
+| JSONL loader | `pkg/loader/` | ~800 | Required for data loading |
+| Issue model | `pkg/model/` | ~800 | Required for type definitions |
+| File watcher | `pkg/watcher/` | ~730 | Live-reload on changes |
+| Self-updater | `pkg/updater/` | ~700 | Version management |
+| Debug utilities | `pkg/debug/` | ~200 | Development support |
+| Version info | `pkg/version/` | ~100 | Build metadata |
+| CLI entry point | `cmd/bw/` | Stripped | Robot flags and export commands removed |
+| E2E tests | `tests/e2e/` | Kept | TUI tests only |
+| **Total** | | **~13,500** | |
 
-### Referenced in CLAUDE.md but Not Actually Invoked
+### Stripped from Beadwork
 
-| Feature | Evidence | Verdict |
-|---|---|---|
-| `bv --robot-next` | Listed as "OR" alternative to `bd ready` in CLAUDE.md step 1; never invoked in any observed session | **NOT USED** |
-| `bv --robot-triage` | Listed as "OR" alternative to `bd ready` in CLAUDE.md step 1; never invoked in any observed session | **NOT USED** |
-| Robot commands (30+ flags) | Documented extensively in CLAUDE-REFERENCE.md; the beads plugin and task agent use `bd` commands exclusively, not `bw --robot-*` | **NOT USED** |
+| Feature | Package | Lines | Why removed |
+|---|---|---|---|
+| Graph analysis engine | `pkg/analysis/` | ~15,000 | `bd` handles dependency ordering; agents use `bd ready` |
+| Robot protocol (30+ flags) | `cmd/bw/` | ~3,000 | Agents use `bd` CLI directly, not `bv --robot-*` |
+| Git correlation engine | `pkg/correlation/` | ~8,000 | `bd` tracks issue lifecycle natively |
+| Export/deployment | `pkg/export/` | ~9,000 | Static sites, Pages, Cloudflare never used |
+| Drift detection + baselines | `pkg/baseline/`, `pkg/drift/` | ~1,200 | No CI integration configured |
+| Semantic search | `pkg/search/` | ~1,600 | `bd search` handles text search |
+| Cass integration | `pkg/cass/` | ~1,400 | External tool not installed |
+| Recipes | `pkg/recipe/` | ~350 | Never configured |
+| Hooks (export) | `pkg/hooks/` | ~500 | Never configured |
+| Multi-repo workspaces | `pkg/workspace/` | ~650 | Single-repo usage |
+| Agent file management | `pkg/agents/` | ~800 | `bd onboard`/`bd setup` handle this |
+| Instance locking | `pkg/instance/` | ~300 | `bd` handles its own locking |
+| Performance metrics | `pkg/metrics/` | ~420 | Instrumentation for the analysis engine |
+| Insights dashboard (TUI) | `pkg/ui/insights.go` | Part of ui | No data without analysis engine |
+| Graph view (TUI) | `pkg/ui/graph.go` | Part of ui | Depends on analysis engine |
+| **Total** | | **~42,200** | |
 
-The CLAUDE.md and CLAUDE-REFERENCE.md reference robot commands because the upstream beads_viewer documentation promotes them. But the actual daily workflow uses `bd ready`, `bd list`, `bd show` for finding work. The robot protocol is entirely bypassed.
-
-### Never Used
-
-| Feature | Lines of Code | Reason it is unused |
-|---|---|---|
-| **Graph analysis engine** (PageRank, betweenness, HITS, critical path, triage, risk, ETA, what-if, suggestions) | ~15,000 | `bd` already handles dependency ordering; agents use `bd ready` not `bw --robot-triage` |
-| **Robot protocol** (30+ `--robot-*` flags) | ~3,000 (in `cmd/`) | The beads plugin has zero references to bw/bv; agents use `bd` CLI directly |
-| **Git correlation engine** (commit-to-issue linking, co-commit analysis, temporal patterns, causality) | ~8,000 | No workflow references anywhere; `bd` tracks issue lifecycle natively |
-| **Export/deployment** (static sites, GitHub Pages, Cloudflare Pages, preview server, SQLite export) | ~9,000 | Never referenced in any workflow config or session |
-| **Drift detection + baselines** | ~1,200 | No CI integration configured; never invoked |
-| **Semantic search** (vector embeddings, hybrid scoring) | ~1,600 | `bd search` handles text search; no vector search usage |
-| **Cass integration** | ~1,400 | External tool not installed; feature is a dead path |
-| **Recipes** | ~350 | Never configured or invoked |
-| **Hooks** (pre/post-export) | ~500 | Never configured |
-| **Multi-repo workspaces** | ~650 | Single-repo usage only |
-| **Agents file management** (`pkg/agents/`) | ~800 | `bd onboard` and `bd setup` handle this |
-| **Instance locking** (`pkg/instance/`) | ~300 | `bd` handles its own locking |
-| **Performance metrics** (`pkg/metrics/`) | ~420 | Internal instrumentation for the analysis engine (which is itself unused) |
-| **Insights dashboard** (TUI view) | Part of `pkg/ui/` | Displays analysis engine output; without the engine, it has no data |
-| **Graph view** (TUI view) | Part of `pkg/ui/` | Interactive DAG navigation; depends on the analysis engine |
-
-### Usage Summary
-
-```
-Feature Area                    Lines    Used?
-----------------------------------------------
-TUI core (list, tree, board)   ~10,000   YES
-Edit modal (huh forms)           ~500    YES
-Loader + model                 ~1,600    YES
-Watcher                          ~730    YES
-Updater                          ~700    YES
-                               ------
-Subtotal (used)               ~13,500
-
-Analysis engine                ~15,000   NO
-Correlation engine              ~8,000   NO
-Export/deploy                   ~9,000   NO
-Robot protocol (cmd layer)      ~3,000   NO
-Search                          ~1,600   NO
-Cass                            ~1,400   NO
-Baseline + drift                ~1,200   NO
-Agents, instance, metrics       ~1,500   NO
-Recipes, hooks, workspace       ~1,500   NO
-                               ------
-Subtotal (unused)             ~42,200
-```
-
-**~76% of the codebase is unused.** The used portion (~13,500 lines) is the TUI, loader, watcher, and updater. Everything else is inherited from the upstream beads_viewer project and serves use cases (AI agent protocol, project intelligence, deployment) that this fork does not exercise.
-
----
-
-## The Case for Stripping
-
-### Why strip?
-
-1. **Maintenance burden**: 42k lines of code that must compile, pass tests, and stay compatible with upstream changes, but provides zero value to this fork's workflow.
-2. **Test suite noise**: Export tests alone take ~20s and test deployment wizards for GitHub/Cloudflare Pages that will never be used. The analysis engine has extensive benchmarks for graph algorithms that are irrelevant.
-3. **Dependency bloat**: The analysis engine pulls in `gonum.org/v1/gonum` (large numerical computing library). Semantic search adds embedding infrastructure. Correlation adds git log parsing. Removing these shrinks the binary and dependency tree.
-4. **Cognitive load**: Contributors (human or AI) must understand which of the 22 packages matter and which are dead weight. A leaner codebase is faster to navigate and reason about.
-5. **Fork identity**: This fork already differentiates on UX (tree view, split pane, huh forms, navigation). Stripping the intelligence layer makes the positioning clearer: "beadwork is an opinionated TUI for beads, not a competing analysis platform."
-
-### What to keep
-
-The core TUI viewer and editor:
-- `pkg/ui/` (list view, tree view, board view, edit modal)
-- `pkg/loader/` (JSONL loading, worktree resolution)
-- `pkg/model/` (issue types)
-- `pkg/watcher/` (live-reload)
-- `pkg/updater/` (self-update)
-- `pkg/debug/` (debug utilities)
-- `pkg/version/` (version info)
-- `cmd/bw/` (CLI entry point, stripped of robot flags and export commands)
-- `tests/e2e/` (TUI end-to-end tests)
-
-### What to remove
-
-Everything else:
-- `pkg/analysis/` (graph engine, triage, suggestions, insights)
-- `pkg/correlation/` (git-to-issue linking)
-- `pkg/export/` (static sites, deployment, markdown, SQLite, graphs, hooks)
-- `pkg/hooks/` (export automation)
-- `pkg/search/` (semantic/vector search)
-- `pkg/cass/` (external search tool integration)
-- `pkg/baseline/` (metrics snapshots)
-- `pkg/drift/` (drift detection)
-- `pkg/metrics/` (performance instrumentation)
-- `pkg/recipe/` (saved views)
-- `pkg/workspace/` (multi-repo)
-- `pkg/agents/` (AGENTS.md management)
-- `pkg/instance/` (PID locking)
-- All `--robot-*` flags from `cmd/bw/main.go`
-- All `--export-*`, `--pages`, `--check-drift`, `--search`, `--recipe`, `--workspace` flags
-
-### What needs careful consideration
-
-- **Graph view** (`pkg/ui/graph.go`): Renders the dependency DAG in the TUI. Currently depends on the analysis engine for graph construction. Could be kept if refactored to build a simple adjacency list from `model.Issue` dependencies directly, without PageRank/betweenness/HITS. The question: is the graph view useful enough to justify keeping? If so, it needs a lightweight graph builder that replaces the dependency on `pkg/analysis/`.
-- **Insights dashboard** (`pkg/ui/insights.go`): Displays analysis engine metrics. Without the engine, this view has no data. Remove unless the graph view is kept and a minimal insights display is desired.
-- **Cycle detection**: Even without the full analysis engine, detecting circular dependencies is valuable for the TUI (warning users). This is a small, self-contained algorithm that could live in `pkg/model/` or `pkg/ui/` directly.
+**~76% of Beads Viewer's codebase is removed in Beadwork.** The kept portion (~13,500 lines) is the TUI, loader, watcher, and updater.
 
 ---
 
 ## Conclusion
 
-Beadwork has evolved from a "viewer" into a project intelligence platform. The name "beads_viewer" (the upstream project) is a historical artifact. In practice, bw provides:
+Beads Viewer evolved from a "viewer" into a project intelligence platform. The name "beads_viewer" is a historical artifact. In practice, bv provides:
 
 1. **Visualization** (TUI with 5 views)
 2. **Analysis** (graph algorithms, priority scoring, risk, ETA)
@@ -344,6 +264,6 @@ Beadwork has evolved from a "viewer" into a project intelligence platform. The n
 6. **Monitoring** (drift detection, baselines, CI integration)
 7. **Search** (hybrid lexical + semantic vector search)
 
-Only #1 is "viewing." The rest is independent intelligence that could, in theory, exist as separate tools.
+Only #1 is "viewing." The rest is independent intelligence that could exist as separate tools.
 
-For this fork's purposes, only #1 (plus editing, via huh forms) is actively used. The other 6 capability areas (~42k lines, ~76% of the codebase) are inherited upstream features that serve a different vision for the tool.
+Beadwork keeps #1 (plus editing via huh forms) and removes the other six capability areas, focusing on being a clean, fast TUI for interacting with beads issue data.
