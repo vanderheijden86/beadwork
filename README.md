@@ -9,7 +9,7 @@
 
 Beadwork is a terminal-based interface for browsing, editing, and managing issues stored in `.beads/issues.jsonl`. It renders your issue data as an interactive TUI with list, tree, and kanban board views, a detail panel with Markdown rendering, and inline editing.
 
-Originally forked from [beads_viewer](https://github.com/Dicklesworthstone/beads_viewer), beadwork has been **stripped to its core**: the TUI viewer and editor. The upstream project's graph analysis engine, robot protocol, export wizards, semantic search, drift detection, recipe system, and other advanced features have been removed to keep the tool small, fast, and focused on the primary use case: reading and updating issues from the terminal.
+Originally forked from [beads_viewer](https://github.com/Dicklesworthstone/beads_viewer), beadwork has been **stripped to its core**: the TUI viewer. Added feature are full-fledged treeview and editing capabilities. The upstream project's graph analysis engine, robot protocol, export wizards, semantic search, drift detection, recipe system, and other advanced features have been removed to keep the tool small, fast, and focused on the primary use case: reading and updating issues from the terminal.
 
 ### Why strip it down?
 
