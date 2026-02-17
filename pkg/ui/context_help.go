@@ -10,23 +10,15 @@ import (
 // This is used when user triggers context-specific help (e.g., double-tap backtick).
 // Content should fit on one screen (~20 lines) without scrolling.
 var ContextHelpContent = map[Context]string{
-	ContextList:           contextHelpList,
-	ContextTree:           contextHelpTree,
-	ContextGraph:          contextHelpGraph,
-	ContextBoard:          contextHelpBoard,
-	ContextInsights:       contextHelpInsights,
-	ContextHistory:        contextHelpHistory,
-	ContextDetail:         contextHelpDetail,
-	ContextSplit:          contextHelpSplit,
-	ContextFilter:         contextHelpFilter,
-	ContextLabelPicker:    contextHelpLabelPicker,
-	ContextRecipePicker:   contextHelpRecipePicker,
-	ContextHelp:           contextHelpHelp,
-	ContextTimeTravel:     contextHelpTimeTravel,
-	ContextLabelDashboard: contextHelpLabelDashboard,
-	ContextAttention:      contextHelpAttention,
-	ContextAgentPrompt:    contextHelpAgentPrompt,
-	ContextCassSession:    contextHelpCassSession,
+	ContextList:        contextHelpList,
+	ContextTree:        contextHelpTree,
+	ContextBoard:       contextHelpBoard,
+	ContextDetail:      contextHelpDetail,
+	ContextSplit:       contextHelpSplit,
+	ContextFilter:      contextHelpFilter,
+	ContextLabelPicker: contextHelpLabelPicker,
+	ContextHelp:        contextHelpHelp,
+	ContextTimeTravel:  contextHelpTimeTravel,
 }
 
 // GetContextHelp returns the help content for a given context.
@@ -105,17 +97,12 @@ const contextHelpList = `## List View
 
 **Switch Views**
   E         Tree view
-  a         Actionable view
   b         Board view
-  g         Graph view
-  i         Insights panel
-  h         History view
 
 **Actions**
   y         Copy issue ID
   t/T       Time-travel
-  U         Self-update bv
-  V         Preview cass sessions`
+  U         Self-update bv`
 
 const contextHelpTree = `## Tree View
 
@@ -145,22 +132,6 @@ const contextHelpTree = `## Tree View
   ` + "`" + `  Flat    F  Follow
   b/B  Bookmark/cycle   m/M  Mark`
 
-const contextHelpGraph = `## Graph View
-
-**Navigation**
-  j/k       Navigate nodes vertically
-  h/l       Navigate siblings
-  Enter     View selected issue
-  f         Focus on subgraph
-  Esc       Exit to list
-
-**Understanding the Graph**
-• Arrows point TO what's blocked
-  (A → B means A blocks B)
-• Node size = priority
-• Color = status
-  Green=closed, Blue=in_progress`
-
 const contextHelpBoard = `## Board View
 
 **Navigation**
@@ -188,59 +159,9 @@ const contextHelpBoard = `## Board View
 **Actions**
   Tab       Toggle detail panel
   Ctrl+j/k  Scroll detail panel
-  V         Preview cass sessions
   y         Copy issue ID
   Enter     View issue details
   Esc       Return to List view`
-
-const contextHelpInsights = `## Insights Panel
-
-**Navigation**
-  h/l       Switch between panels
-  j/k       Move within panel
-  Ctrl+j/k  Scroll detail section
-  Tab       Next panel
-
-**Heatmap** (Priority × Depth grid)
-  m         Toggle heatmap view
-  Arrows    Navigate cells
-  Enter     Drill into cell
-
-**Details**
-  e         Toggle explanations
-  x         Toggle calculations
-
-**Attention Indicators**
-• Stale: Open too long
-• Blocked chains: Bottlenecks
-• Priority inversions: Low blocking high
-
-  Enter     View selected issue
-  Esc       Return to list`
-
-const contextHelpHistory = `## History View
-
-**Navigation**
-  j/k       Navigate primary pane
-  J/K       Navigate secondary pane
-  Tab       Cycle focus (list→detail→files)
-  Enter     Jump to selected bead
-
-**View Modes**
-  v         Toggle Bead/Git mode
-  f         Toggle file tree panel
-  /         Search commits/beads
-  c         Cycle confidence filter
-
-**Causality Markers**
-  🎯 Direct   Commit mentions bead ID
-  🔗 Temporal Within time window
-  📁 File     Touches associated files
-
-**Actions**
-  y         Copy commit SHA
-  o         Open commit in browser
-  Esc       Return to list`
 
 const contextHelpDetail = `## Detail View
 
@@ -287,9 +208,6 @@ const contextHelpFilter = `## Filter Mode
 
 **Search**
   /         Start fuzzy search
-  Ctrl+S    Semantic search (AI)
-  H         Hybrid ranking
-  Alt+H     Hybrid preset
   n/N       Next/prev match
   Esc       Clear search
 
@@ -311,20 +229,6 @@ const contextHelpLabelPicker = `## Label Picker
   n         Create new label
   d         Delete label
   e         Edit label`
-
-const contextHelpRecipePicker = `## Recipe Picker
-
-**Navigation**
-  j/k       Move selection
-  Enter     Apply recipe
-  Esc       Cancel
-
-**Recipes**
-Pre-configured filters and sorts:
-• Sprint Ready
-• Blocked Items
-• By Priority
-• Recently Updated`
 
 const contextHelpHelp = `## Help Overlay
 
@@ -357,57 +261,6 @@ point in history.
 Tip: Use History view (h) to pick
 different points in time`
 
-const contextHelpLabelDashboard = `## Label Dashboard
-
-**Overview**
-Shows all labels with:
-• Issue counts per label
-• Health indicators
-• Usage trends
-
-**Navigation**
-  j/k       Move selection
-  Enter     Drill into label
-  h         View label health
-  g         Label graph analysis
-  Esc       Return to list
-
-**Filtering**
-  /         Search labels`
-
-const contextHelpAttention = `## Attention View
-
-**Issues Needing Attention**
-
-Sorted by attention score based on:
-• Age (older = more attention)
-• Priority mismatches
-• Blocking factor
-• Stale status
-
-**Navigation**
-  j/k       Move selection
-  Enter     View issue
-  s         Change status
-
-Press 1 to return to List view`
-
-const contextHelpAgentPrompt = `## AI Agent Prompt
-
-**Input**
-Type your question or request
-for the AI agent.
-
-**Actions**
-  Enter     Submit prompt
-  Esc       Cancel
-  Ctrl+C    Clear input
-
-**Examples**
-• "Triage these issues"
-• "What should I work on?"
-• "Summarize blocked items"`
-
 const contextHelpGeneric = `## Quick Reference
 
 **Global Keys**
@@ -422,27 +275,6 @@ const contextHelpGeneric = `## Quick Reference
   Enter     Select/open
 
 **Views**
-  b/g/i/h   Switch views
-  ;         Shortcuts sidebar`
+  b         Board view
+  E         Tree view`
 
-const contextHelpCassSession = `## Cass Session Preview
-
-Shows coding sessions correlated with
-the selected bead via cass search.
-
-**Navigation**
-  j/k       Move between sessions
-  Enter     Expand session details
-  Esc       Close modal
-
-**Actions**
-  y         Copy cass command
-  o         Open session file
-
-**Match Types**
-  ID        Direct bead ID match
-  File      Modified same files
-  Title     Keyword similarity
-
-Sessions ranked by relevance score.
-Only shown when cass is installed.`

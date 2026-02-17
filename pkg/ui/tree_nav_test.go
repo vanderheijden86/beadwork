@@ -74,7 +74,7 @@ func createNavTestIssues() []model.Issue {
 func TestTreeNavJumpToParentP(t *testing.T) {
 	cleanTreeState(t)
 	issues := createNavTestIssues()
-	m := ui.NewModel(issues, nil, "")
+	m := ui.NewModel(issues, "")
 	m = enterTreeView(t, m)
 
 	// Move to task-1 (child of epic-1)
@@ -94,7 +94,7 @@ func TestTreeNavJumpToParentP(t *testing.T) {
 func TestTreeNavJumpToParentPUppercase(t *testing.T) {
 	cleanTreeState(t)
 	issues := createNavTestIssues()
-	m := ui.NewModel(issues, nil, "")
+	m := ui.NewModel(issues, "")
 	m = enterTreeView(t, m)
 
 	// Move to task-2
@@ -115,7 +115,7 @@ func TestTreeNavJumpToParentPUppercase(t *testing.T) {
 func TestTreeNavJumpToParentAtRoot(t *testing.T) {
 	cleanTreeState(t)
 	issues := createNavTestIssues()
-	m := ui.NewModel(issues, nil, "")
+	m := ui.NewModel(issues, "")
 	m = enterTreeView(t, m)
 
 	// We're on epic-1 (a root node)
@@ -134,7 +134,7 @@ func TestTreeNavJumpToParentAtRoot(t *testing.T) {
 func TestTreeNavNextSibling(t *testing.T) {
 	cleanTreeState(t)
 	issues := createNavTestIssues()
-	m := ui.NewModel(issues, nil, "")
+	m := ui.NewModel(issues, "")
 	m = enterTreeView(t, m)
 
 	// Move to task-1 (first child of epic-1)
@@ -160,7 +160,7 @@ func TestTreeNavNextSibling(t *testing.T) {
 func TestTreeNavNextSiblingAtLast(t *testing.T) {
 	cleanTreeState(t)
 	issues := createNavTestIssues()
-	m := ui.NewModel(issues, nil, "")
+	m := ui.NewModel(issues, "")
 	m = enterTreeView(t, m)
 
 	// Move to task-3 (last child of epic-1)
@@ -182,7 +182,7 @@ func TestTreeNavNextSiblingAtLast(t *testing.T) {
 func TestTreeNavPrevSibling(t *testing.T) {
 	cleanTreeState(t)
 	issues := createNavTestIssues()
-	m := ui.NewModel(issues, nil, "")
+	m := ui.NewModel(issues, "")
 	m = enterTreeView(t, m)
 
 	// Move to task-2
@@ -203,7 +203,7 @@ func TestTreeNavPrevSibling(t *testing.T) {
 func TestTreeNavPrevSiblingAtFirst(t *testing.T) {
 	cleanTreeState(t)
 	issues := createNavTestIssues()
-	m := ui.NewModel(issues, nil, "")
+	m := ui.NewModel(issues, "")
 	m = enterTreeView(t, m)
 
 	// Move to task-1 (first child)
@@ -223,7 +223,7 @@ func TestTreeNavPrevSiblingAtFirst(t *testing.T) {
 func TestTreeNavFirstSibling(t *testing.T) {
 	cleanTreeState(t)
 	issues := createNavTestIssues()
-	m := ui.NewModel(issues, nil, "")
+	m := ui.NewModel(issues, "")
 	m = enterTreeView(t, m)
 
 	// Move to task-3 (last child)
@@ -245,7 +245,7 @@ func TestTreeNavFirstSibling(t *testing.T) {
 func TestTreeNavLastSibling(t *testing.T) {
 	cleanTreeState(t)
 	issues := createNavTestIssues()
-	m := ui.NewModel(issues, nil, "")
+	m := ui.NewModel(issues, "")
 	m = enterTreeView(t, m)
 
 	// Move to task-1 (first child)
@@ -265,7 +265,7 @@ func TestTreeNavLastSibling(t *testing.T) {
 func TestTreeNavSiblingAtRootLevel(t *testing.T) {
 	cleanTreeState(t)
 	issues := createNavTestIssues()
-	m := ui.NewModel(issues, nil, "")
+	m := ui.NewModel(issues, "")
 	m = enterTreeView(t, m)
 
 	// We're at epic-1 (root)
@@ -343,7 +343,7 @@ func createDeepTreeIssues() []model.Issue {
 func TestTreeNavTabCycleFolded(t *testing.T) {
 	cleanTreeState(t)
 	issues := createDeepTreeIssues()
-	m := ui.NewModel(issues, nil, "")
+	m := ui.NewModel(issues, "")
 	m = enterTreeView(t, m)
 
 	// Collapse epic-1 first
@@ -364,7 +364,7 @@ func TestTreeNavTabCycleFolded(t *testing.T) {
 func TestTreeNavTabCycleChildrenToSubtree(t *testing.T) {
 	cleanTreeState(t)
 	issues := createDeepTreeIssues()
-	m := ui.NewModel(issues, nil, "")
+	m := ui.NewModel(issues, "")
 	m = enterTreeView(t, m)
 
 	// Start state: epic-1 expanded (depth<1 auto-expand), task-1 collapsed by default.
@@ -391,7 +391,7 @@ func TestTreeNavTabCycleChildrenToSubtree(t *testing.T) {
 func TestTreeNavTabCycleBackToFolded(t *testing.T) {
 	cleanTreeState(t)
 	issues := createDeepTreeIssues()
-	m := ui.NewModel(issues, nil, "")
+	m := ui.NewModel(issues, "")
 	m = enterTreeView(t, m)
 
 	// First collapse epic-1
@@ -414,7 +414,7 @@ func TestTreeNavTabCycleBackToFolded(t *testing.T) {
 func TestTreeNavShiftTabGlobalCycle(t *testing.T) {
 	cleanTreeState(t)
 	issues := createDeepTreeIssues()
-	m := ui.NewModel(issues, nil, "")
+	m := ui.NewModel(issues, "")
 	m = enterTreeView(t, m)
 
 	// Press Shift+TAB to cycle to "all folded"
@@ -456,7 +456,7 @@ func TestTreeNavShiftTabGlobalCycle(t *testing.T) {
 func TestTreeNavTabOnLeafDoesNothing(t *testing.T) {
 	cleanTreeState(t)
 	issues := createNavTestIssues()
-	m := ui.NewModel(issues, nil, "")
+	m := ui.NewModel(issues, "")
 	m = enterTreeView(t, m)
 
 	// Navigate to task-1 (a leaf node)
@@ -483,7 +483,7 @@ func TestTreeNavTabOnLeafDoesNothing(t *testing.T) {
 func TestTreeNavLevel1ShowsOnlyRoots(t *testing.T) {
 	cleanTreeState(t)
 	issues := createDeepTreeIssues()
-	m := ui.NewModel(issues, nil, "")
+	m := ui.NewModel(issues, "")
 	m = enterTreeView(t, m)
 
 	// Press '1' to show only roots
@@ -500,7 +500,7 @@ func TestTreeNavLevel1ShowsOnlyRoots(t *testing.T) {
 func TestTreeNavLevel2ShowsRootsAndChildren(t *testing.T) {
 	cleanTreeState(t)
 	issues := createDeepTreeIssues()
-	m := ui.NewModel(issues, nil, "")
+	m := ui.NewModel(issues, "")
 	m = enterTreeView(t, m)
 
 	// Press '2' to show roots + direct children
@@ -518,7 +518,7 @@ func TestTreeNavLevel2ShowsRootsAndChildren(t *testing.T) {
 func TestTreeNavLevel3ShowsThreeLevels(t *testing.T) {
 	cleanTreeState(t)
 	issues := createDeepTreeIssues()
-	m := ui.NewModel(issues, nil, "")
+	m := ui.NewModel(issues, "")
 	m = enterTreeView(t, m)
 
 	// Press '3' to show 3 levels
@@ -535,7 +535,7 @@ func TestTreeNavLevel3ShowsThreeLevels(t *testing.T) {
 func TestTreeNavLevel9ExpandsAll(t *testing.T) {
 	cleanTreeState(t)
 	issues := createDeepTreeIssues()
-	m := ui.NewModel(issues, nil, "")
+	m := ui.NewModel(issues, "")
 	m = enterTreeView(t, m)
 
 	// First collapse everything
@@ -560,7 +560,7 @@ func TestTreeNavLevel9ExpandsAll(t *testing.T) {
 func TestTreeNavLevelPreservesCursor(t *testing.T) {
 	cleanTreeState(t)
 	issues := createDeepTreeIssues()
-	m := ui.NewModel(issues, nil, "")
+	m := ui.NewModel(issues, "")
 	m = enterTreeView(t, m)
 
 	// Select epic-1

@@ -1,9 +1,3 @@
-# git.sr.ht/~sbinet/gg v0.7.0
-## explicit; go 1.24
-git.sr.ht/~sbinet/gg
-# github.com/ajstarks/svgo v0.0.0-20211024235047-1546f124cd8b
-## explicit; go 1.15
-github.com/ajstarks/svgo
 # github.com/alecthomas/chroma/v2 v2.23.0
 ## explicit; go 1.22
 github.com/alecthomas/chroma/v2
@@ -113,9 +107,6 @@ github.com/goccy/go-json/internal/encoder/vm_color_indent
 github.com/goccy/go-json/internal/encoder/vm_indent
 github.com/goccy/go-json/internal/errors
 github.com/goccy/go-json/internal/runtime
-# github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0
-## explicit
-github.com/golang/freetype/raster
 # github.com/google/uuid v1.6.0
 ## explicit
 github.com/google/uuid
@@ -191,23 +182,10 @@ github.com/yuin/goldmark-emoji/definition
 # golang.org/x/exp v0.0.0-20260112195511-716be5621a96
 ## explicit; go 1.24.0
 golang.org/x/exp/constraints
-# golang.org/x/image v0.35.0
-## explicit; go 1.24.0
-golang.org/x/image/draw
-golang.org/x/image/font
-golang.org/x/image/font/basicfont
-golang.org/x/image/font/opentype
-golang.org/x/image/font/sfnt
-golang.org/x/image/math/f64
-golang.org/x/image/math/fixed
-golang.org/x/image/vector
 # golang.org/x/net v0.49.0
 ## explicit; go 1.24.0
 golang.org/x/net/html
 golang.org/x/net/html/atom
-# golang.org/x/sync v0.19.0
-## explicit; go 1.24.0
-golang.org/x/sync/errgroup
 # golang.org/x/sys v0.40.0
 ## explicit; go 1.24.0
 golang.org/x/sys/plan9
@@ -219,10 +197,6 @@ golang.org/x/term
 # golang.org/x/text v0.33.0
 ## explicit; go 1.24.0
 golang.org/x/text/cases
-golang.org/x/text/encoding
-golang.org/x/text/encoding/charmap
-golang.org/x/text/encoding/internal
-golang.org/x/text/encoding/internal/identifier
 golang.org/x/text/internal
 golang.org/x/text/internal/language
 golang.org/x/text/internal/language/compact
@@ -230,36 +204,6 @@ golang.org/x/text/internal/tag
 golang.org/x/text/language
 golang.org/x/text/transform
 golang.org/x/text/unicode/norm
-# gonum.org/v1/gonum v0.17.0
-## explicit; go 1.24.0
-gonum.org/v1/gonum/blas
-gonum.org/v1/gonum/blas/blas64
-gonum.org/v1/gonum/blas/cblas128
-gonum.org/v1/gonum/blas/gonum
-gonum.org/v1/gonum/floats
-gonum.org/v1/gonum/floats/scalar
-gonum.org/v1/gonum/graph
-gonum.org/v1/gonum/graph/internal/linear
-gonum.org/v1/gonum/graph/internal/set
-gonum.org/v1/gonum/graph/iterator
-gonum.org/v1/gonum/graph/network
-gonum.org/v1/gonum/graph/path
-gonum.org/v1/gonum/graph/set/uid
-gonum.org/v1/gonum/graph/simple
-gonum.org/v1/gonum/graph/spectral
-gonum.org/v1/gonum/graph/topo
-gonum.org/v1/gonum/graph/traverse
-gonum.org/v1/gonum/internal/asm/c128
-gonum.org/v1/gonum/internal/asm/c64
-gonum.org/v1/gonum/internal/asm/f32
-gonum.org/v1/gonum/internal/asm/f64
-gonum.org/v1/gonum/internal/cmplx64
-gonum.org/v1/gonum/internal/math32
-gonum.org/v1/gonum/internal/order
-gonum.org/v1/gonum/lapack
-gonum.org/v1/gonum/lapack/gonum
-gonum.org/v1/gonum/lapack/lapack64
-gonum.org/v1/gonum/mat
 # gopkg.in/yaml.v3 v3.0.1
 ## explicit
 gopkg.in/yaml.v3
@@ -305,6 +249,3 @@ modernc.org/sqlite/vtab
 # pgregory.net/rapid v1.2.0
 ## explicit; go 1.18
 pgregory.net/rapid
-# github.com/Dicklesworthstone/toon-go v0.0.0-20260124164058-e044b09590e8
-## explicit; go 1.21
-github.com/Dicklesworthstone/toon-go

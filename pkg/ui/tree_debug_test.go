@@ -35,7 +35,7 @@ func TestDebugTreeOrder(t *testing.T) {
 		{ID: "standalone-2", Title: "Standalone Two", Status: model.StatusOpen, Priority: 3, IssueType: model.TypeTask, CreatedAt: now.Add(5 * time.Second)},
 	}
 
-	m := ui.NewModel(issues, nil, "")
+	m := ui.NewModel(issues, "")
 	// Enter tree view
 	newM, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("E")})
 	m = newM.(ui.Model)

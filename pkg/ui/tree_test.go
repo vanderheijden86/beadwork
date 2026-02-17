@@ -16,6 +16,11 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+// testTheme returns a minimal Theme for testing.
+func testTheme() Theme {
+	return DefaultTheme(lipgloss.NewRenderer(nil))
+}
+
 // stripANSI removes ANSI escape sequences for plain-text column comparison.
 var ansiRe = regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)
 
@@ -3777,7 +3782,7 @@ func TestTreeViewIsDefaultOnLaunch(t *testing.T) {
 		{ID: "task-2", Title: "Standalone Task", Priority: 3, IssueType: model.TypeTask, Status: model.StatusOpen},
 	}
 
-	m := NewModel(issues, nil, "")
+	m := NewModel(issues, "")
 
 	// Focus should be tree, not list
 	if m.focused != focusTree {
@@ -3802,7 +3807,7 @@ func TestTreeViewDefaultCanSwitchToList(t *testing.T) {
 		{ID: "bv-1", Title: "Issue One", Priority: 1, IssueType: model.TypeTask, Status: model.StatusOpen},
 	}
 
-	m := NewModel(issues, nil, "")
+	m := NewModel(issues, "")
 
 	// Should start in tree
 	if m.FocusState() != "tree" {
@@ -3983,7 +3988,7 @@ func TestTreeDefaultSortCreatedDescWithHierarchy(t *testing.T) {
 
 // TestTreeViewDefaultEmptyIssues verifies default tree view works with zero issues.
 func TestTreeViewDefaultEmptyIssues(t *testing.T) {
-	m := NewModel([]model.Issue{}, nil, "")
+	m := NewModel([]model.Issue{}, "")
 
 	if m.focused != focusTree {
 		t.Errorf("expected focused = focusTree even with 0 issues, got %v", m.focused)

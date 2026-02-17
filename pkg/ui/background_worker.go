@@ -4,7 +4,6 @@ package ui
 
 import (
 	"context"
-	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -20,11 +19,9 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/vanderheijden86/beadwork/pkg/analysis"
 	dbg "github.com/vanderheijden86/beadwork/pkg/debug"
 	"github.com/vanderheijden86/beadwork/pkg/loader"
 	"github.com/vanderheijden86/beadwork/pkg/model"
-	"github.com/vanderheijden86/beadwork/pkg/recipe"
 	"github.com/vanderheijden86/beadwork/pkg/watcher"
 )
 
@@ -187,12 +184,9 @@ type BackgroundWorker struct {
 	recoveryCount     int
 	recovering        bool
 	generation        uint64
-	lastHash          string // Content hash of last processed snapshot (for dedup)
-	forceNext         bool   // Force the next snapshot build even if content hash matches
-	currentRecipe     *recipe.Recipe
-	currentRecipeID   string // Recipe identifier for snapshot rebuild keys
-	currentRecipeHash string // Recipe fingerprint for rebuild keys (bv-4ilb)
-	logLevel          WorkerLogLevel
+	lastHash  string // Content hash of last processed snapshot (for dedup)
+	forceNext bool   // Force the next snapshot build even if content hash matches
+	logLevel  WorkerLogLevel
 	logJSON           bool
 	metricsEnabled    bool
 	tracePath         string
@@ -883,48 +877,6 @@ func (w *BackgroundWorker) ForceRefresh() {
 	go w.process()
 }
 
-func recipeFingerprint(r *recipe.Recipe) string {
-	if r == nil {
-		return ""
-	}
-
-	b, err := json.Marshal(r)
-	if err != nil {
-		// Fall back to name-only to preserve determinism.
-		return r.Name
-	}
-
-	sum := sha256.Sum256(b)
-	return fmt.Sprintf("%x", sum[:])
-}
-
-// SetRecipe updates the worker's current recipe and triggers a refresh (bv-2h40).
-// This allows Phase 3 view builders to incorporate recipe/filter state off-thread.
-func (w *BackgroundWorker) SetRecipe(r *recipe.Recipe) {
-	w.mu.Lock()
-	if w.state == WorkerStopped {
-		w.mu.Unlock()
-		return
-	}
-
-	nextID := ""
-	nextHash := ""
-	if r != nil {
-		nextID = r.Name
-		nextHash = recipeFingerprint(r)
-	}
-
-	changed := w.currentRecipeID != nextID || w.currentRecipeHash != nextHash
-	w.currentRecipe = r
-	w.currentRecipeID = nextID
-	w.currentRecipeHash = nextHash
-	w.mu.Unlock()
-
-	if changed {
-		w.ForceRefresh()
-	}
-}
-
 // GetSnapshot returns the current snapshot (may be nil).
 func (w *BackgroundWorker) GetSnapshot() *DataSnapshot {
 	w.mu.RLock()
@@ -1050,11 +1002,7 @@ func (w *BackgroundWorker) process() {
 		w.snapshot = snapshot
 		swapLatency = time.Since(swapStart)
 		version = w.metrics.snapshotVersion.Add(1)
-		if snapshot.IncrementalListUsed {
-			w.metrics.incrementalListCount.Add(1)
-		} else {
-			w.metrics.fullListCount.Add(1)
-		}
+		w.metrics.fullListCount.Add(1)
 	}
 	wasDirty := w.dirty
 	coalesced := w.coalesceCount.Load()
@@ -1304,14 +1252,7 @@ func (w *BackgroundWorker) buildSnapshot() *DataSnapshot {
 		runtime.ReadMemStats(&memBefore)
 	}
 
-	// Capture recipe state for this snapshot before loading (bv-2h40).
-	w.mu.RLock()
-	currentRecipe := w.currentRecipe
-	recipeID := w.currentRecipeID
-	recipeHash := w.currentRecipeHash
-	w.mu.RUnlock()
-
-	// Determine dataset tier using a fast line count (bv-9thm).
+	// Determine dataset tier using a fast line count.
 	sourceLineCount := 0
 	tier := datasetTierUnknown
 	var countStart time.Time
@@ -1337,8 +1278,8 @@ func (w *BackgroundWorker) buildSnapshot() *DataSnapshot {
 		})
 	}
 
-	// Huge tier: default to open-only unless the recipe explicitly includes closed/tombstone.
-	loadOpenOnly := tier == datasetTierHuge && !recipeIncludesClosedStatuses(currentRecipe)
+	// Huge tier: default to open-only.
+	loadOpenOnly := tier == datasetTierHuge
 
 	// Load issues from file with panic recovery
 	var issues []model.Issue
@@ -1391,7 +1332,7 @@ func (w *BackgroundWorker) buildSnapshot() *DataSnapshot {
 	loadDuration := time.Since(start)
 
 	// Compute content hash for dedup
-	hash := analysis.ComputeDataHash(issues)
+	hash := computeDataHash(issues)
 
 	// Check if content is unchanged (dedup optimization)
 	w.mu.Lock()
@@ -1413,60 +1354,34 @@ func (w *BackgroundWorker) buildSnapshot() *DataSnapshot {
 		return nil
 	}
 
-	w.mu.RLock()
-	prevSnapshot := w.snapshot
-	w.mu.RUnlock()
-
-	var diff *analysis.IssueDiff
-	if prevSnapshot != nil {
-		diffValue := analysis.ComputeIssueDiff(prevSnapshot.Issues, issues)
-		diff = &diffValue
-		if w.logLevel >= LogLevelDebug || w.traceFile != nil {
-			w.logEvent(LogLevelDebug, "snapshot_diff", map[string]any{
-				"added":              len(diffValue.Added),
-				"removed":            len(diffValue.Removed),
-				"modified":           len(diffValue.Modified),
-				"content_changed":    len(diffValue.ContentChanged),
-				"dependency_changed": len(diffValue.DependencyChanged),
-				"unchanged":          len(diffValue.Unchanged),
-				"total_prev":         len(prevSnapshot.Issues),
-				"total_new":          len(issues),
-			})
-		}
-	}
-
-	// Build snapshot (includes Phase 1 analysis) with panic recovery
+	// Build snapshot with panic recovery
 	var snapshot *DataSnapshot
-	analyzeStart := time.Now()
-	analyzeErr := w.safeCompute("analyze_phase1", func() error {
-		builder := NewSnapshotBuilder(issues).
-			WithRecipe(currentRecipe).
-			WithBuildConfig(snapshotBuildConfigForTier(tier))
-		if prevSnapshot != nil {
-			builder.WithPreviousSnapshot(prevSnapshot, diff)
-		}
-		snapshot = builder.Build()
+	buildStart := time.Now()
+	buildErr := w.safeCompute("build_snapshot", func() error {
+		snapshot = NewSnapshotBuilder(issues).
+			WithBuildConfig(snapshotBuildConfigForTier(tier)).
+			Build()
 		return nil
 	})
 
-	analyzeDuration := time.Since(analyzeStart)
+	buildDuration := time.Since(buildStart)
 	if profileSnapshot {
-		recordTiming("phase1", analyzeDuration)
+		recordTiming("build", buildDuration)
 	}
 	if metricsEnabled {
-		w.metrics.lastPhase1Ns.Store(analyzeDuration.Nanoseconds())
+		w.metrics.lastPhase1Ns.Store(buildDuration.Nanoseconds())
 	}
 
-	if analyzeErr != nil {
-		w.logEvent(LogLevelError, "snapshot_analyze_failed", map[string]any{
-			"error": analyzeErr.Error(),
+	if buildErr != nil {
+		w.logEvent(LogLevelError, "snapshot_build_failed", map[string]any{
+			"error": buildErr.Error(),
 		})
-		w.recordError(analyzeErr)
+		w.recordError(buildErr)
 		loader.ReturnIssuePtrsToPool(pooledRefs)
 
 		// Send error to UI
 		w.send(SnapshotErrorMsg{
-			Err:         analyzeErr,
+			Err:         buildErr,
 			Recoverable: true,
 		})
 		return nil
@@ -1484,8 +1399,6 @@ func (w *BackgroundWorker) buildSnapshot() *DataSnapshot {
 	if snapshot != nil {
 		snapshot.DataHash = hash
 		snapshot.LoadWarningCount = len(loadWarnings)
-		snapshot.RecipeName = recipeID
-		snapshot.RecipeHash = recipeHash
 		snapshot.pooledIssues = pooledRefs
 		snapshot.DatasetTier = tier
 		snapshot.SourceIssueCountHint = sourceLineCount
@@ -1517,11 +1430,11 @@ func (w *BackgroundWorker) buildSnapshot() *DataSnapshot {
 		recordTiming("snapshot_total", totalDuration)
 	}
 	fields := map[string]any{
-		"issues":    len(issues),
-		"load_ms":   float64(loadDuration.Microseconds()) / 1000.0,
-		"phase1_ms": float64(analyzeDuration.Microseconds()) / 1000.0,
-		"total_ms":  float64(totalDuration.Microseconds()) / 1000.0,
-		"hash":      hashPrefix(hash),
+		"issues":   len(issues),
+		"load_ms":  float64(loadDuration.Microseconds()) / 1000.0,
+		"build_ms": float64(buildDuration.Microseconds()) / 1000.0,
+		"total_ms": float64(totalDuration.Microseconds()) / 1000.0,
+		"hash":     hashPrefix(hash),
 	}
 	if metricsEnabled {
 		fields["snapshot_bytes"] = w.metrics.lastSnapshotSizeBytes.Load()
@@ -1531,33 +1444,15 @@ func (w *BackgroundWorker) buildSnapshot() *DataSnapshot {
 	}
 	w.logEvent(LogLevelInfo, "snapshot_built", fields)
 	if profileSnapshot && snapshotTimings != nil {
-		dbg.Log("worker.snapshot_summary issues=%d total=%s load=%s phase1=%s",
+		dbg.Log("worker.snapshot_summary issues=%d total=%s load=%s build=%s",
 			len(issues),
 			formatReloadDuration(snapshotTimings["snapshot_total"]),
 			formatReloadDuration(snapshotTimings["load_issues"]),
-			formatReloadDuration(snapshotTimings["phase1"]),
+			formatReloadDuration(snapshotTimings["build"]),
 		)
 	}
 
-	// Spawn Phase 2 completion watcher if Phase 2 isn't ready yet
-	if snapshot != nil && !snapshot.Phase2Ready {
-		go w.runPhase2Analysis(snapshot.Analysis, hash)
-	}
-
 	return snapshot
-}
-
-func recipeIncludesClosedStatuses(r *recipe.Recipe) bool {
-	if r == nil {
-		return false
-	}
-	for _, s := range r.Filters.Status {
-		switch strings.TrimSpace(strings.ToLower(s)) {
-		case string(model.StatusClosed), string(model.StatusTombstone):
-			return true
-		}
-	}
-	return false
 }
 
 func largeDatasetWarning(tier datasetTier, sourceHint, loaded int, openOnly bool) string {
@@ -1679,46 +1574,6 @@ func envDurationMilliseconds(name string, fallback time.Duration) time.Duration 
 	return time.Duration(n) * time.Millisecond
 }
 
-// runPhase2Analysis waits for Phase 2 analysis to complete and notifies the UI.
-// This runs in a goroutine so it doesn't block snapshot delivery.
-// The dataHash is used by the UI to verify the update matches the current snapshot.
-func (w *BackgroundWorker) runPhase2Analysis(stats *analysis.GraphStats, dataHash string) {
-	if stats == nil {
-		return
-	}
-
-	// Wait for Phase 2 to complete (blocking)
-	phase2Start := time.Now()
-	stats.WaitForPhase2()
-	phase2Duration := time.Since(phase2Start)
-	if w.metricsEnabled {
-		w.metrics.lastPhase2Ns.Store(phase2Duration.Nanoseconds())
-	}
-	if dbg.Enabled() {
-		dbg.LogTiming("worker.phase2", phase2Duration)
-	}
-
-	// Check if this Phase 2 completion still corresponds to the active snapshot.
-	w.mu.RLock()
-	stopped := w.state == WorkerStopped
-	current := w.snapshot
-	w.mu.RUnlock()
-
-	if stopped || current == nil || current.Analysis != stats || current.DataHash != dataHash {
-		w.logEvent(LogLevelDebug, "phase2_skip", map[string]any{
-			"hash": hashPrefix(dataHash),
-		})
-		return
-	}
-	w.logEvent(LogLevelInfo, "phase2_complete", map[string]any{
-		"hash":      hashPrefix(dataHash),
-		"phase2_ms": float64(phase2Duration.Microseconds()) / 1000.0,
-	})
-
-	// Notify UI that Phase 2 metrics are ready
-	w.send(Phase2UpdateMsg{DataHash: dataHash})
-}
-
 // SnapshotReadyMsg is sent to the UI when a new snapshot is ready.
 type SnapshotReadyMsg struct {
 	Snapshot      *DataSnapshot
@@ -1733,13 +1588,6 @@ type SnapshotReadyMsg struct {
 type SnapshotErrorMsg struct {
 	Err         error
 	Recoverable bool // True if we expect to recover on next file change
-}
-
-// Phase2UpdateMsg is sent when Phase 2 analysis completes.
-// This allows the UI to update without waiting for full rebuild.
-// The UI should check DataHash matches current snapshot before using.
-type Phase2UpdateMsg struct {
-	DataHash string // Content hash to verify this matches current snapshot
 }
 
 func (w *BackgroundWorker) send(msg tea.Msg) {

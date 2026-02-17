@@ -142,11 +142,7 @@ func TestContextFromFocus(t *testing.T) {
 		{focusList, "list"},
 		{focusDetail, "detail"},
 		{focusBoard, "board"},
-		{focusGraph, "graph"},
-		{focusInsights, "insights"},
-		{focusHistory, "history"},
-		{focusActionable, "actionable"},
-		{focusLabelDashboard, "label"},
+		{focusTree, "tree"},
 		{focusHelp, "list"}, // Default fallback
 	}
 

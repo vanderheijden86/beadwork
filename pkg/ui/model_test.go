@@ -40,7 +40,7 @@ func TestModelFiltering(t *testing.T) {
 		},
 	}
 
-	m := ui.NewModel(issues, nil, "")
+	m := ui.NewModel(issues, "")
 
 	// Test "All"
 	if len(m.FilteredIssues()) != 8 {
@@ -114,14 +114,10 @@ func TestTimeTravelMode(t *testing.T) {
 		{ID: "1", Title: "Test Issue", Status: model.StatusOpen, Priority: 1},
 	}
 
-	m := ui.NewModel(issues, nil, "")
+	m := ui.NewModel(issues, "")
 
 	if m.IsTimeTravelMode() {
 		t.Error("Expected not to be in time-travel mode initially")
-	}
-
-	if m.TimeTravelDiff() != nil {
-		t.Error("Expected TimeTravelDiff to be nil initially")
 	}
 }
 
@@ -148,7 +144,7 @@ func TestGetTypeIconMD(t *testing.T) {
 }
 
 func TestModelCreationWithEmptyIssues(t *testing.T) {
-	m := ui.NewModel([]model.Issue{}, nil, "")
+	m := ui.NewModel([]model.Issue{}, "")
 
 	if len(m.FilteredIssues()) != 0 {
 		t.Errorf("Expected 0 issues for empty input, got %d", len(m.FilteredIssues()))
@@ -164,7 +160,7 @@ func TestIssueItemDiffStatus(t *testing.T) {
 		{ID: "1", Title: "Test", Status: model.StatusOpen},
 	}
 
-	m := ui.NewModel(issues, nil, "")
+	m := ui.NewModel(issues, "")
 
 	filtered := m.FilteredIssues()
 	if len(filtered) != 1 {
@@ -181,7 +177,7 @@ func TestFocusStateInitial(t *testing.T) {
 	issues := []model.Issue{
 		{ID: "1", Title: "Test Issue", Status: model.StatusOpen, Priority: 1},
 	}
-	m := ui.NewModel(issues, nil, "")
+	m := ui.NewModel(issues, "")
 
 	if m.FocusState() != "tree" {
 		t.Errorf("Initial focus state = %q, want %q", m.FocusState(), "tree")
@@ -193,7 +189,7 @@ func TestFocusTransitionBoard(t *testing.T) {
 	issues := []model.Issue{
 		{ID: "1", Title: "Test Issue", Status: model.StatusOpen, Priority: 1},
 	}
-	m := ui.NewModel(issues, nil, "")
+	m := ui.NewModel(issues, "")
 	m = switchToList(t, m) // Exit default tree view (bd-dxc)
 
 	if m.FocusState() != "list" {
@@ -224,93 +220,13 @@ func TestFocusTransitionBoard(t *testing.T) {
 	}
 }
 
-// TestFocusTransitionGraph verifies 'g' toggles graph view
-func TestFocusTransitionGraph(t *testing.T) {
-	issues := []model.Issue{
-		{ID: "1", Title: "Test Issue", Status: model.StatusOpen, Priority: 1},
-	}
-	m := ui.NewModel(issues, nil, "")
-	m = switchToList(t, m) // Exit default tree view (bd-dxc)
-
-	newM, _ := m.Update(keyMsg("g"))
-	m = newM.(ui.Model)
-
-	if m.FocusState() != "graph" {
-		t.Errorf("After 'g', focus = %q, want 'graph'", m.FocusState())
-	}
-	if !m.IsGraphView() {
-		t.Error("IsGraphView should be true after 'g'")
-	}
-
-	newM, _ = m.Update(keyMsg("g"))
-	m = newM.(ui.Model)
-
-	if m.FocusState() != "list" {
-		t.Errorf("After second 'g', focus = %q, want 'list'", m.FocusState())
-	}
-	if m.IsGraphView() {
-		t.Error("IsGraphView should be false after second 'g'")
-	}
-}
-
-// TestFocusTransitionActionable verifies 'a' toggles actionable view
-func TestFocusTransitionActionable(t *testing.T) {
-	issues := []model.Issue{
-		{ID: "1", Title: "Test Issue", Status: model.StatusOpen, Priority: 1},
-	}
-	m := ui.NewModel(issues, nil, "")
-	m = switchToList(t, m) // Exit default tree view (bd-dxc)
-
-	newM, _ := m.Update(keyMsg("a"))
-	m = newM.(ui.Model)
-
-	if m.FocusState() != "actionable" {
-		t.Errorf("After 'a', focus = %q, want 'actionable'", m.FocusState())
-	}
-	if !m.IsActionableView() {
-		t.Error("IsActionableView should be true after 'a'")
-	}
-
-	newM, _ = m.Update(keyMsg("a"))
-	m = newM.(ui.Model)
-
-	if m.FocusState() != "list" {
-		t.Errorf("After second 'a', focus = %q, want 'list'", m.FocusState())
-	}
-	if m.IsActionableView() {
-		t.Error("IsActionableView should be false after second 'a'")
-	}
-}
-
-// TestFocusTransitionInsights verifies 'i' toggles insights view
-func TestFocusTransitionInsights(t *testing.T) {
-	issues := []model.Issue{
-		{ID: "1", Title: "Test Issue", Status: model.StatusOpen, Priority: 1},
-	}
-	m := ui.NewModel(issues, nil, "")
-	m = switchToList(t, m) // Exit default tree view (bd-dxc)
-
-	newM, _ := m.Update(keyMsg("i"))
-	m = newM.(ui.Model)
-
-	if m.FocusState() != "insights" {
-		t.Errorf("After 'i', focus = %q, want 'insights'", m.FocusState())
-	}
-
-	newM, _ = m.Update(keyMsg("i"))
-	m = newM.(ui.Model)
-
-	if m.FocusState() != "list" {
-		t.Errorf("After second 'i', focus = %q, want 'list'", m.FocusState())
-	}
-}
 
 // TestFocusTransitionTree verifies 'E' toggles tree view (bd-dxc: starts in tree)
 func TestFocusTransitionTree(t *testing.T) {
 	issues := []model.Issue{
 		{ID: "1", Title: "Test Issue", Status: model.StatusOpen, Priority: 1, IssueType: model.TypeEpic},
 	}
-	m := ui.NewModel(issues, nil, "")
+	m := ui.NewModel(issues, "")
 
 	// Default is tree view (bd-dxc)
 	if m.FocusState() != "tree" {
@@ -339,7 +255,7 @@ func TestFocusTransitionHelp(t *testing.T) {
 	issues := []model.Issue{
 		{ID: "1", Title: "Test Issue", Status: model.StatusOpen, Priority: 1},
 	}
-	m := ui.NewModel(issues, nil, "")
+	m := ui.NewModel(issues, "")
 
 	newM, _ := m.Update(keyMsg("?"))
 	m = newM.(ui.Model)
@@ -349,43 +265,15 @@ func TestFocusTransitionHelp(t *testing.T) {
 	}
 }
 
-// TestFocusTransitionHistory verifies 'h' toggles history view
-func TestFocusTransitionHistory(t *testing.T) {
-	issues := []model.Issue{
-		{ID: "1", Title: "Test Issue", Status: model.StatusOpen, Priority: 1},
-	}
-	m := ui.NewModel(issues, nil, "")
-	m = switchToList(t, m) // Exit default tree view (bd-dxc)
-
-	newM, _ := m.Update(keyMsg("h"))
-	m = newM.(ui.Model)
-
-	if m.FocusState() != "history" {
-		t.Errorf("After 'h', focus = %q, want 'history'", m.FocusState())
-	}
-	if !m.IsHistoryView() {
-		t.Error("IsHistoryView should be true after 'h'")
-	}
-
-	newM, _ = m.Update(keyMsg("h"))
-	m = newM.(ui.Model)
-
-	if m.FocusState() != "list" {
-		t.Errorf("After second 'h', focus = %q, want 'list'", m.FocusState())
-	}
-	if m.IsHistoryView() {
-		t.Error("IsHistoryView should be false after second 'h'")
-	}
-}
-
 // TestViewSwitchClearsOthers verifies switching views clears other view states
 func TestViewSwitchClearsOthers(t *testing.T) {
 	issues := []model.Issue{
-		{ID: "1", Title: "Test Issue", Status: model.StatusOpen, Priority: 1},
+		{ID: "1", Title: "Test Issue", Status: model.StatusOpen, Priority: 1, IssueType: model.TypeEpic},
 	}
-	m := ui.NewModel(issues, nil, "")
+	m := ui.NewModel(issues, "")
 	m = switchToList(t, m) // Exit default tree view (bd-dxc)
 
+	// Switch to board
 	newM, _ := m.Update(keyMsg("b"))
 	m = newM.(ui.Model)
 
@@ -393,109 +281,71 @@ func TestViewSwitchClearsOthers(t *testing.T) {
 		t.Fatal("IsBoardView should be true after 'b'")
 	}
 
-	newM, _ = m.Update(keyMsg("g"))
+	// Switch to tree - board should be cleared
+	newM, _ = m.Update(keyMsg("E"))
 	m = newM.(ui.Model)
 
-	if !m.IsGraphView() {
-		t.Error("IsGraphView should be true after 'g'")
+	if m.FocusState() != "tree" {
+		t.Error("Expected tree focus after 'E'")
 	}
 	if m.IsBoardView() {
-		t.Error("IsBoardView should be false after switching to graph")
-	}
-
-	newM, _ = m.Update(keyMsg("a"))
-	m = newM.(ui.Model)
-
-	if !m.IsActionableView() {
-		t.Error("IsActionableView should be true after 'a'")
-	}
-	if m.IsGraphView() {
-		t.Error("IsGraphView should be false after switching to actionable")
+		t.Error("IsBoardView should be false after switching to tree")
 	}
 }
 
-// TestEscClosesViews verifies Esc returns to list from various views
+// TestEscClosesViews verifies Esc returns to list from board view
 func TestEscClosesViews(t *testing.T) {
 	issues := []model.Issue{
 		{ID: "1", Title: "Test Issue", Status: model.StatusOpen, Priority: 1},
 	}
 
-	tests := []struct {
-		name       string
-		enterKey   string
-		expectView string
-	}{
-		{"board", "b", "board"},
-		{"graph", "g", "graph"},
-		{"actionable", "a", "actionable"},
-		{"insights", "i", "insights"},
+	m := ui.NewModel(issues, "")
+	m = switchToList(t, m) // Exit default tree view (bd-dxc)
+
+	newM, _ := m.Update(keyMsg("b"))
+	m = newM.(ui.Model)
+
+	if m.FocusState() != "board" {
+		t.Fatalf("After 'b', focus = %q, want 'board'", m.FocusState())
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			m := ui.NewModel(issues, nil, "")
-			m = switchToList(t, m) // Exit default tree view (bd-dxc)
+	newM, _ = m.Update(keyMsg("esc"))
+	m = newM.(ui.Model)
 
-			newM, _ := m.Update(keyMsg(tt.enterKey))
-			m = newM.(ui.Model)
-
-			if m.FocusState() != tt.expectView {
-				t.Fatalf("After %q, focus = %q, want %q", tt.enterKey, m.FocusState(), tt.expectView)
-			}
-
-			newM, _ = m.Update(keyMsg("esc"))
-			m = newM.(ui.Model)
-
-			if m.FocusState() != "list" {
-				t.Errorf("After Esc from %s, focus = %q, want 'list'", tt.name, m.FocusState())
-			}
-		})
+	if m.FocusState() != "list" {
+		t.Errorf("After Esc from board, focus = %q, want 'list'", m.FocusState())
 	}
 }
 
-// TestQuitClosesViews verifies 'q' returns to list from various views
+// TestQuitClosesViews verifies 'q' returns to list from board view
 func TestQuitClosesViews(t *testing.T) {
 	issues := []model.Issue{
 		{ID: "1", Title: "Test Issue", Status: model.StatusOpen, Priority: 1},
 	}
 
-	tests := []struct {
-		name       string
-		enterKey   string
-		expectView string
-	}{
-		{"board", "b", "board"},
-		{"graph", "g", "graph"},
-		{"insights", "i", "insights"},
+	m := ui.NewModel(issues, "")
+	m = switchToList(t, m) // Exit default tree view (bd-dxc)
+
+	newM, _ := m.Update(keyMsg("b"))
+	m = newM.(ui.Model)
+
+	if m.FocusState() != "board" {
+		t.Fatalf("After 'b', focus = %q, want 'board'", m.FocusState())
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			m := ui.NewModel(issues, nil, "")
-			m = switchToList(t, m) // Exit default tree view (bd-dxc)
+	newM, _ = m.Update(keyMsg("q"))
+	m = newM.(ui.Model)
 
-			newM, _ := m.Update(keyMsg(tt.enterKey))
-			m = newM.(ui.Model)
-
-			if m.FocusState() != tt.expectView {
-				t.Fatalf("After %q, focus = %q, want %q", tt.enterKey, m.FocusState(), tt.expectView)
-			}
-
-			newM, _ = m.Update(keyMsg("q"))
-			m = newM.(ui.Model)
-
-			if m.FocusState() != "list" {
-				t.Errorf("After 'q' from %s, focus = %q, want 'list'", tt.name, m.FocusState())
-			}
-		})
+	if m.FocusState() != "list" {
+		t.Errorf("After 'q' from board, focus = %q, want 'list'", m.FocusState())
 	}
 }
 
 // TestEmptyIssuesDoesNotPanic verifies state machine handles empty issues
 func TestEmptyIssuesDoesNotPanic(t *testing.T) {
-	m := ui.NewModel([]model.Issue{}, nil, "")
+	m := ui.NewModel([]model.Issue{}, "")
 
-	keys := []string{"b", "g", "a", "i", "E", "H", "?", "j", "k", "enter", "esc"}
+	keys := []string{"b", "E", "?", "j", "k", "enter", "esc"}
 
 	for _, key := range keys {
 		t.Run(key, func(t *testing.T) {
@@ -516,7 +366,7 @@ func TestFocusStateString(t *testing.T) {
 	issues := []model.Issue{
 		{ID: "1", Title: "Test", Status: model.StatusOpen, Priority: 1},
 	}
-	m := ui.NewModel(issues, nil, "")
+	m := ui.NewModel(issues, "")
 
 	state := m.FocusState()
 	if state == "unknown" {

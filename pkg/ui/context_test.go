@@ -31,11 +31,6 @@ func TestCurrentContext_Overlays(t *testing.T) {
 		expected Context
 	}{
 		{
-			name:     "agent prompt",
-			setup:    func(m *Model) { m.showAgentPrompt = true },
-			expected: ContextAgentPrompt,
-		},
-		{
 			name:     "help overlay",
 			setup:    func(m *Model) { m.showHelp = true },
 			expected: ContextHelp,
@@ -51,34 +46,9 @@ func TestCurrentContext_Overlays(t *testing.T) {
 			expected: ContextLabelPicker,
 		},
 		{
-			name:     "recipe picker",
-			setup:    func(m *Model) { m.showRecipePicker = true },
-			expected: ContextRecipePicker,
-		},
-		{
-			name:     "label health detail",
-			setup:    func(m *Model) { m.showLabelHealthDetail = true },
-			expected: ContextLabelHealthDetail,
-		},
-		{
-			name:     "label drilldown",
-			setup:    func(m *Model) { m.showLabelDrilldown = true },
-			expected: ContextLabelDrilldown,
-		},
-		{
-			name:     "label graph analysis",
-			setup:    func(m *Model) { m.showLabelGraphAnalysis = true },
-			expected: ContextLabelGraphAnalysis,
-		},
-		{
 			name:     "time travel input",
 			setup:    func(m *Model) { m.showTimeTravelPrompt = true },
 			expected: ContextTimeTravelInput,
-		},
-		{
-			name:     "alerts panel",
-			setup:    func(m *Model) { m.showAlertsPanel = true },
-			expected: ContextAlerts,
 		},
 		{
 			name:     "repo picker",
@@ -105,49 +75,9 @@ func TestCurrentContext_Views(t *testing.T) {
 		expected Context
 	}{
 		{
-			name:     "insights panel",
-			setup:    func(m *Model) { m.focused = focusInsights },
-			expected: ContextInsights,
-		},
-		{
-			name:     "attention view",
-			setup:    func(m *Model) { m.focused = focusInsights; m.showAttentionView = true },
-			expected: ContextAttention,
-		},
-		{
-			name:     "flow matrix",
-			setup:    func(m *Model) { m.focused = focusFlowMatrix },
-			expected: ContextFlowMatrix,
-		},
-		{
-			name:     "label dashboard",
-			setup:    func(m *Model) { m.focused = focusLabelDashboard },
-			expected: ContextLabelDashboard,
-		},
-		{
-			name:     "graph view",
-			setup:    func(m *Model) { m.isGraphView = true },
-			expected: ContextGraph,
-		},
-		{
 			name:     "board view",
 			setup:    func(m *Model) { m.isBoardView = true },
 			expected: ContextBoard,
-		},
-		{
-			name:     "actionable view",
-			setup:    func(m *Model) { m.isActionableView = true },
-			expected: ContextActionable,
-		},
-		{
-			name:     "history view",
-			setup:    func(m *Model) { m.isHistoryView = true },
-			expected: ContextHistory,
-		},
-		{
-			name:     "sprint view",
-			setup:    func(m *Model) { m.isSprintView = true },
-			expected: ContextSprint,
 		},
 		{
 			name:     "tree view via focus",
@@ -220,7 +150,7 @@ func TestCurrentContext_Priority(t *testing.T) {
 	// Test that overlays take priority over views
 	m := newTestModel()
 	m.showHelp = true       // Overlay
-	m.isGraphView = true    // View
+	m.isBoardView = true    // View
 	m.timeTravelMode = true // Detail state
 
 	// Overlay should win
@@ -230,12 +160,12 @@ func TestCurrentContext_Priority(t *testing.T) {
 
 	// Remove overlay, view should win over detail state
 	m.showHelp = false
-	if ctx := m.CurrentContext(); ctx != ContextGraph {
+	if ctx := m.CurrentContext(); ctx != ContextBoard {
 		t.Errorf("View should take priority over detail state, got %q", ctx)
 	}
 
 	// Remove view, detail state should win
-	m.isGraphView = false
+	m.isBoardView = false
 	if ctx := m.CurrentContext(); ctx != ContextTimeTravel {
 		t.Errorf("Detail state should take priority over default, got %q", ctx)
 	}
@@ -248,7 +178,7 @@ func TestContext_Description(t *testing.T) {
 		shouldMatch bool
 	}{
 		{ContextList, "Issue list", true},
-		{ContextGraph, "Dependency graph", true},
+		{ContextBoard, "Kanban board", true},
 		{ContextHelp, "Help overlay", true},
 		{Context("unknown"), "unknown", true}, // Fallback to string value
 	}
@@ -265,9 +195,8 @@ func TestContext_Description(t *testing.T) {
 
 func TestContext_IsOverlay(t *testing.T) {
 	overlays := []Context{
-		ContextLabelPicker, ContextRecipePicker, ContextHelp, ContextQuitConfirm,
-		ContextLabelHealthDetail, ContextLabelDrilldown, ContextLabelGraphAnalysis,
-		ContextTimeTravelInput, ContextAlerts, ContextRepoPicker, ContextAgentPrompt,
+		ContextLabelPicker, ContextHelp, ContextQuitConfirm,
+		ContextTimeTravelInput, ContextRepoPicker,
 	}
 
 	for _, c := range overlays {
@@ -277,7 +206,7 @@ func TestContext_IsOverlay(t *testing.T) {
 	}
 
 	nonOverlays := []Context{
-		ContextList, ContextGraph, ContextBoard, ContextInsights, ContextHistory,
+		ContextList, ContextBoard, ContextTree,
 	}
 
 	for _, c := range nonOverlays {
@@ -289,9 +218,7 @@ func TestContext_IsOverlay(t *testing.T) {
 
 func TestContext_IsView(t *testing.T) {
 	views := []Context{
-		ContextInsights, ContextFlowMatrix, ContextGraph, ContextBoard,
-		ContextActionable, ContextHistory, ContextSprint, ContextTree,
-		ContextLabelDashboard, ContextAttention, ContextSplit, ContextDetail,
+		ContextBoard, ContextTree, ContextSplit, ContextDetail,
 		ContextTimeTravel,
 	}
 
@@ -318,7 +245,6 @@ func TestContext_TutorialPages(t *testing.T) {
 		minPages int // Minimum expected pages
 	}{
 		{ContextList, 1},
-		{ContextGraph, 1},
 		{ContextBoard, 1},
 		{ContextFilter, 1},
 		{ContextHelp, 1},

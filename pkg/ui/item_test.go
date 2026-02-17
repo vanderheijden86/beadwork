@@ -448,67 +448,6 @@ func TestExtractRepoPrefixSeparatorPriority(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// IssueItem Triage Fields Tests
-// =============================================================================
-
-func TestIssueItemTriageFields(t *testing.T) {
-	// Test that triage fields are properly accessible
-	item := ui.IssueItem{
-		Issue: model.Issue{
-			ID:     "triage-1",
-			Title:  "Triage Test",
-			Status: model.StatusOpen,
-		},
-		TriageScore:   0.85,
-		TriageReason:  "High impact blocker",
-		TriageReasons: []string{"blocks 5 items", "critical path"},
-		IsQuickWin:    true,
-		IsBlocker:     true,
-		UnblocksCount: 5,
-	}
-
-	// Verify fields are set correctly
-	if item.TriageScore != 0.85 {
-		t.Errorf("TriageScore = %v, want 0.85", item.TriageScore)
-	}
-	if item.TriageReason != "High impact blocker" {
-		t.Errorf("TriageReason = %q, want %q", item.TriageReason, "High impact blocker")
-	}
-	if len(item.TriageReasons) != 2 {
-		t.Errorf("TriageReasons len = %d, want 2", len(item.TriageReasons))
-	}
-	if !item.IsQuickWin {
-		t.Error("IsQuickWin should be true")
-	}
-	if !item.IsBlocker {
-		t.Error("IsBlocker should be true")
-	}
-	if item.UnblocksCount != 5 {
-		t.Errorf("UnblocksCount = %d, want 5", item.UnblocksCount)
-	}
-}
-
-func TestIssueItemGraphFields(t *testing.T) {
-	// Test GraphScore and Impact fields
-	item := ui.IssueItem{
-		Issue: model.Issue{
-			ID:     "graph-1",
-			Title:  "Graph Test",
-			Status: model.StatusOpen,
-		},
-		GraphScore: 0.75,
-		Impact:     0.9,
-	}
-
-	if item.GraphScore != 0.75 {
-		t.Errorf("GraphScore = %v, want 0.75", item.GraphScore)
-	}
-	if item.Impact != 0.9 {
-		t.Errorf("Impact = %v, want 0.9", item.Impact)
-	}
-}
-
 func TestIssueItemDiffStatusBadge(t *testing.T) {
 	// Test that DiffStatus field works with Badge method
 	tests := []struct {
@@ -579,8 +518,6 @@ func TestIssueItemListInterface(t *testing.T) {
 			Labels:    []string{"test"},
 		},
 		RepoPrefix: "pkg",
-		GraphScore: 0.5,
-		Impact:     0.7,
 		DiffStatus: ui.DiffStatusNew,
 	}
 

@@ -476,12 +476,8 @@ func (b *BoardModel) SetSnapshot(s *DataSnapshot) {
 		b.columns = groupIssuesByMode(s.Issues, b.swimLaneMode)
 	}
 
-	// Prefer snapshot-precomputed reverse-dependency index when available.
-	if s.GraphLayout != nil && s.GraphLayout.Dependents != nil {
-		b.blocksIndex = s.GraphLayout.Dependents
-	} else {
-		b.blocksIndex = buildBlocksIndex(s.Issues)
-	}
+	// Build reverse-dependency index from issues.
+	b.blocksIndex = buildBlocksIndex(s.Issues)
 
 	// Use snapshot issue map for blocker titles.
 	b.issueMap = s.IssueMap

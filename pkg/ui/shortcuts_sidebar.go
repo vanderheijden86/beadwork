@@ -395,18 +395,8 @@ func ContextFromFocus(f focus) string {
 		return "detail"
 	case focusBoard:
 		return "board"
-	case focusGraph:
-		return "graph"
-	case focusInsights:
-		return "insights"
-	case focusHistory:
-		return "history"
-	case focusActionable:
-		return "actionable"
 	case focusTree:
 		return "tree"
-	case focusLabelDashboard:
-		return "label"
 	default:
 		return "list"
 	}

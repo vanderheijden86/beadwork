@@ -5,8 +5,6 @@ import (
 	"io"
 	"strings"
 
-	"github.com/vanderheijden86/beadwork/pkg/analysis"
-
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -14,11 +12,8 @@ import (
 
 // IssueDelegate renders issue items in the list
 type IssueDelegate struct {
-	Theme             Theme
-	ShowPriorityHints bool
-	PriorityHints     map[string]*analysis.PriorityRecommendation
-	WorkspaceMode     bool // When true, shows repo prefix badges
-	ShowSearchScores  bool // Show semantic/hybrid score badge when search is active
+	Theme         Theme
+	WorkspaceMode bool // When true, shows repo prefix badges
 }
 
 func (d IssueDelegate) Height() int {
@@ -85,15 +80,6 @@ func (d IssueDelegate) Render(w io.Writer, m list.Model, index int, listItem lis
 		}
 	}
 
-	// Sparkline (Graph Score) - visualization of importance
-	if width > 120 {
-		spark := RenderSparkline(i.GraphScore, 5)
-		sparkColor := GetHeatmapColor(i.GraphScore, t)
-		sparkStyle := t.Renderer.NewStyle().Foreground(sparkColor)
-		rightParts = append(rightParts, sparkStyle.Render(spark))
-		rightWidth += 6 // 5 + 1 spacing
-	}
-
 	// Assignee (if present and we have room)
 	if width > 100 && i.Issue.Assignee != "" {
 		assignee := truncateRunesHelper(i.Issue.Assignee, 12, "…")
@@ -113,8 +99,7 @@ func (d IssueDelegate) Render(w io.Writer, m list.Model, index int, listItem lis
 	}
 
 	// Left side fixed columns with polished badges
-	// [selector 2] [repo-badge 0-6] [icon 1-2] [prio-badge 3] [hint 1-2] [status-badge 6] [id dynamic] [space]
-	// Use measured iconDisplayWidth instead of hardcoded value for proper alignment
+	// [selector 2] [repo-badge 0-6] [icon 1-2] [prio-badge 3] [status-badge 6] [id dynamic] [space]
 	leftFixedWidth := 2 + iconDisplayWidth + 1 // selector(2) + icon(measured) + space(1)
 
 	// Repo badge width (workspace mode)
@@ -130,32 +115,10 @@ func (d IssueDelegate) Render(w io.Writer, m list.Model, index int, listItem lis
 	prioBadgeWidth := lipgloss.Width(prioBadge)
 	leftFixedWidth += prioBadgeWidth + 1
 
-	// Priority hint indicator
-	if d.ShowPriorityHints {
-		leftFixedWidth += 2
-	}
-
-	// Triage indicator width (bv-151) - use lipgloss.Width for accurate emoji measurement
-	if i.IsQuickWin {
-		leftFixedWidth += lipgloss.Width("⭐") + 1 // emoji + space
-	} else if i.IsBlocker && i.UnblocksCount > 0 {
-		leftFixedWidth += lipgloss.Width(fmt.Sprintf("🔓%d", i.UnblocksCount)) + 1 // emoji+count + space
-	} else if i.UnblocksCount > 0 {
-		leftFixedWidth += lipgloss.Width(fmt.Sprintf("↪%d", i.UnblocksCount)) + 1 // arrow+count + space
-	}
-
 	// Status badge (polished)
 	statusBadge := RenderStatusBadge(string(i.Issue.Status))
 	statusBadgeWidth := lipgloss.Width(statusBadge)
 	leftFixedWidth += statusBadgeWidth + 1
-
-	// Search score badge (semantic/hybrid)
-	var searchBadge string
-	if d.ShowSearchScores && i.SearchScoreSet {
-		scoreStr := fmt.Sprintf("%.2f", i.SearchScore)
-		searchBadge = t.InfoBold.Render(fmt.Sprintf("[%s]", scoreStr))
-		leftFixedWidth += lipgloss.Width(searchBadge) + 1
-	}
 
 	// ID width - use actual visual width, but cap reasonably
 	idWidth := lipgloss.Width(idStr)
@@ -211,43 +174,9 @@ func (d IssueDelegate) Render(w io.Writer, m list.Model, index int, listItem lis
 	leftSide.WriteString(prioBadge)
 	leftSide.WriteString(" ")
 
-	// Priority hint indicator (↑/↓) - using pre-computed styles
-	if d.ShowPriorityHints && d.PriorityHints != nil {
-		if hint, ok := d.PriorityHints[i.Issue.ID]; ok {
-			if hint.Direction == "increase" {
-				leftSide.WriteString(t.PriorityUpArrow.Render("↑"))
-			} else if hint.Direction == "decrease" {
-				leftSide.WriteString(t.PriorityDownArrow.Render("↓"))
-			}
-		} else {
-			leftSide.WriteString(" ")
-		}
-		leftSide.WriteString(" ")
-	}
-
-	// Triage indicators (bv-151): Quick win ⭐ and Unblocks count 🔓 - using pre-computed styles
-	triageIndicator := ""
-	if i.IsQuickWin {
-		triageIndicator = t.TriageStar.Render("⭐")
-	} else if i.IsBlocker && i.UnblocksCount > 0 {
-		triageIndicator = t.TriageUnblocks.Render(fmt.Sprintf("🔓%d", i.UnblocksCount))
-	} else if i.UnblocksCount > 0 {
-		triageIndicator = t.TriageUnblocksAlt.Render(fmt.Sprintf("↪%d", i.UnblocksCount))
-	}
-	if triageIndicator != "" {
-		leftSide.WriteString(triageIndicator)
-		leftSide.WriteString(" ")
-	}
-
 	// Status badge (polished)
 	leftSide.WriteString(statusBadge)
 	leftSide.WriteString(" ")
-
-	// Search score badge (optional)
-	if searchBadge != "" {
-		leftSide.WriteString(searchBadge)
-		leftSide.WriteString(" ")
-	}
 
 	// ID with secondary styling (using pre-computed style base)
 	idStyle := t.SecondaryText

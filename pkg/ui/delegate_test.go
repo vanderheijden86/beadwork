@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/vanderheijden86/beadwork/pkg/analysis"
 	"github.com/vanderheijden86/beadwork/pkg/model"
 
 	"github.com/charmbracelet/bubbles/list"
@@ -36,18 +35,14 @@ func newTestIssueItem(id string) IssueItem {
 	}
 }
 
-func TestIssueDelegate_RenderWorkspaceWithPriorityHints(t *testing.T) {
+func TestIssueDelegate_RenderWorkspaceWithDiffBadge(t *testing.T) {
 	item := newTestIssueItem("api-123")
 	item.RepoPrefix = "api"         // exercise workspace badge branch
 	item.DiffStatus = DiffStatusNew // exercise diff badge branch
 	theme := DefaultTheme(lipgloss.NewRenderer(os.Stdout))
 
 	delegate := IssueDelegate{
-		Theme:             theme,
-		ShowPriorityHints: true,
-		PriorityHints: map[string]*analysis.PriorityRecommendation{
-			item.Issue.ID: {IssueID: item.Issue.ID, Direction: "increase"},
-		},
+		Theme:         theme,
 		WorkspaceMode: true,
 	}
 
@@ -61,9 +56,6 @@ func TestIssueDelegate_RenderWorkspaceWithPriorityHints(t *testing.T) {
 
 	if !strings.Contains(out, "api-123") {
 		t.Fatalf("render output missing issue id: %q", out)
-	}
-	if !strings.Contains(out, "↑") {
-		t.Fatalf("render output missing priority hint arrow: %q", out)
 	}
 	if !strings.Contains(out, "[API]") {
 		t.Fatalf("render output missing repo badge [API]: %q", out)

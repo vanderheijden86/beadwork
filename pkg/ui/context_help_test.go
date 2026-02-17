@@ -12,21 +12,14 @@ func TestContextHelpContentMap(t *testing.T) {
 	// Verify all expected contexts have help content
 	expectedContexts := []Context{
 		ContextList,
-		ContextGraph,
+		ContextTree,
 		ContextBoard,
-		ContextInsights,
-		ContextHistory,
 		ContextDetail,
 		ContextSplit,
 		ContextFilter,
 		ContextLabelPicker,
-		ContextRecipePicker,
 		ContextHelp,
 		ContextTimeTravel,
-		ContextTree,
-		ContextLabelDashboard,
-		ContextAttention,
-		ContextAgentPrompt,
 	}
 
 	for _, ctx := range expectedContexts {
@@ -53,24 +46,14 @@ func TestGetContextHelp(t *testing.T) {
 			contains: "List View",
 		},
 		{
-			name:     "graph context",
-			ctx:      ContextGraph,
-			contains: "Graph View",
+			name:     "tree context",
+			ctx:      ContextTree,
+			contains: "Tree View",
 		},
 		{
 			name:     "board context",
 			ctx:      ContextBoard,
 			contains: "Board View",
-		},
-		{
-			name:     "insights context",
-			ctx:      ContextInsights,
-			contains: "Insights Panel",
-		},
-		{
-			name:     "history context",
-			ctx:      ContextHistory,
-			contains: "History View",
 		},
 		{
 			name:     "detail context",
@@ -89,7 +72,7 @@ func TestGetContextHelp(t *testing.T) {
 		},
 		{
 			name:     "unknown context falls back to generic",
-			ctx:      Context("unknown-context"), // Invalid context
+			ctx:      Context("unknown-context"),
 			contains: "Quick Reference",
 		},
 	}
@@ -158,7 +141,7 @@ func TestRenderContextHelp(t *testing.T) {
 	result := RenderContextHelp(ContextList, theme, width, height)
 
 	// Should have modal border
-	if !strings.Contains(result, "╭") || !strings.Contains(result, "╮") {
+	if !strings.Contains(result, "\u256d") || !strings.Contains(result, "\u256e") {
 		t.Error("RenderContextHelp should render with rounded border")
 	}
 
@@ -185,8 +168,6 @@ func TestRenderContextHelpNarrowWidth(t *testing.T) {
 
 	result := RenderContextHelp(ContextList, theme, narrowWidth, height)
 
-	// Should adapt to narrow width (modal width = width - 4)
-	// Just verify it renders without panicking
 	if result == "" {
 		t.Error("RenderContextHelp should produce output even for narrow width")
 	}
@@ -200,8 +181,6 @@ func TestContextHelpKeyboardShortcuts(t *testing.T) {
 	}{
 		{ContextList, "j/k"},
 		{ContextList, "Enter"},
-		{ContextGraph, "h/l"},
-		{ContextGraph, "f"},
 		{ContextBoard, "h/l"},
 		{ContextDetail, "Esc"},
 		{ContextSplit, "Tab"},
@@ -215,10 +194,6 @@ func TestContextHelpKeyboardShortcuts(t *testing.T) {
 		}
 	}
 }
-
-// =============================================================================
-// ADDITIONAL TESTS FOR BV-WE18: Context Help Content Coverage
-// =============================================================================
 
 func TestContextHelpExitHints(t *testing.T) {
 	// Each context should mention how to exit/close
@@ -242,7 +217,6 @@ func TestContextHelpExitHints(t *testing.T) {
 }
 
 func TestContextHelpNoPlaceholders(t *testing.T) {
-	// Verify no placeholder text like "TODO", "Coming soon", "TBD", etc.
 	placeholders := []string{"TODO", "FIXME", "Coming soon", "TBD", "placeholder", "not implemented"}
 
 	for ctx, content := range ContextHelpContent {
@@ -258,18 +232,15 @@ func TestContextHelpNoPlaceholders(t *testing.T) {
 }
 
 func TestContextHelpCompactWidth(t *testing.T) {
-	// Verify content lines fit within modal width (60 chars)
 	maxLineWidth := 60
 
 	for ctx, content := range ContextHelpContent {
 		t.Run(fmt.Sprintf("context_%s_compact_width", ctx), func(t *testing.T) {
 			lines := strings.Split(content, "\n")
 			for i, line := range lines {
-				// Skip markdown headers - they're bold and short
 				if strings.HasPrefix(strings.TrimSpace(line), "##") {
 					continue
 				}
-				// Skip section headers like **Navigation**
 				if strings.HasPrefix(strings.TrimSpace(line), "**") {
 					continue
 				}
@@ -283,8 +254,6 @@ func TestContextHelpCompactWidth(t *testing.T) {
 }
 
 func TestContextHelpListShortcutsMatchModel(t *testing.T) {
-	// Verify list context shortcuts are accurate
-	// These are the documented shortcuts that should work in list view
 	content := GetContextHelp(ContextList)
 
 	requiredShortcuts := []struct {
@@ -305,7 +274,6 @@ func TestContextHelpListShortcutsMatchModel(t *testing.T) {
 }
 
 func TestContextHelpBoardShortcutsMatchModel(t *testing.T) {
-	// Verify board context shortcuts are accurate
 	content := GetContextHelp(ContextBoard)
 
 	requiredShortcuts := []struct {
@@ -326,57 +294,11 @@ func TestContextHelpBoardShortcutsMatchModel(t *testing.T) {
 	}
 }
 
-func TestContextHelpHistoryShortcutsMatchModel(t *testing.T) {
-	// Verify history context shortcuts are accurate
-	content := GetContextHelp(ContextHistory)
-
-	requiredShortcuts := []struct {
-		shortcut    string
-		description string
-	}{
-		{"j/k", "primary navigation"},
-		{"J/K", "secondary navigation"},
-		{"Tab", "toggle focus"},
-		{"v", "toggle view mode"},
-		{"/", "search"},
-		{"y", "copy SHA"},
-	}
-
-	for _, rs := range requiredShortcuts {
-		if !strings.Contains(content, rs.shortcut) {
-			t.Errorf("History context help missing %s for %s", rs.shortcut, rs.description)
-		}
-	}
-}
-
-func TestContextHelpGraphShortcutsMatchModel(t *testing.T) {
-	// Verify graph context shortcuts are accurate
-	content := GetContextHelp(ContextGraph)
-
-	requiredShortcuts := []struct {
-		shortcut    string
-		description string
-	}{
-		{"j/k", "vertical navigation"},
-		{"h/l", "sibling navigation"},
-		{"Enter", "view issue"},
-		{"f", "focus subgraph"},
-		{"Esc", "exit"},
-	}
-
-	for _, rs := range requiredShortcuts {
-		if !strings.Contains(content, rs.shortcut) {
-			t.Errorf("Graph context help missing %s for %s", rs.shortcut, rs.description)
-		}
-	}
-}
-
 func TestRenderContextHelpVeryNarrow(t *testing.T) {
 	theme := DefaultTheme(lipgloss.NewRenderer(nil))
 	veryNarrowWidth := 30
 	height := 40
 
-	// Should not panic with very narrow width
 	result := RenderContextHelp(ContextList, theme, veryNarrowWidth, height)
 	if result == "" {
 		t.Error("RenderContextHelp should produce output for very narrow width")
@@ -388,7 +310,6 @@ func TestRenderContextHelpVeryShort(t *testing.T) {
 	width := 80
 	veryShortHeight := 10
 
-	// Should not panic with very short height
 	result := RenderContextHelp(ContextList, theme, width, veryShortHeight)
 	if result == "" {
 		t.Error("RenderContextHelp should produce output for very short height")
@@ -398,7 +319,6 @@ func TestRenderContextHelpVeryShort(t *testing.T) {
 func TestRenderContextHelpMinimalDimensions(t *testing.T) {
 	theme := DefaultTheme(lipgloss.NewRenderer(nil))
 
-	// Test minimal dimensions without panicking
 	result := RenderContextHelp(ContextList, theme, 10, 5)
 	if result == "" {
 		t.Error("RenderContextHelp should produce output for minimal dimensions")
@@ -409,11 +329,9 @@ func TestContextHelpUnicodeRendering(t *testing.T) {
 	theme := DefaultTheme(lipgloss.NewRenderer(nil))
 	width, height := 80, 40
 
-	// Test that unicode characters in content are preserved
 	result := RenderContextHelp(ContextBoard, theme, width, height)
 
-	// Border should have unicode box drawing characters
-	if !strings.Contains(result, "╭") || !strings.Contains(result, "─") {
+	if !strings.Contains(result, "\u256d") || !strings.Contains(result, "\u2500") {
 		t.Error("RenderContextHelp should render unicode border characters")
 	}
 }
@@ -422,14 +340,12 @@ func TestContextHelpAllContextsRender(t *testing.T) {
 	theme := DefaultTheme(lipgloss.NewRenderer(nil))
 	width, height := 80, 40
 
-	// Verify all contexts render without error
 	for ctx := range ContextHelpContent {
 		t.Run(fmt.Sprintf("render_%s", ctx), func(t *testing.T) {
 			result := RenderContextHelp(ctx, theme, width, height)
 			if result == "" {
 				t.Errorf("RenderContextHelp(%v) should produce non-empty output", ctx)
 			}
-			// Should contain context-specific content
 			if !strings.Contains(result, "##") {
 				t.Errorf("RenderContextHelp(%v) should include content with heading", ctx)
 			}
@@ -438,7 +354,6 @@ func TestContextHelpAllContextsRender(t *testing.T) {
 }
 
 func TestContextHelpFilterModeComplete(t *testing.T) {
-	// Filter mode help should document all status filter keys
 	content := GetContextHelp(ContextFilter)
 
 	filterShortcuts := []string{"o", "c", "r", "a"}
@@ -449,21 +364,7 @@ func TestContextHelpFilterModeComplete(t *testing.T) {
 	}
 }
 
-func TestContextHelpInsightsComplete(t *testing.T) {
-	// Insights panel help should explain what the metrics mean
-	content := GetContextHelp(ContextInsights)
-
-	// Should mention key metrics concepts
-	concepts := []string{"Priority", "Blocked", "Attention"}
-	for _, concept := range concepts {
-		if !strings.Contains(content, concept) {
-			t.Errorf("Insights context help should explain %q concept", concept)
-		}
-	}
-}
-
 func TestContextHelpGenericFallback(t *testing.T) {
-	// Verify generic fallback contains universal shortcuts
 	generic := contextHelpGeneric
 
 	universalShortcuts := []string{"?", "Esc", "q", "j/k"}

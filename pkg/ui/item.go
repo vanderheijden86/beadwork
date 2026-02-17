@@ -34,24 +34,8 @@ func (s DiffStatus) Badge() string {
 // IssueItem wraps model.Issue to implement list.Item
 type IssueItem struct {
 	Issue      model.Issue
-	GraphScore float64
-	Impact     float64
 	DiffStatus DiffStatus // Diff state for time-travel mode
 	RepoPrefix string     // Repository prefix for workspace mode (e.g., "api", "web")
-
-	// Semantic/hybrid search scores (set when search is active)
-	SearchScore      float64
-	SearchTextScore  float64
-	SearchComponents map[string]float64
-	SearchScoreSet   bool
-
-	// Triage insights (bv-151)
-	TriageScore   float64  // Unified triage score (0-1)
-	TriageReason  string   // Primary reason for recommendation
-	TriageReasons []string // All triage reasons
-	IsQuickWin    bool     // True if identified as a quick win
-	IsBlocker     bool     // True if this item blocks significant downstream work
-	UnblocksCount int      // Number of items this unblocks
 }
 
 func (i IssueItem) Title() string {

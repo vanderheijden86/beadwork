@@ -76,7 +76,7 @@ func sendSpecialKey(t *testing.T, m ui.Model, keyType tea.KeyType) ui.Model {
 // moves the tree cursor down, just like 'j'.
 func TestTreeViewArrowDownMovesSelection(t *testing.T) {
 	issues := createTreeTestIssues()
-	m := ui.NewModel(issues, nil, "")
+	m := ui.NewModel(issues, "")
 	m = enterTreeView(t, m)
 
 	// Record initial selection
@@ -101,7 +101,7 @@ func TestTreeViewArrowDownMovesSelection(t *testing.T) {
 // moves the tree cursor up, just like 'k'.
 func TestTreeViewArrowUpMovesSelection(t *testing.T) {
 	issues := createTreeTestIssues()
-	m := ui.NewModel(issues, nil, "")
+	m := ui.NewModel(issues, "")
 	m = enterTreeView(t, m)
 
 	// Move down first with 'j' (known working)
@@ -133,13 +133,13 @@ func TestTreeViewArrowKeysParity(t *testing.T) {
 	issues := createTreeTestIssues()
 
 	// Path 1: Use j key
-	m1 := ui.NewModel(issues, nil, "")
+	m1 := ui.NewModel(issues, "")
 	m1 = enterTreeView(t, m1)
 	m1 = sendKey(t, m1, "j")
 	jID := m1.TreeSelectedID()
 
 	// Path 2: Use Down arrow
-	m2 := ui.NewModel(issues, nil, "")
+	m2 := ui.NewModel(issues, "")
 	m2 = enterTreeView(t, m2)
 	m2 = sendSpecialKey(t, m2, tea.KeyDown)
 	downID := m2.TreeSelectedID()
@@ -164,7 +164,7 @@ func TestTreeViewArrowKeysParity(t *testing.T) {
 // navigation (not collapse) in tree view.
 func TestTreeViewArrowLeftPageBack(t *testing.T) {
 	issues := createManyTreeIssues(100)
-	m := ui.NewModel(issues, nil, "")
+	m := ui.NewModel(issues, "")
 
 	newM, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
 	m = newM.(ui.Model)
@@ -191,7 +191,7 @@ func TestTreeViewArrowLeftPageBack(t *testing.T) {
 // navigation (not expand) in tree view.
 func TestTreeViewArrowRightPageForward(t *testing.T) {
 	issues := createManyTreeIssues(100)
-	m := ui.NewModel(issues, nil, "")
+	m := ui.NewModel(issues, "")
 
 	newM, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
 	m = newM.(ui.Model)
@@ -242,7 +242,7 @@ func createManyTreeIssues(n int) []model.Issue {
 // in the same format as the list view: "Page X/Y (start-end of total)".
 func TestTreeViewPageIndicator(t *testing.T) {
 	issues := createManyTreeIssues(100)
-	m := ui.NewModel(issues, nil, "")
+	m := ui.NewModel(issues, "")
 
 	// Set a realistic terminal size so the tree has a known page size
 	newM, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
@@ -263,7 +263,7 @@ func TestTreeViewPageIndicator(t *testing.T) {
 // TestTreeViewPageForward verifies that Right arrow in tree view moves to the next page.
 func TestTreeViewPageForward(t *testing.T) {
 	issues := createManyTreeIssues(100)
-	m := ui.NewModel(issues, nil, "")
+	m := ui.NewModel(issues, "")
 
 	newM, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
 	m = newM.(ui.Model)
@@ -293,7 +293,7 @@ func TestTreeViewPageForward(t *testing.T) {
 // TestTreeViewPageBackward verifies that Left arrow in tree view moves to the previous page.
 func TestTreeViewPageBackward(t *testing.T) {
 	issues := createManyTreeIssues(100)
-	m := ui.NewModel(issues, nil, "")
+	m := ui.NewModel(issues, "")
 
 	newM, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
 	m = newM.(ui.Model)
@@ -321,7 +321,7 @@ func TestTreeViewPageBackward(t *testing.T) {
 // (not pagination) after remapping left/right to pagination.
 func TestTreeViewHLStillCollapseExpand(t *testing.T) {
 	issues := createTreeTestIssues()
-	m := ui.NewModel(issues, nil, "")
+	m := ui.NewModel(issues, "")
 	m = enterTreeView(t, m)
 
 	initialCount := m.TreeNodeCount()
@@ -359,7 +359,7 @@ func sendCtrlKey(t *testing.T, m ui.Model, keyType tea.KeyType) ui.Model {
 // when some nodes are collapsed.
 func TestTreeViewCtrlAExpandsAll(t *testing.T) {
 	issues := createTreeTestIssues()
-	m := ui.NewModel(issues, nil, "")
+	m := ui.NewModel(issues, "")
 	m = enterTreeView(t, m)
 
 	// First collapse all with 'Z'
@@ -379,7 +379,7 @@ func TestTreeViewCtrlAExpandsAll(t *testing.T) {
 // when all nodes are already expanded.
 func TestTreeViewCtrlACollapsesAll(t *testing.T) {
 	issues := createTreeTestIssues()
-	m := ui.NewModel(issues, nil, "")
+	m := ui.NewModel(issues, "")
 	m = enterTreeView(t, m)
 
 	// First ensure all expanded with 'X'
@@ -402,7 +402,7 @@ func TestTreeViewCtrlACollapsesAll(t *testing.T) {
 // collapsed → expanded → collapsed
 func TestTreeViewCtrlATogglesCycle(t *testing.T) {
 	issues := createTreeTestIssues()
-	m := ui.NewModel(issues, nil, "")
+	m := ui.NewModel(issues, "")
 	m = enterTreeView(t, m)
 
 	// Collapse all first
@@ -442,7 +442,7 @@ func lastN(s string, n int) string {
 // TestTreeViewSortPopupOpensOnS verifies that 's' opens the sort popup overlay.
 func TestTreeViewSortPopupOpensOnS(t *testing.T) {
 	issues := createTreeTestIssues()
-	m := ui.NewModel(issues, nil, "")
+	m := ui.NewModel(issues, "")
 	m = enterTreeView(t, m)
 
 	// Popup should be closed initially
@@ -460,7 +460,7 @@ func TestTreeViewSortPopupOpensOnS(t *testing.T) {
 // TestTreeViewSortPopupEscCloses verifies that Esc closes the sort popup without changing sort.
 func TestTreeViewSortPopupEscCloses(t *testing.T) {
 	issues := createTreeTestIssues()
-	m := ui.NewModel(issues, nil, "")
+	m := ui.NewModel(issues, "")
 	m = enterTreeView(t, m)
 
 	initialField := m.TreeSortField()
@@ -484,7 +484,7 @@ func TestTreeViewSortPopupEscCloses(t *testing.T) {
 // TestTreeViewSortPopupSKeyCloses verifies that pressing 's' again closes the popup.
 func TestTreeViewSortPopupSKeyCloses(t *testing.T) {
 	issues := createTreeTestIssues()
-	m := ui.NewModel(issues, nil, "")
+	m := ui.NewModel(issues, "")
 	m = enterTreeView(t, m)
 
 	// Open popup
@@ -504,7 +504,7 @@ func TestTreeViewSortPopupSKeyCloses(t *testing.T) {
 // in the popup changes the sort field.
 func TestTreeViewSortPopupSelectChangesSort(t *testing.T) {
 	issues := createTreeTestIssues()
-	m := ui.NewModel(issues, nil, "")
+	m := ui.NewModel(issues, "")
 	m = enterTreeView(t, m)
 
 	// Default sort: Created descending (bd-ctu)
@@ -530,7 +530,7 @@ func TestTreeViewSortPopupSelectChangesSort(t *testing.T) {
 // toggles its direction (asc/desc).
 func TestTreeViewSortPopupToggleDirection(t *testing.T) {
 	issues := createTreeTestIssues()
-	m := ui.NewModel(issues, nil, "")
+	m := ui.NewModel(issues, "")
 	m = enterTreeView(t, m)
 
 	initialDir := m.TreeSortDirection()
@@ -551,7 +551,7 @@ func TestTreeViewSortPopupToggleDirection(t *testing.T) {
 // popup when open (not passed to tree navigation), and after closing, navigation works.
 func TestTreeViewSortPopupDoesNotAffectNavigation(t *testing.T) {
 	issues := createTreeTestIssues()
-	m := ui.NewModel(issues, nil, "")
+	m := ui.NewModel(issues, "")
 	m = enterTreeView(t, m)
 
 	idBefore := m.TreeSelectedID()
@@ -583,7 +583,7 @@ func TestTreeViewSortPopupDoesNotAffectNavigation(t *testing.T) {
 func TestTreeViewBacktickTogglesFlatMode(t *testing.T) {
 	// Use flat issues (no hierarchy) to avoid stale tree-state.json affecting results
 	issues := createManyTreeIssues(10)
-	m := ui.NewModel(issues, nil, "")
+	m := ui.NewModel(issues, "")
 	m = enterTreeView(t, m)
 
 	initialCount := m.TreeNodeCount()
@@ -616,7 +616,7 @@ func TestTreeViewBacktickTogglesFlatMode(t *testing.T) {
 // TestTreeViewBookmarkToggleKey verifies 'b' key toggles bookmark in tree view
 func TestTreeViewBookmarkToggleKey(t *testing.T) {
 	issues := createTreeTestIssues()
-	m := ui.NewModel(issues, nil, "")
+	m := ui.NewModel(issues, "")
 	m = enterTreeView(t, m)
 
 	initialID := m.TreeSelectedID()
@@ -653,7 +653,7 @@ func TestTreeViewBookmarkToggleKey(t *testing.T) {
 // TestTreeViewBookmarkCycleKey verifies 'B' key cycles through bookmarks
 func TestTreeViewBookmarkCycleKey(t *testing.T) {
 	issues := createTreeTestIssues()
-	m := ui.NewModel(issues, nil, "")
+	m := ui.NewModel(issues, "")
 	m = enterTreeView(t, m)
 
 	// Bookmark first item (epic-1)
@@ -690,7 +690,7 @@ func TestTreeViewBookmarkCycleKey(t *testing.T) {
 // TestTreeViewBKeyDoesNotOpenBoard verifies 'b' in tree view doesn't open board
 func TestTreeViewBKeyDoesNotOpenBoard(t *testing.T) {
 	issues := createTreeTestIssues()
-	m := ui.NewModel(issues, nil, "")
+	m := ui.NewModel(issues, "")
 	m = enterTreeView(t, m)
 
 	// Press 'b' in tree view
@@ -712,7 +712,7 @@ func TestTreeViewBKeyDoesNotOpenBoard(t *testing.T) {
 // TestTreeViewFollowModeToggleKey verifies 'F' key toggles follow mode
 func TestTreeViewFollowModeToggleKey(t *testing.T) {
 	issues := createTreeTestIssues()
-	m := ui.NewModel(issues, nil, "")
+	m := ui.NewModel(issues, "")
 	m = enterTreeView(t, m)
 
 	if m.TreeFollowMode() {
@@ -739,7 +739,7 @@ func TestTreeViewFollowModeToggleKey(t *testing.T) {
 // TestTreeViewDetailToggle verifies 'd' key toggles treeDetailHidden.
 func TestTreeViewDetailToggle(t *testing.T) {
 	issues := createTreeTestIssues()
-	m := ui.NewModel(issues, nil, "")
+	m := ui.NewModel(issues, "")
 	m = enterTreeView(t, m)
 
 	if m.TreeDetailHidden() {
@@ -763,7 +763,7 @@ func TestTreeViewDetailToggle(t *testing.T) {
 // switches focus to detail (detail-only full-screen view).
 func TestTreeViewEnterInTreeOnlyShowsDetail(t *testing.T) {
 	issues := createTreeTestIssues()
-	m := ui.NewModel(issues, nil, "")
+	m := ui.NewModel(issues, "")
 	m = enterTreeView(t, m)
 
 	// Hide detail panel
@@ -783,7 +783,7 @@ func TestTreeViewEnterInTreeOnlyShowsDetail(t *testing.T) {
 // mode (entered via Enter in tree-only) returns focus to tree.
 func TestTreeViewEscFromDetailOnlyReturnsToTree(t *testing.T) {
 	issues := createTreeTestIssues()
-	m := ui.NewModel(issues, nil, "")
+	m := ui.NewModel(issues, "")
 	m = enterTreeView(t, m)
 
 	// Hide detail, enter detail-only via Enter
@@ -809,7 +809,7 @@ func TestTreeViewEscFromDetailOnlyReturnsToTree(t *testing.T) {
 // detail-only mode (non-split) returns focus to tree, same as ESC (bd-bys).
 func TestTreeViewEnterFromDetailReturnsToTreeInNonSplit(t *testing.T) {
 	issues := createTreeTestIssues()
-	m := ui.NewModel(issues, nil, "")
+	m := ui.NewModel(issues, "")
 	m = enterTreeView(t, m)
 
 	// Hide detail, enter detail-only via Enter
@@ -837,7 +837,7 @@ func TestTreeViewEnterFromDetailReturnsToTreeInNonSplit(t *testing.T) {
 // expand/collapse when in split mode with detail visible (no regression, bd-bys).
 func TestTreeViewEnterExpandsCollapseInSplitMode(t *testing.T) {
 	issues := createTreeTestIssues()
-	m := ui.NewModel(issues, nil, "")
+	m := ui.NewModel(issues, "")
 
 	// Set wide terminal for split view
 	newM, _ := m.Update(tea.WindowSizeMsg{Width: 200, Height: 40})
@@ -866,7 +866,7 @@ func TestTreeViewEnterExpandsCollapseInSplitMode(t *testing.T) {
 // expand/collapse in tree-only mode (not affected by detail toggle).
 func TestTreeViewSpaceStillExpandsInTreeOnly(t *testing.T) {
 	issues := createTreeTestIssues()
-	m := ui.NewModel(issues, nil, "")
+	m := ui.NewModel(issues, "")
 	m = enterTreeView(t, m)
 
 	// Hide detail
@@ -889,7 +889,7 @@ func TestTreeViewSpaceStillExpandsInTreeOnly(t *testing.T) {
 // panel is hidden in tree-only mode.
 func TestTreeViewTabSkipsDetailWhenHidden(t *testing.T) {
 	issues := createTreeTestIssues()
-	m := ui.NewModel(issues, nil, "")
+	m := ui.NewModel(issues, "")
 
 	// Make it a split view so Tab normally works
 	newM, _ := m.Update(tea.WindowSizeMsg{Width: 200, Height: 40})
@@ -912,7 +912,7 @@ func TestTreeViewTabSkipsDetailWhenHidden(t *testing.T) {
 // focused on detail snaps focus back to tree.
 func TestTreeViewDetailToggleResetsFromDetail(t *testing.T) {
 	issues := createTreeTestIssues()
-	m := ui.NewModel(issues, nil, "")
+	m := ui.NewModel(issues, "")
 
 	// Make it a split view so Tab works
 	newM, _ := m.Update(tea.WindowSizeMsg{Width: 200, Height: 40})
@@ -947,7 +947,7 @@ func TestTreeViewDetailToggleResetsFromDetail(t *testing.T) {
 // automatically hidden when the terminal is too narrow for readable content.
 func TestTreeDetailAutoHideNarrowTerminal(t *testing.T) {
 	issues := createTreeTestIssues()
-	m := ui.NewModel(issues, nil, "")
+	m := ui.NewModel(issues, "")
 
 	// Enter tree view
 	m = enterTreeView(t, m)
@@ -981,7 +981,7 @@ func TestTreeDetailAutoHideNarrowTerminal(t *testing.T) {
 // re-shows the detail panel after it was auto-hidden.
 func TestTreeDetailAutoShowOnWiderTerminal(t *testing.T) {
 	issues := createTreeTestIssues()
-	m := ui.NewModel(issues, nil, "")
+	m := ui.NewModel(issues, "")
 	m = enterTreeView(t, m)
 
 	// Wide enough with default ratio
@@ -1013,7 +1013,7 @@ func TestTreeDetailAutoShowOnWiderTerminal(t *testing.T) {
 // the user can still manually show/hide the detail with 'd'.
 func TestTreeDetailAutoHideManualToggleStillWorks(t *testing.T) {
 	issues := createTreeTestIssues()
-	m := ui.NewModel(issues, nil, "")
+	m := ui.NewModel(issues, "")
 	m = enterTreeView(t, m)
 
 	// Wide terminal -- detail visible
@@ -1041,7 +1041,7 @@ func TestTreeDetailAutoHideManualToggleStillWorks(t *testing.T) {
 // auto-hidden while the user is focused on the detail pane, focus snaps to tree.
 func TestTreeDetailAutoHideFocusSnap(t *testing.T) {
 	issues := createTreeTestIssues()
-	m := ui.NewModel(issues, nil, "")
+	m := ui.NewModel(issues, "")
 
 	// Wide terminal, enter tree view
 	newM, _ := m.Update(tea.WindowSizeMsg{Width: 200, Height: 40})
