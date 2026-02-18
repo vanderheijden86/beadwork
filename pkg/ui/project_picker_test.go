@@ -597,3 +597,34 @@ func TestProjectSwitch_NoLoadingScreen(t *testing.T) {
 		t.Error("project switch should NOT show loading screen")
 	}
 }
+
+// TestProjectSwitch_SameProjectIsNoop verifies pressing the number key of the
+// already-active project does NOT restart the background worker or reload data (bd-3eh).
+func TestProjectSwitch_SameProjectIsNoop(t *testing.T) {
+	_, projects := createSampleProjects(t)
+
+	cfg := config.Config{
+		Projects:  projects,
+		Favorites: nil,
+		UI:        config.UIConfig{DefaultView: "tree", SplitRatio: 0.4},
+	}
+
+	issues := []model.Issue{
+		{ID: "api-1", Title: "Fix auth bug", Status: "open", IssueType: "bug", Priority: 1, CreatedAt: time.Now()},
+	}
+
+	m := ui.NewModel(issues, projects[0].Path+string(os.PathSeparator)+".beads"+string(os.PathSeparator)+"issues.jsonl").
+		WithConfig(cfg, "api-service", projects[0].Path)
+	newM, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m = newM.(ui.Model)
+
+	// Send SwitchProjectMsg for the SAME project that's already active
+	switchMsg := ui.SwitchProjectMsg{Project: projects[0]}
+	newM, cmd := m.Update(switchMsg)
+	m = newM.(ui.Model)
+
+	// Should be a no-op: no commands returned (no worker restart, no file reload)
+	if cmd != nil {
+		t.Error("switching to already-active project should be a no-op (no commands)")
+	}
+}

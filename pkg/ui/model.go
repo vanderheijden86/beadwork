@@ -1135,6 +1135,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(cmds...)
 
 	case SwitchProjectMsg:
+		// Skip if already on this project (bd-3eh)
+		if msg.Project.Name == m.activeProjectName {
+			return m, nil
+		}
 		// Switch to a different project (bd-q5z, bd-ey3, bd-87w)
 		m.activeProjectName = msg.Project.Name
 		m.activeProjectPath = msg.Project.ResolvedPath()
