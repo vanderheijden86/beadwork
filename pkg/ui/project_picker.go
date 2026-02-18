@@ -391,12 +391,7 @@ func (m *ProjectPickerModel) renderExpandedShortcutBar(w int) string {
 
 	line := strings.Join(parts, "  ")
 
-	barStyle := t.Renderer.NewStyle().
-		Width(w).
-		Background(ColorBgHighlight).
-		Padding(0, 1)
-
-	return barStyle.Render(line)
+	return " " + line
 }
 
 // renderTitleBar renders the k9s-style title bar with resource type and count.
@@ -445,8 +440,7 @@ func (m *ProjectPickerModel) renderColumnHeaders(w int) string {
 
 	headerStyle := t.Renderer.NewStyle().
 		Foreground(t.Secondary).
-		Bold(true).
-		Width(w)
+		Bold(true)
 
 	return headerStyle.Render(header)
 }
@@ -490,26 +484,21 @@ func (m *ProjectPickerModel) renderRow(entry ProjectEntry, isCursor bool, w int)
 		// Cursor highlight during filter mode
 		return t.Renderer.NewStyle().
 			Foreground(t.Primary).
-			Background(ColorBgHighlight).
 			Bold(true).
-			Width(w).
 			Render(line)
 	}
 
 	if entry.IsActive {
-		// Active project: cyan text with highlight background
+		// Active project: cyan text
 		return t.Renderer.NewStyle().
 			Foreground(lipgloss.AdaptiveColor{Light: "#006080", Dark: "#8BE9FD"}).
-			Background(ColorBgHighlight).
 			Bold(true).
-			Width(w).
 			Render(line)
 	}
 
 	// Normal row
 	return t.Renderer.NewStyle().
 		Foreground(t.Base.GetForeground()).
-		Width(w).
 		Render(line)
 }
 
