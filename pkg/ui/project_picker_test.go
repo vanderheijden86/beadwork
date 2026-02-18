@@ -959,9 +959,16 @@ func TestModel_TabDefocusesPickerKeepsExpanded(t *testing.T) {
 		t.Fatalf("expected focus 'project_picker', got %q", m.FocusState())
 	}
 
-	// Press Tab
-	newM, _ = m.Update(tea.KeyMsg{Type: tea.KeyTab})
+	// Press Tab (produces a ProjectPickerDefocusMsg command)
+	newM, cmd := m.Update(tea.KeyMsg{Type: tea.KeyTab})
 	m = newM.(ui.Model)
+
+	// Execute the command and feed the message back (simulating bubbletea loop)
+	if cmd != nil {
+		msg := cmd()
+		newM, _ = m.Update(msg)
+		m = newM.(ui.Model)
+	}
 
 	// Picker should still be expanded
 	if !m.PickerExpanded() {

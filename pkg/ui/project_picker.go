@@ -34,18 +34,23 @@ type ToggleFavoriteMsg struct {
 	SlotNumber  int // 0 = remove, 1-9 = assign
 }
 
+// ProjectPickerDefocusMsg is sent when the user presses Tab to defocus the picker (bd-ecf).
+type ProjectPickerDefocusMsg struct{}
+
 // ProjectPickerModel is an always-visible k9s-style header for selecting projects.
 // It has two display modes: expanded (full table) and minimized (single summary line).
-// In expanded mode, the project list is display-only (no cursor navigation).
-// Project switching is done via number keys 1-9 or filter mode.
+// When focused, arrow keys navigate and Enter selects. When not focused, it's display-only.
+// Project switching is done via number keys 1-9, filter mode, or Enter when focused.
 type ProjectPickerModel struct {
 	entries     []ProjectEntry
 	filtered    []int // indices into entries
-	cursor      int   // only used during filter mode for selecting results
+	cursor      int   // cursor position for focused mode and filter mode
+	viewOffset  int   // first visible row index for scrolling (bd-ecf)
 	width       int
 	height      int
 	filterInput textinput.Model
 	filtering   bool
+	focused     bool // whether the picker has keyboard focus (bd-ecf)
 	theme       Theme
 }
 
@@ -77,6 +82,16 @@ func (m *ProjectPickerModel) SetSize(w, h int) {
 	m.height = h
 }
 
+// SetFocused sets the picker's keyboard focus state (bd-ecf).
+func (m *ProjectPickerModel) SetFocused(f bool) {
+	m.focused = f
+}
+
+// IsFocused returns whether the picker has keyboard focus (bd-ecf).
+func (m *ProjectPickerModel) IsFocused() bool {
+	return m.focused
+}
+
 // Update handles keyboard input for the project picker.
 func (m ProjectPickerModel) Update(msg tea.Msg) (ProjectPickerModel, tea.Cmd) {
 	switch msg := msg.(type) {
@@ -89,11 +104,13 @@ func (m ProjectPickerModel) Update(msg tea.Msg) (ProjectPickerModel, tea.Cmd) {
 	return m, nil
 }
 
-// updateNormal handles keys in display-only mode.
-// Only filter entry (/) and number-key quick-switch are active.
-// Navigation (j/k/enter) is intentionally omitted — the picker is display-only.
-// Project switching is done via number keys 1-9, handled at top priority in Model.Update.
+// updateNormal handles keys in non-filter mode.
+// When focused (bd-ecf): arrow keys navigate, Enter selects, Tab defocuses.
+// When not focused: display-only with / to enter filter and 1-9 for quick-switch.
 func (m ProjectPickerModel) updateNormal(msg tea.KeyMsg) (ProjectPickerModel, tea.Cmd) {
+	if m.focused {
+		return m.updateFocused(msg)
+	}
 	switch msg.String() {
 	case "/":
 		m.filtering = true
@@ -111,6 +128,60 @@ func (m ProjectPickerModel) updateNormal(msg tea.KeyMsg) (ProjectPickerModel, te
 		}
 	}
 	return m, nil
+}
+
+// updateFocused handles keys when the picker has keyboard focus (bd-ecf).
+// Arrow keys navigate, Enter selects the project, Tab defocuses back to tree/list.
+func (m ProjectPickerModel) updateFocused(msg tea.KeyMsg) (ProjectPickerModel, tea.Cmd) {
+	switch msg.String() {
+	case "up":
+		if m.cursor > 0 {
+			m.cursor--
+			m.ensureCursorVisible()
+		}
+		return m, nil
+	case "down":
+		if m.cursor < len(m.filtered)-1 {
+			m.cursor++
+			m.ensureCursorVisible()
+		}
+		return m, nil
+	case "enter":
+		if len(m.filtered) > 0 && m.cursor < len(m.filtered) {
+			entry := m.entries[m.filtered[m.cursor]]
+			return m, func() tea.Msg {
+				return SwitchProjectMsg{Project: entry.Project}
+			}
+		}
+		return m, nil
+	case "tab":
+		return m, func() tea.Msg { return ProjectPickerDefocusMsg{} }
+	case "/":
+		m.filtering = true
+		m.filterInput.SetValue("")
+		m.filterInput.Focus()
+		return m, nil
+	case "1", "2", "3", "4", "5", "6", "7", "8", "9":
+		n := int(msg.String()[0] - '0')
+		for _, entry := range m.entries {
+			if entry.FavoriteNum == n {
+				return m, func() tea.Msg {
+					return SwitchProjectMsg{Project: entry.Project}
+				}
+			}
+		}
+	}
+	return m, nil
+}
+
+// ensureCursorVisible adjusts viewOffset so the cursor is within the visible window (bd-ecf).
+func (m *ProjectPickerModel) ensureCursorVisible() {
+	if m.cursor < m.viewOffset {
+		m.viewOffset = m.cursor
+	}
+	if m.cursor >= m.viewOffset+maxExpandedRows {
+		m.viewOffset = m.cursor - maxExpandedRows + 1
+	}
 }
 
 // updateFiltering handles keys when in filter mode.
@@ -253,7 +324,7 @@ func (m *ProjectPickerModel) ViewExpanded() string {
 		sections = append(sections, filterStyle.Render("  / "+m.filterInput.View()))
 	}
 
-	// --- Project rows (display-only, no cursor) ---
+	// --- Project rows (cursor shown when focused or filtering) ---
 	if len(m.filtered) == 0 {
 		t := m.theme
 		dimStyle := t.Renderer.NewStyle().
@@ -261,13 +332,18 @@ func (m *ProjectPickerModel) ViewExpanded() string {
 			Italic(true)
 		sections = append(sections, dimStyle.Render("  No projects found. Configure scan_paths in ~/.config/bw/config.yaml"))
 	} else {
-		visible := len(m.filtered)
-		if visible > maxExpandedRows {
-			visible = maxExpandedRows
+		// Determine visible range with viewOffset for scrolling (bd-ecf)
+		startIdx := m.viewOffset
+		endIdx := startIdx + maxExpandedRows
+		if endIdx > len(m.filtered) {
+			endIdx = len(m.filtered)
 		}
-		for i := 0; i < visible; i++ {
+		if startIdx > len(m.filtered) {
+			startIdx = 0
+		}
+		for i := startIdx; i < endIdx; i++ {
 			entry := m.entries[m.filtered[i]]
-			isCursor := m.filtering && i == m.cursor
+			isCursor := (m.filtering || m.focused) && i == m.cursor
 			sections = append(sections, m.renderRow(entry, isCursor, w))
 		}
 		if len(m.filtered) > maxExpandedRows {
@@ -382,6 +458,12 @@ func (m *ProjectPickerModel) renderExpandedShortcutBar(w int) string {
 		{"<1-9>", "Quick Switch"},
 		{"</>", "Filter"},
 		{"<P>", "Minimize"},
+	}
+	if m.focused {
+		shortcuts = append(shortcuts, struct {
+			key  string
+			desc string
+		}{"<Tab>", "Back to Issues"})
 	}
 
 	var parts []string

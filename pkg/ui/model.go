@@ -1165,6 +1165,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, tea.Batch(cmds...)
 
+	case ProjectPickerDefocusMsg:
+		// Tab pressed in focused picker: return focus to previous view (bd-ecf)
+		m.projectPicker.SetFocused(false)
+		m.focused = m.pickerPrevFocus
+		return m, nil
+
 	case SwitchProjectMsg:
 		// Skip if already on this project (bd-3eh)
 		if msg.Project.Name == m.activeProjectName {
@@ -1681,6 +1687,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.tutorialModel = NewTutorialModel(m.theme) // Reset for next time
 			}
 			return m, tutorialCmd
+		}
+
+		// If project picker is focused, route keys to it (bd-ecf).
+		// P to minimize is handled below (in the switch), number keys fall through.
+		if m.focused == focusProjectPicker && m.pickerExpanded {
+			key := msg.String()
+			// Let P pass through to the main switch for minimize toggle
+			if key != "P" {
+				// Number keys 1-9 fall through to the global handler below
+				if !(len(key) == 1 && key[0] >= '1' && key[0] <= '9') {
+					var pickerCmd tea.Cmd
+					m.projectPicker, pickerCmd = m.projectPicker.Update(msg)
+					return m, pickerCmd
+				}
+			}
 		}
 
 		// Project switching keys (bd-8hw.3, bd-8zc) - number keys 1-9 ALWAYS switch regardless of focus
