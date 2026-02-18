@@ -378,13 +378,13 @@ type Model struct {
 	showEditModal bool
 	editModal     EditModal
 
-	// Project switching (bd-q5z)
+	// Project switching (bd-q5z, bd-ey3)
 	activeProjectName string            // Name of the currently loaded project
 	activeProjectPath string            // Path to the project directory
 	activeProjectFavN int               // Favorite number (1-9, or 0)
 	appConfig         config.Config     // Loaded app configuration
 	allProjects       []config.Project  // All known projects
-	showProjectPicker bool              // Project picker overlay visible
+	pickerExpanded    bool              // Project picker expanded (true) or minimized (false)
 	projectPicker     ProjectPickerModel
 }
 
@@ -392,6 +392,24 @@ type Model struct {
 type labelCount struct {
 	Label string
 	Count int
+}
+
+// bodyHeight returns the available height for the main content area,
+// accounting for the picker header (expanded or minimized) and footer (bd-ey3).
+func (m Model) bodyHeight() int {
+	headerH := 1 // default: single-line global header when no projects
+	if len(m.allProjects) > 0 {
+		if m.pickerExpanded {
+			headerH = m.projectPicker.ExpandedHeight()
+		} else {
+			headerH = m.projectPicker.MinimizedHeight()
+		}
+	}
+	h := m.height - headerH - 1 // -1 for footer
+	if h < 3 {
+		h = 3
+	}
+	return h
 }
 
 // currentViewName returns a human-readable name for the current view mode.
@@ -756,6 +774,10 @@ func (m Model) WithConfig(cfg config.Config, projectName, projectPath string) Mo
 	m.activeProjectPath = projectPath
 	m.activeProjectFavN = cfg.ProjectFavoriteNumber(projectName)
 	m.allProjects = config.DiscoverProjects(cfg)
+	// Initialize picker as expanded on startup (bd-ey3)
+	m.pickerExpanded = true
+	entries := m.buildProjectEntries()
+	m.projectPicker = NewProjectPicker(entries, m.theme)
 	return m
 }
 
@@ -866,7 +888,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.height = 40
 			m.ready = true
 			m.list.SetSize(m.width, m.height-3)
-			m.viewport = viewport.New(m.width, m.height-2)
+			m.viewport = viewport.New(m.width, m.bodyHeight())
 		}
 
 	case workerPollTickMsg:
@@ -1031,13 +1053,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// user state (selection + persisted expand/collapse) (bv-6n4c).
 		if m.focused == focusTree {
 			m.tree.BuildFromSnapshot(m.snapshot)
-			m.tree.SetSize(m.width, m.height-2)
+			m.tree.SetSize(m.width, m.bodyHeight())
 			m.tree.SetGlobalIssueMap(m.issueMap)
 		}
 
 		// Refresh detail pane if visible
 		if m.isSplitView || m.showDetails {
 			m.updateViewportContent()
+		}
+
+		// Rebuild picker entries with updated counts (bd-ey3)
+		if len(m.allProjects) > 0 {
+			pickerEntries := m.buildProjectEntries()
+			m.projectPicker = NewProjectPicker(pickerEntries, m.theme)
+			m.projectPicker.SetSize(m.width, m.height)
 		}
 
 		if firstSnapshot {
@@ -1079,8 +1108,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(cmds...)
 
 	case SwitchProjectMsg:
-		// Switch to a different project (bd-q5z)
-		m.showProjectPicker = false
+		// Switch to a different project (bd-q5z, bd-ey3)
 		m.activeProjectName = msg.Project.Name
 		m.activeProjectPath = msg.Project.ResolvedPath()
 		m.activeProjectFavN = m.appConfig.ProjectFavoriteNumber(msg.Project.Name)
@@ -1108,6 +1136,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, func() tea.Msg { return FileChangedMsg{} })
 		m.statusMsg = fmt.Sprintf("Switched to %s", msg.Project.Name)
 		m.statusIsError = false
+		// Rebuild picker entries to reflect new active project (bd-ey3)
+		entries := m.buildProjectEntries()
+		m.projectPicker = NewProjectPicker(entries, m.theme)
+		m.projectPicker.SetSize(m.width, m.height)
 		return m, tea.Batch(cmds...)
 
 	case ToggleFavoriteMsg:
@@ -1119,12 +1151,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		// Save config
 		_ = config.Save(m.appConfig)
-		// Refresh picker entries if open
-		if m.showProjectPicker {
-			entries := m.buildProjectEntries()
-			m.projectPicker = NewProjectPicker(entries, m.theme)
-			m.projectPicker.SetSize(m.width, m.height)
-		}
+		// Refresh picker entries (always visible now, bd-ey3)
+		entries := m.buildProjectEntries()
+		m.projectPicker = NewProjectPicker(entries, m.theme)
+		m.projectPicker.SetSize(m.width, m.height)
 		return m, nil
 
 	case FileChangedMsg:
@@ -1303,7 +1333,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				treeStart = time.Now()
 			}
 			m.tree.Build(m.issues)
-			m.tree.SetSize(m.width, m.height-2)
+			m.tree.SetSize(m.width, m.bodyHeight())
 			m.tree.SetGlobalIssueMap(m.issueMap)
 			if profileRefresh {
 				recordTiming("tree_rebuild", time.Since(treeStart))
@@ -1448,20 +1478,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Batch(cmds...)
 		}
 
-		// Handle project picker overlay before global keys (bd-q5z)
-		if m.showProjectPicker {
-			if msg.String() == "ctrl+c" {
-				return m, tea.Quit
-			}
-			if msg.String() == "esc" && !m.projectPicker.Filtering() {
-				m.showProjectPicker = false
-				return m, nil
-			}
-			var pickerCmd tea.Cmd
-			m.projectPicker, pickerCmd = m.projectPicker.Update(msg)
-			return m, pickerCmd
-		}
-
 		// Handle repo picker overlay (workspace mode) before global keys (esc/q/etc.)
 		if m.showRepoPicker {
 			if msg.String() == "ctrl+c" {
@@ -1554,7 +1570,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Otherwise let keys pass through to the view handler for normal navigation.
 		if m.showShortcutsSidebar && m.list.FilterState() != list.Filtering {
 			m.shortcutsSidebar.SetContext(ContextFromFocus(m.focused))
-			m.shortcutsSidebar.SetSize(m.shortcutsSidebar.Width(), m.height-2)
+			m.shortcutsSidebar.SetSize(m.shortcutsSidebar.Width(), m.bodyHeight())
 			if m.shortcutsSidebar.NeedsScroll() {
 				switch msg.String() {
 				case "j", "down", "ctrl+j":
@@ -1604,9 +1620,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.focused == focusTree {
 					break // Let handleTreeKeys handle 'P' for jump-to-parent (bd-ryu)
 				}
-				// Toggle project picker overlay (bd-q5z)
-				m.showProjectPicker = !m.showProjectPicker
-				if m.showProjectPicker {
+				// Toggle project picker expanded/minimized (bd-ey3)
+				m.pickerExpanded = !m.pickerExpanded
+				if m.pickerExpanded {
+					// Rebuild entries when expanding
 					entries := m.buildProjectEntries()
 					m.projectPicker = NewProjectPicker(entries, m.theme)
 					m.projectPicker.SetSize(m.width, m.height)
@@ -1762,7 +1779,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					} else {
 						m.tree.Build(m.issues)
 					}
-					m.tree.SetSize(m.width, m.height-2)
+					m.tree.SetSize(m.width, m.bodyHeight())
 					m.tree.SetGlobalIssueMap(m.issueMap) // Provide global issue map for filter blocker checks (bd-5nw)
 					m.treeViewActive = true
 					m.focused = focusTree
@@ -2776,10 +2793,6 @@ func (m Model) View() string {
 	} else if m.showHelp {
 		body = m.renderHelpOverlay()
 		isOverlay = true
-	} else if m.showProjectPicker {
-		// Project picker overlay (bd-q5z)
-		body = m.projectPicker.View()
-		isOverlay = true
 	} else if m.showTutorial {
 		// Interactive tutorial (bv-8y31) - full screen overlay
 		body = m.tutorialModel.View()
@@ -2795,11 +2808,11 @@ func (m Model) View() string {
 		} else if m.isSplitView && !m.treeDetailHidden {
 			body = m.renderTreeSplitView()
 		} else {
-			m.tree.SetSize(m.width, m.height-2)
+			m.tree.SetSize(m.width, m.bodyHeight())
 			body = m.tree.View()
 		}
 	} else if m.isBoardView {
-		body = m.board.View(m.width, m.height-2)
+		body = m.board.View(m.width, m.bodyHeight())
 	} else if m.isSplitView {
 		body = m.renderSplitView()
 	} else {
@@ -2815,7 +2828,7 @@ func (m Model) View() string {
 	if m.showShortcutsSidebar {
 		// Update sidebar context based on current focus
 		m.shortcutsSidebar.SetContext(ContextFromFocus(m.focused))
-		m.shortcutsSidebar.SetSize(m.shortcutsSidebar.Width(), m.height-2)
+		m.shortcutsSidebar.SetSize(m.shortcutsSidebar.Width(), m.bodyHeight())
 		sidebar := m.shortcutsSidebar.View()
 		body = lipgloss.JoinHorizontal(lipgloss.Top, body, sidebar)
 	}
@@ -2833,8 +2846,22 @@ func (m Model) View() string {
 		return finalStyle.Render(lipgloss.JoinVertical(lipgloss.Left, body, footer))
 	}
 
-	header := m.renderGlobalHeader()
-	return finalStyle.Render(lipgloss.JoinVertical(lipgloss.Left, header, body, footer))
+	// Always-visible project picker header (bd-ey3)
+	// Replaces the old renderGlobalHeader() - picker subsumes that role
+	var pickerHeader string
+	if len(m.allProjects) > 0 {
+		m.projectPicker.SetSize(m.width, m.height)
+		if m.pickerExpanded {
+			pickerHeader = m.projectPicker.ViewExpanded()
+		} else {
+			pickerHeader = m.projectPicker.ViewMinimized()
+		}
+	} else {
+		// No projects configured: fall back to the original global header
+		pickerHeader = m.renderGlobalHeader()
+	}
+
+	return finalStyle.Render(lipgloss.JoinVertical(lipgloss.Left, pickerHeader, body, footer))
 }
 
 func (m Model) renderQuitConfirm() string {
@@ -4041,9 +4068,14 @@ func (m Model) TreeDetailHidden() bool {
 	return m.treeDetailHidden
 }
 
-// ShowProjectPicker returns whether the project picker is visible (bd-q5z.8).
+// ShowProjectPicker returns whether the project picker is expanded (bd-q5z.8, bd-ey3).
 func (m Model) ShowProjectPicker() bool {
-	return m.showProjectPicker
+	return m.pickerExpanded
+}
+
+// PickerExpanded returns whether the project picker header is in expanded mode (bd-ey3).
+func (m Model) PickerExpanded() bool {
+	return m.pickerExpanded
 }
 
 // ActiveProjectName returns the name of the currently loaded project (bd-q5z.8).

@@ -95,83 +95,51 @@ func switchToListView(t *testing.T, m ui.Model) ui.Model {
 	return m
 }
 
-func TestProjectPicker_OpenAndClose(t *testing.T) {
+func TestProjectPicker_ExpandedByDefault(t *testing.T) {
 	m, _ := createModelWithProjects(t)
 
-	if m.ShowProjectPicker() {
-		t.Fatal("picker should be closed initially")
+	// Picker should be expanded by default after WithConfig (bd-ey3)
+	if !m.PickerExpanded() {
+		t.Fatal("picker should be expanded by default")
 	}
+}
 
-	// Switch to list view (P in tree view = jump-to-parent)
+func TestProjectPicker_ToggleExpandedMinimized(t *testing.T) {
+	m, _ := createModelWithProjects(t)
 	m = switchToListView(t, m)
 
-	// Press P to open
+	// Should start expanded
+	if !m.PickerExpanded() {
+		t.Fatal("picker should be expanded initially")
+	}
+
+	// Press P to minimize
 	newM, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("P")})
 	m = newM.(ui.Model)
 
-	if !m.ShowProjectPicker() {
-		t.Fatal("picker should be open after P")
+	if m.PickerExpanded() {
+		t.Fatal("picker should be minimized after P")
 	}
 
-	// Press esc to close
-	newM, _ = m.Update(tea.KeyMsg{Type: tea.KeyEscape})
+	// Press P to expand again
+	newM, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("P")})
 	m = newM.(ui.Model)
 
-	if m.ShowProjectPicker() {
-		t.Fatal("picker should be closed after esc")
+	if !m.PickerExpanded() {
+		t.Fatal("picker should be expanded after second P")
 	}
 }
 
 func TestProjectPicker_ShowsAllProjects(t *testing.T) {
 	m, _ := createModelWithProjects(t)
-	m = switchToListView(t, m)
 
-	newM, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("P")})
-	m = newM.(ui.Model)
-
-	if !m.ShowProjectPicker() {
-		t.Fatal("picker should be open")
+	// Picker is expanded by default, should show all projects
+	if !m.PickerExpanded() {
+		t.Fatal("picker should be expanded by default")
 	}
 
-	// Should show all 3 projects
 	if m.ProjectPickerFilteredCount() != 3 {
 		t.Errorf("expected 3 projects in picker, got %d", m.ProjectPickerFilteredCount())
-	}
-}
-
-func TestProjectPicker_Navigation(t *testing.T) {
-	m, _ := createModelWithProjects(t)
-	m = switchToListView(t, m)
-
-	newM, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("P")})
-	m = newM.(ui.Model)
-
-	if m.ProjectPickerCursor() != 0 {
-		t.Fatalf("expected cursor at 0, got %d", m.ProjectPickerCursor())
-	}
-
-	// Move down with j
-	newM, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
-	m = newM.(ui.Model)
-
-	if m.ProjectPickerCursor() != 1 {
-		t.Errorf("expected cursor at 1 after j, got %d", m.ProjectPickerCursor())
-	}
-
-	// Move down again
-	newM, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
-	m = newM.(ui.Model)
-
-	if m.ProjectPickerCursor() != 2 {
-		t.Errorf("expected cursor at 2, got %d", m.ProjectPickerCursor())
-	}
-
-	// Move up with k
-	newM, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("k")})
-	m = newM.(ui.Model)
-
-	if m.ProjectPickerCursor() != 1 {
-		t.Errorf("expected cursor at 1 after k, got %d", m.ProjectPickerCursor())
 	}
 }
 
@@ -183,7 +151,7 @@ func TestProjectPicker_ActiveProjectHighlighted(t *testing.T) {
 	}
 }
 
-func TestProjectPicker_ViewContainsProjectInfo(t *testing.T) {
+func TestProjectPicker_ViewExpandedContainsProjectInfo(t *testing.T) {
 	entries := []ui.ProjectEntry{
 		{
 			Project:      config.Project{Name: "api-service", Path: "/tmp/api-service"},
@@ -215,34 +183,86 @@ func TestProjectPicker_ViewContainsProjectInfo(t *testing.T) {
 	picker := ui.NewProjectPicker(entries, theme)
 	picker.SetSize(120, 40)
 
-	view := picker.View()
+	view := picker.ViewExpanded()
 
 	// Should contain project names
 	for _, name := range []string{"api-service", "web-frontend", "data-pipeline"} {
 		if !strings.Contains(view, name) {
-			t.Errorf("view should contain project name %q", name)
+			t.Errorf("expanded view should contain project name %q", name)
 		}
 	}
 
 	// Should contain the title bar
 	if !strings.Contains(view, "projects") {
-		t.Error("view should contain 'projects' title")
+		t.Error("expanded view should contain 'projects' title")
 	}
 
 	// Should contain column headers
 	if !strings.Contains(view, "NAME") {
-		t.Error("view should contain NAME column header")
+		t.Error("expanded view should contain NAME column header")
 	}
 	if !strings.Contains(view, "BLOCKED") {
-		t.Error("view should contain BLOCKED column header")
+		t.Error("expanded view should contain BLOCKED column header")
 	}
 
-	// Should contain shortcut hints
-	if !strings.Contains(view, "Switch") {
-		t.Error("view should contain 'Switch' shortcut hint")
+	// Should contain shortcut hints (new set for expanded mode)
+	if !strings.Contains(view, "Quick Switch") {
+		t.Error("expanded view should contain 'Quick Switch' shortcut hint")
 	}
-	if !strings.Contains(view, "Filter") {
-		t.Error("view should contain 'Filter' shortcut hint")
+	if !strings.Contains(view, "Minimize") {
+		t.Error("expanded view should contain 'Minimize' shortcut hint")
+	}
+
+	// Should contain active project indicator (►)
+	if !strings.Contains(view, "\u25ba") {
+		t.Error("expanded view should contain ► indicator for active project")
+	}
+}
+
+func TestProjectPicker_ViewMinimizedContainsInfo(t *testing.T) {
+	entries := []ui.ProjectEntry{
+		{
+			Project:      config.Project{Name: "api-service", Path: "/tmp/api-service"},
+			FavoriteNum:  1,
+			IsActive:     true,
+			OpenCount:    3,
+			ReadyCount:   2,
+			BlockedCount: 1,
+		},
+		{
+			Project:      config.Project{Name: "web-frontend", Path: "/tmp/web-frontend"},
+			FavoriteNum:  2,
+			IsActive:     false,
+			OpenCount:    2,
+			ReadyCount:   1,
+			BlockedCount: 1,
+		},
+	}
+
+	theme := ui.TestTheme()
+	picker := ui.NewProjectPicker(entries, theme)
+	picker.SetSize(120, 40)
+
+	view := picker.ViewMinimized()
+
+	// Should contain active project name
+	if !strings.Contains(view, "api-service") {
+		t.Error("minimized view should contain active project name")
+	}
+
+	// Should contain stats (open/ready/blocked)
+	if !strings.Contains(view, "3/2/1") {
+		t.Error("minimized view should contain stats (3/2/1)")
+	}
+
+	// Should contain favorite shortcuts
+	if !strings.Contains(view, "api-service") {
+		t.Error("minimized view should contain favorite project name")
+	}
+
+	// Should contain expand hint
+	if !strings.Contains(view, "Expand") {
+		t.Error("minimized view should contain 'Expand' hint")
 	}
 }
 
@@ -318,90 +338,73 @@ func TestProjectPicker_QuickSwitchByNumber(t *testing.T) {
 	}
 }
 
-func TestProjectPicker_EnterSwitches(t *testing.T) {
-	entries := []ui.ProjectEntry{
-		{Project: config.Project{Name: "api-service", Path: "/tmp/api"}},
-		{Project: config.Project{Name: "web-frontend", Path: "/tmp/web"}},
-	}
-
-	theme := ui.TestTheme()
-	picker := ui.NewProjectPicker(entries, theme)
-	picker.SetSize(120, 40)
-
-	// Move to second entry
-	picker, _ = picker.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
-
-	// Press enter
-	_, cmd := picker.Update(tea.KeyMsg{Type: tea.KeyEnter})
-
-	if cmd == nil {
-		t.Fatal("expected a command from enter")
-	}
-
-	msg := cmd()
-	switchMsg, ok := msg.(ui.SwitchProjectMsg)
-	if !ok {
-		t.Fatalf("expected SwitchProjectMsg, got %T", msg)
-	}
-	if switchMsg.Project.Name != "web-frontend" {
-		t.Errorf("expected web-frontend, got %q", switchMsg.Project.Name)
-	}
-}
-
-func TestProjectPicker_FavoriteToggle(t *testing.T) {
-	entries := []ui.ProjectEntry{
-		{Project: config.Project{Name: "api-service", Path: "/tmp/api"}, FavoriteNum: 1},
-		{Project: config.Project{Name: "web-frontend", Path: "/tmp/web"}, FavoriteNum: 0},
-	}
-
-	theme := ui.TestTheme()
-	picker := ui.NewProjectPicker(entries, theme)
-	picker.SetSize(120, 40)
-
-	// Move to web-frontend (no favorite) and press u
-	picker, _ = picker.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
-	_, cmd := picker.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("u")})
-
-	if cmd == nil {
-		t.Fatal("expected a command from favorite toggle")
-	}
-
-	msg := cmd()
-	toggleMsg, ok := msg.(ui.ToggleFavoriteMsg)
-	if !ok {
-		t.Fatalf("expected ToggleFavoriteMsg, got %T", msg)
-	}
-	if toggleMsg.ProjectName != "web-frontend" {
-		t.Errorf("expected web-frontend, got %q", toggleMsg.ProjectName)
-	}
-	// Slot 1 is taken by api-service, so should assign slot 2
-	if toggleMsg.SlotNumber != 2 {
-		t.Errorf("expected slot 2 (first available), got %d", toggleMsg.SlotNumber)
-	}
-}
-
-func TestProjectPicker_GoToTopBottom(t *testing.T) {
+func TestProjectPicker_DisplayOnlyNoNavigation(t *testing.T) {
+	// In the always-visible design, j/k/g/G/enter/u don't navigate/act on the picker
 	entries := []ui.ProjectEntry{
 		{Project: config.Project{Name: "alpha", Path: "/tmp/a"}},
 		{Project: config.Project{Name: "beta", Path: "/tmp/b"}},
 		{Project: config.Project{Name: "gamma", Path: "/tmp/c"}},
-		{Project: config.Project{Name: "delta", Path: "/tmp/d"}},
 	}
 
 	theme := ui.TestTheme()
 	picker := ui.NewProjectPicker(entries, theme)
 	picker.SetSize(120, 40)
 
-	// Go to bottom with G
-	picker, _ = picker.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("G")})
-	if picker.Cursor() != 3 {
-		t.Errorf("expected cursor at 3 (bottom), got %d", picker.Cursor())
+	// j should not move cursor (display-only)
+	picker, _ = picker.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
+	if picker.Cursor() != 0 {
+		t.Errorf("cursor should stay at 0 in display-only mode, got %d", picker.Cursor())
 	}
 
-	// Go to top with g
-	picker, _ = picker.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("g")})
+	// k should not move cursor
+	picker, _ = picker.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("k")})
 	if picker.Cursor() != 0 {
-		t.Errorf("expected cursor at 0 (top), got %d", picker.Cursor())
+		t.Errorf("cursor should stay at 0, got %d", picker.Cursor())
+	}
+
+	// enter should not produce a command
+	_, cmd := picker.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if cmd != nil {
+		t.Error("enter should not produce a command in display-only mode")
+	}
+
+	// u should not produce a command
+	_, cmd = picker.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("u")})
+	if cmd != nil {
+		t.Error("u should not produce a command in display-only mode")
+	}
+}
+
+func TestProjectPicker_ExpandedHeight(t *testing.T) {
+	entries := []ui.ProjectEntry{
+		{Project: config.Project{Name: "alpha", Path: "/tmp/a"}},
+		{Project: config.Project{Name: "beta", Path: "/tmp/b"}},
+		{Project: config.Project{Name: "gamma", Path: "/tmp/c"}},
+	}
+
+	theme := ui.TestTheme()
+	picker := ui.NewProjectPicker(entries, theme)
+	picker.SetSize(120, 40)
+
+	// 3 header lines (shortcut bar + title + column headers) + 3 project rows = 6
+	height := picker.ExpandedHeight()
+	if height != 6 {
+		t.Errorf("expected expanded height 6, got %d", height)
+	}
+}
+
+func TestProjectPicker_MinimizedHeight(t *testing.T) {
+	entries := []ui.ProjectEntry{
+		{Project: config.Project{Name: "alpha", Path: "/tmp/a"}},
+	}
+
+	theme := ui.TestTheme()
+	picker := ui.NewProjectPicker(entries, theme)
+	picker.SetSize(120, 40)
+
+	height := picker.MinimizedHeight()
+	if height != 1 {
+		t.Errorf("expected minimized height 1, got %d", height)
 	}
 }
 
