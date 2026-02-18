@@ -49,7 +49,6 @@ const (
 	focusUpdateModal
 	focusStatusPicker
 	focusEditModal
-	focusProjectPicker // bd-ecf: project picker has keyboard focus
 )
 
 // SortMode represents the current list sorting mode (bv-3ita)
@@ -396,7 +395,6 @@ type Model struct {
 	appConfig         config.Config     // Loaded app configuration
 	allProjects       []config.Project  // All known projects
 	pickerExpanded    bool              // Project picker expanded (true) or minimized (false)
-	pickerPrevFocus   focus             // Focus to restore when defocusing picker (bd-ecf)
 	projectPicker     ProjectPickerModel
 }
 
@@ -1171,12 +1169,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, tea.Batch(cmds...)
 
-	case ProjectPickerDefocusMsg:
-		// Tab pressed in focused picker: return focus to previous view (bd-ecf)
-		m.projectPicker.SetFocused(false)
-		m.focused = m.pickerPrevFocus
-		return m, nil
-
 	case SwitchProjectMsg:
 		// Skip if already on this project (bd-3eh)
 		if msg.Project.Name == m.activeProjectName {
@@ -1698,21 +1690,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tutorialCmd
 		}
 
-		// If project picker is focused, route keys to it (bd-ecf).
-		// P to minimize is handled below (in the switch), number keys fall through.
-		if m.focused == focusProjectPicker && m.pickerExpanded {
-			key := msg.String()
-			// Let P pass through to the main switch for minimize toggle
-			if key != "P" {
-				// Number keys 1-9 fall through to the global handler below
-				if !(len(key) == 1 && key[0] >= '1' && key[0] <= '9') {
-					var pickerCmd tea.Cmd
-					m.projectPicker, pickerCmd = m.projectPicker.Update(msg)
-					return m, pickerCmd
-				}
-			}
-		}
-
 		// Project switching keys (bd-8hw.3, bd-8zc) - number keys 1-9 ALWAYS switch regardless of focus
 		// Handled at top priority so they work from any view/state.
 		// First checks config favorites, then falls back to positional numbering.
@@ -1734,24 +1711,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.list.FilterState() != list.Filtering {
 			switch msg.String() {
 			case "P":
-				// Toggle project picker expanded/minimized (bd-ey3, bd-ecf)
+				// Toggle project picker expanded/minimized (bd-ey3)
 				// Note: lowercase 'p' still does jump-to-parent in tree (bd-ryu)
+				m.pickerExpanded = !m.pickerExpanded
 				if m.pickerExpanded {
-					// Minimize and defocus (bd-ecf)
-					m.pickerExpanded = false
-					m.projectPicker.SetFocused(false)
-					if m.focused == focusProjectPicker {
-						m.focused = m.pickerPrevFocus
-					}
-				} else {
-					// Expand and focus (bd-ecf)
-					m.pickerPrevFocus = m.focused
+					// Rebuild entries when expanding
 					entries := m.buildProjectEntries()
 					m.projectPicker = NewProjectPicker(entries, m.theme)
 					m.projectPicker.SetSize(m.width, m.height)
-					m.projectPicker.SetFocused(true)
-					m.pickerExpanded = true
-					m.focused = focusProjectPicker
 				}
 				return m, nil
 
@@ -4085,8 +4052,6 @@ func (m Model) FocusState() string {
 		return "status_picker"
 	case focusEditModal:
 		return "edit_modal"
-	case focusProjectPicker:
-		return "project_picker"
 	default:
 		return "unknown"
 	}
