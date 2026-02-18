@@ -1114,13 +1114,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			_ = m.board.SelectIssueByID(boardSelectedID)
 		}
 
-		// If the tree view is active, rebuild it from the new snapshot while preserving
-		// user state (selection + persisted expand/collapse) (bv-6n4c).
-		if m.focused == focusTree {
-			m.tree.BuildFromSnapshot(m.snapshot)
-			m.tree.SetSize(m.width, m.bodyHeight())
-			m.tree.SetGlobalIssueMap(m.issueMap)
-		}
+		// Always rebuild tree from the new snapshot (bd-qjc).
+		// The tree is visible in all non-overlay states (it's the default view),
+		// so it must stay in sync even when picker or detail has focus.
+		m.tree.BuildFromSnapshot(m.snapshot)
+		m.tree.SetSize(m.width, m.bodyHeight())
+		m.tree.SetGlobalIssueMap(m.issueMap)
 
 		// Refresh detail pane if visible
 		if m.isSplitView || m.showDetails {

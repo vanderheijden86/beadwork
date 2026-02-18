@@ -1019,6 +1019,47 @@ func TestModel_PickerArrowNavigation(t *testing.T) {
 	}
 }
 
+// TestSnapshotRebuildsTree_WhenPickerFocused verifies that the tree is rebuilt from a
+// new snapshot even when the project picker has focus (bd-qjc).
+func TestSnapshotRebuildsTree_WhenPickerFocused(t *testing.T) {
+	m, _ := createModelWithProjects(t)
+
+	// Tree should have nodes initially
+	if m.TreeNodeCount() == 0 {
+		t.Fatal("tree should have nodes on startup")
+	}
+
+	// Press P to minimize, then P to expand+focus picker
+	newM, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("P")})
+	m = newM.(ui.Model)
+	newM, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("P")})
+	m = newM.(ui.Model)
+
+	// Verify picker is focused
+	if m.FocusState() != "project_picker" {
+		t.Fatalf("expected focus 'project_picker', got %q", m.FocusState())
+	}
+
+	// Now send a SnapshotReadyMsg (simulating background worker completing data load).
+	// This happens after a project switch or file change reload.
+	snapshotIssues := []model.Issue{
+		{ID: "new-1", Title: "New issue one", Status: "open", IssueType: "task", Priority: 2, CreatedAt: time.Now()},
+		{ID: "new-2", Title: "New issue two", Status: "open", IssueType: "bug", Priority: 1, CreatedAt: time.Now()},
+	}
+	snapshot := ui.NewSnapshotBuilder(snapshotIssues).Build()
+	newM, _ = m.Update(ui.SnapshotReadyMsg{Snapshot: snapshot})
+	m = newM.(ui.Model)
+
+	// The tree MUST be rebuilt even though picker has focus,
+	// because the tree is always visible beneath the picker.
+	if m.TreeNodeCount() == 0 {
+		t.Error("tree should have nodes after SnapshotReadyMsg, even with picker focused")
+	}
+	if m.TreeNodeCount() != 2 {
+		t.Errorf("expected 2 tree nodes from snapshot, got %d", m.TreeNodeCount())
+	}
+}
+
 // TestPickerCounts_BlockedByDependencies verifies that non-active projects correctly
 // count issues blocked by open dependencies (bd-qjc).
 func TestPickerCounts_BlockedByDependencies(t *testing.T) {
