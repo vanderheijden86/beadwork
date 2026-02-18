@@ -316,12 +316,11 @@ func (m *ProjectPickerModel) ViewMinimized() string {
 		activeName = "untitled"
 	}
 
-	// Left: project info
-	projectInfo := descStyle.Render("Project: ") +
-		t.Renderer.NewStyle().Foreground(t.Primary).Bold(true).Render(activeName) +
+	// Active project info (bd-aa6: no "Project:" prefix, no expand hint)
+	projectInfo := t.Renderer.NewStyle().Foreground(t.Primary).Bold(true).Render(activeName) +
 		descStyle.Render(fmt.Sprintf(" (%d/%d/%d/%d)", activeOpen, activeInProg, activeReady, activeBlocked))
 
-	// Middle: favorite shortcuts
+	// Favorite shortcuts
 	var favParts []string
 	for _, entry := range m.entries {
 		if entry.FavoriteNum > 0 {
@@ -332,11 +331,8 @@ func (m *ProjectPickerModel) ViewMinimized() string {
 	sort.Slice(favParts, func(i, j int) bool { return favParts[i] < favParts[j] })
 	favSection := strings.Join(favParts, "  ")
 
-	// Right: expand hint
-	expandHint := keyStyle.Render("<P>") + " " + descStyle.Render("Expand")
-
 	sep := sepStyle.Render(" \u2502 ")
-	line := "  " + projectInfo + sep + favSection + sep + expandHint
+	line := "  " + projectInfo + sep + favSection
 
 	barStyle := t.Renderer.NewStyle().
 		Width(w).

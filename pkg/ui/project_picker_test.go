@@ -234,24 +234,24 @@ func TestProjectPicker_ViewMinimizedContainsInfo(t *testing.T) {
 
 	view := picker.ViewMinimized()
 
-	// Should contain active project name
+	// Should contain active project name and stats
 	if !strings.Contains(view, "api-service") {
 		t.Error("minimized view should contain active project name")
 	}
-
-	// Should contain stats (open/in_progress/ready/blocked)
 	if !strings.Contains(view, "3/0/2/1") {
 		t.Error("minimized view should contain stats (3/0/2/1)")
 	}
 
-	// Should contain favorite shortcuts
-	if !strings.Contains(view, "api-service") {
-		t.Error("minimized view should contain favorite project name")
+	// Should NOT contain "Project:" prefix (bd-aa6)
+	if strings.Contains(view, "Project:") {
+		t.Error("minimized view should NOT contain 'Project:' prefix")
 	}
-
-	// Should contain expand hint
-	if !strings.Contains(view, "Expand") {
-		t.Error("minimized view should contain 'Expand' hint")
+	// Should NOT contain expand hint (bd-aa6)
+	if strings.Contains(view, "Expand") {
+		t.Error("minimized view should NOT contain 'Expand' hint")
+	}
+	if strings.Contains(view, "<P>") {
+		t.Error("minimized view should NOT contain '<P>' hint")
 	}
 }
 
