@@ -693,9 +693,9 @@ func TestTreeViewDetailToggle(t *testing.T) {
 	}
 }
 
-// TestTreeViewEnterInTreeOnlyShowsDetail verifies Enter in tree-only mode
-// switches focus to detail (detail-only full-screen view).
-func TestTreeViewEnterInTreeOnlyShowsDetail(t *testing.T) {
+// TestTreeViewSpaceInTreeOnlyShowsDetail verifies Space in tree-only mode
+// switches focus to detail (detail-only full-screen view, bd-8zc).
+func TestTreeViewSpaceInTreeOnlyShowsDetail(t *testing.T) {
 	issues := createTreeTestIssues()
 	m := ui.NewModel(issues, "")
 	m = enterTreeView(t, m)
@@ -706,23 +706,23 @@ func TestTreeViewEnterInTreeOnlyShowsDetail(t *testing.T) {
 		t.Fatal("Expected detail hidden after 'd'")
 	}
 
-	// Press Enter - should switch to detail focus
-	m = sendKey(t, m, "enter")
+	// Press Space - should switch to detail focus (bd-8zc)
+	m = sendKey(t, m, " ")
 	if m.FocusState() != "detail" {
-		t.Errorf("Expected focus 'detail' after Enter in tree-only mode, got %q", m.FocusState())
+		t.Errorf("Expected focus 'detail' after Space in tree-only mode, got %q", m.FocusState())
 	}
 }
 
 // TestTreeViewEscFromDetailOnlyReturnsToTree verifies ESC from detail-only
-// mode (entered via Enter in tree-only) returns focus to tree.
+// mode (entered via Space in tree-only) returns focus to tree.
 func TestTreeViewEscFromDetailOnlyReturnsToTree(t *testing.T) {
 	issues := createTreeTestIssues()
 	m := ui.NewModel(issues, "")
 	m = enterTreeView(t, m)
 
-	// Hide detail, enter detail-only via Enter
+	// Hide detail, enter detail-only via Space (bd-8zc)
 	m = sendKey(t, m, "d")
-	m = sendKey(t, m, "enter")
+	m = sendKey(t, m, " ")
 	if m.FocusState() != "detail" {
 		t.Fatalf("Expected focus 'detail', got %q", m.FocusState())
 	}
@@ -739,36 +739,8 @@ func TestTreeViewEscFromDetailOnlyReturnsToTree(t *testing.T) {
 	}
 }
 
-// TestTreeViewEnterFromDetailReturnsToTreeInNonSplit verifies Enter from
-// detail-only mode (non-split) returns focus to tree, same as ESC (bd-bys).
-func TestTreeViewEnterFromDetailReturnsToTreeInNonSplit(t *testing.T) {
-	issues := createTreeTestIssues()
-	m := ui.NewModel(issues, "")
-	m = enterTreeView(t, m)
-
-	// Hide detail, enter detail-only via Enter
-	m = sendKey(t, m, "d")
-	if !m.TreeDetailHidden() {
-		t.Fatal("Expected detail hidden after 'd'")
-	}
-	m = sendKey(t, m, "enter")
-	if m.FocusState() != "detail" {
-		t.Fatalf("Expected focus 'detail' after Enter, got %q", m.FocusState())
-	}
-
-	// Press Enter again - should return to tree focus (toggle behavior)
-	m = sendKey(t, m, "enter")
-	if m.FocusState() != "tree" {
-		t.Errorf("Expected focus 'tree' after second Enter (toggle back), got %q", m.FocusState())
-	}
-	// Detail should still be hidden (tree-only mode preserved)
-	if !m.TreeDetailHidden() {
-		t.Error("Expected detail still hidden after Enter toggle back to tree")
-	}
-}
-
-// TestTreeViewEnterExpandsCollapseInSplitMode verifies Enter still toggles
-// expand/collapse when in split mode with detail visible (no regression, bd-bys).
+// TestTreeViewEnterExpandsCollapseInSplitMode verifies Enter toggles
+// expand/collapse in split mode (bd-8zc: Enter always expands/collapses).
 func TestTreeViewEnterExpandsCollapseInSplitMode(t *testing.T) {
 	issues := createTreeTestIssues()
 	m := ui.NewModel(issues, "")
@@ -784,38 +756,36 @@ func TestTreeViewEnterExpandsCollapseInSplitMode(t *testing.T) {
 		t.Fatal("Expected detail visible in split mode")
 	}
 
-	// Detail is visible, so treeDetailHidden is false.
-	// Enter should toggle expand/collapse (same as space), NOT switch focus.
-	m = sendKey(t, m, "enter")
+	// Enter should toggle expand/collapse, NOT switch focus (bd-8zc).
+	m = sendSpecialKey(t, m, tea.KeyEnter)
 	if m.FocusState() != "tree" {
 		t.Errorf("Expected focus to remain 'tree' after Enter in split mode, got %q", m.FocusState())
 	}
-	// Detail should still be visible (not hidden)
 	if m.TreeDetailHidden() {
 		t.Error("Expected detail to remain visible after Enter in split mode")
 	}
 }
 
-// TestTreeViewSpaceStillExpandsInTreeOnly verifies Space key still toggles
-// expand/collapse in tree-only mode (not affected by detail toggle).
-func TestTreeViewSpaceStillExpandsInTreeOnly(t *testing.T) {
+// TestTreeViewSpaceOpenDetailInSplitMode verifies Space switches focus to detail
+// in split mode (bd-8zc).
+func TestTreeViewSpaceOpenDetailInSplitMode(t *testing.T) {
 	issues := createTreeTestIssues()
 	m := ui.NewModel(issues, "")
+
+	// Set wide terminal for split view
+	newM, _ := m.Update(tea.WindowSizeMsg{Width: 200, Height: 40})
+	m = newM.(ui.Model)
+
 	m = enterTreeView(t, m)
 
-	// Hide detail
-	m = sendKey(t, m, "d")
-
-	// Record initial tree state - cursor is on epic-1
-	initialID := m.TreeSelectedID()
-	if initialID != "epic-1" {
-		t.Fatalf("Expected initial selection 'epic-1', got %q", initialID)
+	if m.TreeDetailHidden() {
+		t.Fatal("Expected detail visible in split mode")
 	}
 
-	// Press Space - should toggle expand (not enter detail-only)
+	// Space should switch focus to detail pane (bd-8zc)
 	m = sendKey(t, m, " ")
-	if m.FocusState() != "tree" {
-		t.Errorf("Expected focus to remain 'tree' after Space, got %q", m.FocusState())
+	if m.FocusState() != "detail" {
+		t.Errorf("Expected focus 'detail' after Space in split mode, got %q", m.FocusState())
 	}
 }
 
@@ -1013,5 +983,135 @@ func TestTreeDetailAutoHideFocusSnap(t *testing.T) {
 	}
 	if !m.TreeDetailHidden() {
 		t.Error("Expected detail auto-hidden")
+	}
+}
+
+// ============================================================================
+// Tests: Key remapping — Enter=expand, Space=detail, no TAB/1-9 in tree (bd-8zc)
+// ============================================================================
+
+// TestTreeViewEnterExpandsCollapses verifies Enter toggles expand/collapse
+// on the current tree node (CycleNodeVisibility), NOT opening detail view.
+func TestTreeViewEnterExpandsCollapses(t *testing.T) {
+	issues := createTreeTestIssues() // epic-1 with children task-1, task-2
+	m := ui.NewModel(issues, "")
+	m = enterTreeView(t, m)
+
+	// Cursor should be on epic-1 (root, expanded by default)
+	if m.TreeSelectedID() != "epic-1" {
+		t.Fatalf("expected epic-1 selected, got %q", m.TreeSelectedID())
+	}
+
+	initialCount := m.TreeNodeCount()
+	if initialCount < 3 {
+		t.Fatalf("expected at least 3 visible nodes (epic + 2 tasks + standalone), got %d", initialCount)
+	}
+
+	// Press Enter — should collapse epic-1 (hide children)
+	m = sendSpecialKey(t, m, tea.KeyEnter)
+
+	afterCollapse := m.TreeNodeCount()
+	if afterCollapse >= initialCount {
+		t.Errorf("expected fewer nodes after Enter (collapse), got %d (was %d)", afterCollapse, initialCount)
+	}
+
+	// Focus should still be tree, NOT detail
+	if m.FocusState() != "tree" {
+		t.Errorf("Enter should NOT switch focus, expected 'tree', got %q", m.FocusState())
+	}
+
+	// Press Enter again — should expand epic-1 (show children again)
+	m = sendSpecialKey(t, m, tea.KeyEnter)
+
+	afterExpand := m.TreeNodeCount()
+	if afterExpand != initialCount {
+		t.Errorf("expected %d nodes after second Enter (expand), got %d", initialCount, afterExpand)
+	}
+}
+
+// TestTreeViewSpaceOpensDetailView verifies Space opens the detail view
+// of the selected ticket when in tree-only mode (treeDetailHidden).
+func TestTreeViewSpaceOpensDetailView(t *testing.T) {
+	issues := createTreeTestIssues()
+	m := ui.NewModel(issues, "")
+
+	// Use narrow width (< SplitViewThreshold=100) to get tree-only mode
+	newM, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 40})
+	m = newM.(ui.Model)
+
+	m = enterTreeView(t, m)
+
+	if !m.TreeDetailHidden() {
+		t.Fatal("expected treeDetailHidden=true in narrow mode")
+	}
+
+	// Press Space — should open detail view
+	newM, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(" ")})
+	m = newM.(ui.Model)
+
+	if m.FocusState() != "detail" {
+		t.Errorf("expected focus 'detail' after Space, got %q", m.FocusState())
+	}
+}
+
+// TestTreeViewEnterDoesNotOpenDetail verifies Enter does NOT open detail view
+// even when treeDetailHidden is true (Enter is for expand/collapse only).
+func TestTreeViewEnterDoesNotOpenDetail(t *testing.T) {
+	issues := createTreeTestIssues()
+	m := ui.NewModel(issues, "")
+
+	// Use narrow width to get tree-only mode
+	newM, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 40})
+	m = newM.(ui.Model)
+
+	m = enterTreeView(t, m)
+
+	if !m.TreeDetailHidden() {
+		t.Fatal("expected treeDetailHidden=true in narrow mode")
+	}
+
+	// Press Enter — should NOT open detail, should expand/collapse
+	m = sendSpecialKey(t, m, tea.KeyEnter)
+
+	if m.FocusState() != "tree" {
+		t.Errorf("Enter should NOT switch to detail, expected 'tree', got %q", m.FocusState())
+	}
+}
+
+// TestTreeViewNumberKeysDontExpandLevels verifies that 1-9 keys in tree do NOT
+// trigger ExpandToLevel anymore (reserved for project switching).
+func TestTreeViewNumberKeysDontExpandLevels(t *testing.T) {
+	issues := createTreeTestIssues()
+	m := ui.NewModel(issues, "")
+	m = enterTreeView(t, m)
+
+	initialCount := m.TreeNodeCount()
+
+	// Press "1" — should NOT change tree structure (no ExpandToLevel)
+	m = sendKey(t, m, "1")
+
+	afterOne := m.TreeNodeCount()
+	if afterOne != initialCount {
+		t.Errorf("pressing '1' should not change tree (no ExpandToLevel), count went from %d to %d", initialCount, afterOne)
+	}
+}
+
+// TestTreeViewTabDoesNotCycleVisibility verifies that TAB in tree does NOT
+// call CycleNodeVisibility (it's reserved for tree/detail focus switching).
+func TestTreeViewTabDoesNotCycleVisibility(t *testing.T) {
+	issues := createTreeTestIssues()
+	m := ui.NewModel(issues, "")
+	m = enterTreeView(t, m)
+
+	// Cursor on epic-1 (expanded)
+	initialCount := m.TreeNodeCount()
+
+	// Press TAB — should NOT change visibility
+	newM, _ := m.Update(tea.KeyMsg{Type: tea.KeyTab})
+	m = newM.(ui.Model)
+
+	afterTab := m.TreeNodeCount()
+	if afterTab != initialCount {
+		t.Errorf("TAB should not cycle visibility, count went from %d to %d", initialCount, afterTab)
 	}
 }

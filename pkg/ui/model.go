@@ -533,6 +533,24 @@ func (m Model) buildProjectEntries() []ProjectEntry {
 		}
 		entries = append(entries, entry)
 	}
+
+	// Auto-number projects 1-9 when no favorites are configured (bd-8zc)
+	hasFavorites := false
+	for _, e := range entries {
+		if e.FavoriteNum > 0 {
+			hasFavorites = true
+			break
+		}
+	}
+	if !hasFavorites {
+		for i := range entries {
+			if i >= 9 {
+				break
+			}
+			entries[i].FavoriteNum = i + 1
+		}
+	}
+
 	return entries
 }
 
@@ -1611,13 +1629,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tutorialCmd
 		}
 
-		// Project switching keys (bd-8hw.3) - number keys 1-9 ALWAYS switch regardless of focus
+		// Project switching keys (bd-8hw.3, bd-8zc) - number keys 1-9 ALWAYS switch regardless of focus
 		// Handled at top priority so they work from any view/state.
+		// First checks config favorites, then falls back to positional numbering.
 		if key := msg.String(); len(key) == 1 && key[0] >= '1' && key[0] <= '9' {
 			n := int(key[0] - '0')
-			proj := m.appConfig.FavoriteProject(n)
-			if proj != nil {
+			// Check config favorites first
+			if proj := m.appConfig.FavoriteProject(n); proj != nil {
 				return m, func() tea.Msg { return SwitchProjectMsg{Project: *proj} }
+			}
+			// Auto-number fallback: 1-N maps to project list order (bd-8zc)
+			idx := n - 1
+			if idx < len(m.allProjects) {
+				proj := m.allProjects[idx]
+				return m, func() tea.Msg { return SwitchProjectMsg{Project: proj} }
 			}
 		}
 
@@ -2304,14 +2329,20 @@ func (m Model) handleTreeKeys(msg tea.KeyMsg) Model {
 	case "k", "up":
 		m.tree.MoveUp()
 		m.syncTreeToDetail()
-	case "enter", " ":
-		if msg.String() == "enter" && m.treeDetailHidden {
-			// Enter in tree-only mode shows detail-only view (bd-80u)
+	case "enter":
+		// Enter always toggles expand/collapse on current node (bd-8zc)
+		m.tree.CycleNodeVisibility()
+		m.syncTreeToDetail()
+	case " ":
+		// Space opens detail view (bd-8zc)
+		if m.treeDetailHidden {
+			// Tree-only mode: show detail-only view
 			m.syncTreeToDetail()
 			m.focused = focusDetail
-		} else {
-			m.tree.ToggleExpand()
+		} else if m.isSplitView {
+			// Split view: switch focus to detail pane
 			m.syncTreeToDetail()
+			m.focused = focusDetail
 		}
 	case "ctrl+a":
 		m.tree.ToggleExpandCollapseAll()
@@ -2399,18 +2430,9 @@ func (m Model) handleTreeKeys(msg tea.KeyMsg) Model {
 		// Last sibling (bd-ryu)
 		m.tree.LastSibling()
 		m.syncTreeToDetail()
-	case "tab":
-		// Org-mode TAB cycling on current node (bd-8of)
-		m.tree.CycleNodeVisibility()
-		m.syncTreeToDetail()
-	case "shift+tab":
-		// Global visibility cycling (bd-8of)
-		m.tree.CycleGlobalVisibility()
-		m.syncTreeToDetail()
-	case "1", "2", "3", "4", "5", "6", "7", "8", "9":
-		// Level-based expand (bd-9jr)
-		level := int(msg.String()[0] - '0')
-		m.tree.ExpandToLevel(level)
+	// NOTE: TAB, shift+tab, and 1-9 removed from tree keys (bd-8zc)
+	// TAB is handled by Model.Update for tree↔detail focus switching
+	// 1-9 are handled by Model.Update for project switching
 	case "m":
 		// Toggle mark on current node (bd-cz0)
 		m.tree.ToggleMark()

@@ -342,10 +342,15 @@ func createDeepTreeIssues() []model.Issue {
 	}
 }
 
-// TestTreeNavTabCycleFolded verifies TAB cycles from folded to children-visible.
-// Starting state: epic-1 is collapsed (folded).
-// After TAB: children should become visible (but not grandchildren).
-func TestTreeNavTabCycleFolded(t *testing.T) {
+// ============================================================================
+// Tests: Enter cycles node visibility, TAB/Shift+TAB/1-9 removed (bd-8zc)
+// TAB is now tree↔detail focus switching only.
+// 1-9 are now project switching only.
+// Enter does CycleNodeVisibility (expand/collapse cycling).
+// ============================================================================
+
+// TestTreeNavEnterCycleFolded verifies Enter cycles from folded to children-visible (bd-8zc).
+func TestTreeNavEnterCycleFolded(t *testing.T) {
 	cleanTreeState(t)
 	issues := createDeepTreeIssues()
 	m := ui.NewModel(issues, "")
@@ -355,26 +360,21 @@ func TestTreeNavTabCycleFolded(t *testing.T) {
 	m = sendKey(t, m, "h") // collapse epic-1
 	countAfterCollapse := m.TreeNodeCount()
 
-	// Now TAB should expand to show direct children only
-	m = sendSpecialKey(t, m, tea.KeyTab)
-	countAfterTab := m.TreeNodeCount()
+	// Now Enter should expand to show direct children only
+	m = sendSpecialKey(t, m, tea.KeyEnter)
+	countAfterEnter := m.TreeNodeCount()
 
-	if countAfterTab <= countAfterCollapse {
-		t.Errorf("TAB should expand folded node: had %d nodes, got %d", countAfterCollapse, countAfterTab)
+	if countAfterEnter <= countAfterCollapse {
+		t.Errorf("Enter should expand folded node: had %d nodes, got %d", countAfterCollapse, countAfterEnter)
 	}
 }
 
-// TestTreeNavTabCycleChildrenToSubtree verifies TAB cycles from children-visible to subtree-visible.
-// When children are visible but subtree is not fully expanded, TAB expands the full subtree.
-func TestTreeNavTabCycleChildrenToSubtree(t *testing.T) {
+// TestTreeNavEnterCycleChildrenToSubtree verifies Enter cycles from children-visible to subtree-visible (bd-8zc).
+func TestTreeNavEnterCycleChildrenToSubtree(t *testing.T) {
 	cleanTreeState(t)
 	issues := createDeepTreeIssues()
 	m := ui.NewModel(issues, "")
 	m = enterTreeView(t, m)
-
-	// Start state: epic-1 expanded (depth<1 auto-expand), task-1 collapsed by default.
-	// subtask-1 not visible (parent task-1 collapsed).
-	// Visible: epic-1, task-1, task-2, standalone-1 = 4 nodes
 
 	if m.TreeSelectedID() != "epic-1" {
 		t.Fatalf("expected epic-1, got %q", m.TreeSelectedID())
@@ -382,18 +382,17 @@ func TestTreeNavTabCycleChildrenToSubtree(t *testing.T) {
 
 	countBefore := m.TreeNodeCount()
 
-	// TAB on epic-1 which already has children visible should expand full subtree
-	m = sendSpecialKey(t, m, tea.KeyTab)
-	countAfterFirstTab := m.TreeNodeCount()
+	// Enter on epic-1 which already has children visible should expand full subtree
+	m = sendSpecialKey(t, m, tea.KeyEnter)
+	countAfterFirstEnter := m.TreeNodeCount()
 
-	// subtask-1 should now appear (subtree fully expanded)
-	if countAfterFirstTab <= countBefore {
-		t.Errorf("TAB should expand subtree: had %d nodes, got %d", countBefore, countAfterFirstTab)
+	if countAfterFirstEnter <= countBefore {
+		t.Errorf("Enter should expand subtree: had %d nodes, got %d", countBefore, countAfterFirstEnter)
 	}
 }
 
-// TestTreeNavTabCycleBackToFolded verifies that TAB eventually cycles back to folded state.
-func TestTreeNavTabCycleBackToFolded(t *testing.T) {
+// TestTreeNavEnterCycleBackToFolded verifies Enter eventually cycles back to folded state (bd-8zc).
+func TestTreeNavEnterCycleBackToFolded(t *testing.T) {
 	cleanTreeState(t)
 	issues := createDeepTreeIssues()
 	m := ui.NewModel(issues, "")
@@ -404,61 +403,18 @@ func TestTreeNavTabCycleBackToFolded(t *testing.T) {
 	collapsedCount := m.TreeNodeCount()
 
 	// Cycle through: folded -> children -> subtree -> folded
-	m = sendSpecialKey(t, m, tea.KeyTab) // folded -> children visible
-	m = sendSpecialKey(t, m, tea.KeyTab) // children -> subtree visible
-	m = sendSpecialKey(t, m, tea.KeyTab) // subtree -> folded again
+	m = sendSpecialKey(t, m, tea.KeyEnter)
+	m = sendSpecialKey(t, m, tea.KeyEnter)
+	m = sendSpecialKey(t, m, tea.KeyEnter)
 
 	finalCount := m.TreeNodeCount()
 	if finalCount != collapsedCount {
-		t.Errorf("TAB cycle should return to folded state: had %d, got %d", collapsedCount, finalCount)
+		t.Errorf("Enter cycle should return to folded state: had %d, got %d", collapsedCount, finalCount)
 	}
 }
 
-// TestTreeNavShiftTabGlobalCycle verifies Shift+TAB cycles global visibility.
-// all folded -> top-level only -> all expanded -> all folded
-func TestTreeNavShiftTabGlobalCycle(t *testing.T) {
-	cleanTreeState(t)
-	issues := createDeepTreeIssues()
-	m := ui.NewModel(issues, "")
-	m = enterTreeView(t, m)
-
-	// Press Shift+TAB to cycle to "all folded"
-	m = sendSpecialKey(t, m, tea.KeyShiftTab)
-	allFoldedCount := m.TreeNodeCount()
-
-	// Should show only root nodes when all folded
-	// Roots: epic-1, standalone-1 = 2
-	if allFoldedCount != 2 {
-		t.Errorf("Shift+TAB all-folded should show 2 roots, got %d", allFoldedCount)
-	}
-
-	// Press Shift+TAB again for "top-level children visible"
-	m = sendSpecialKey(t, m, tea.KeyShiftTab)
-	topLevelCount := m.TreeNodeCount()
-
-	if topLevelCount <= allFoldedCount {
-		t.Errorf("Shift+TAB top-level should show more than all-folded: %d vs %d", topLevelCount, allFoldedCount)
-	}
-
-	// Press Shift+TAB again for "all expanded"
-	m = sendSpecialKey(t, m, tea.KeyShiftTab)
-	allExpandedCount := m.TreeNodeCount()
-
-	if allExpandedCount < topLevelCount {
-		t.Errorf("Shift+TAB all-expanded should show at least as many as top-level: %d vs %d", allExpandedCount, topLevelCount)
-	}
-
-	// Press Shift+TAB again - should cycle back to "all folded"
-	m = sendSpecialKey(t, m, tea.KeyShiftTab)
-	cycledCount := m.TreeNodeCount()
-
-	if cycledCount != allFoldedCount {
-		t.Errorf("Shift+TAB should cycle back to all-folded: expected %d, got %d", allFoldedCount, cycledCount)
-	}
-}
-
-// TestTreeNavTabOnLeafDoesNothing verifies TAB on a leaf node does nothing.
-func TestTreeNavTabOnLeafDoesNothing(t *testing.T) {
+// TestTreeNavEnterOnLeafDoesNothing verifies Enter on a leaf node does nothing (bd-8zc).
+func TestTreeNavEnterOnLeafDoesNothing(t *testing.T) {
 	cleanTreeState(t)
 	issues := createNavTestIssues()
 	m := ui.NewModel(issues, "")
@@ -471,116 +427,35 @@ func TestTreeNavTabOnLeafDoesNothing(t *testing.T) {
 	}
 
 	countBefore := m.TreeNodeCount()
-	m = sendSpecialKey(t, m, tea.KeyTab)
+	m = sendSpecialKey(t, m, tea.KeyEnter)
 	countAfter := m.TreeNodeCount()
 
 	if countBefore != countAfter {
-		t.Errorf("TAB on leaf node should not change node count: had %d, got %d", countBefore, countAfter)
+		t.Errorf("Enter on leaf node should not change node count: had %d, got %d", countBefore, countAfter)
 	}
 }
 
-// ============================================================================
-// Feature 3: Level-based expand/collapse (bd-9jr)
-// Press 1-9 to expand tree to that depth level.
-// ============================================================================
-
-// TestTreeNavLevel1ShowsOnlyRoots verifies pressing '1' shows only root nodes.
-func TestTreeNavLevel1ShowsOnlyRoots(t *testing.T) {
+// TestTreeNavNumberKeysNoLongerExpandLevels verifies 1-9 don't expand tree levels (bd-8zc).
+// These keys are now reserved for project switching.
+func TestTreeNavNumberKeysNoLongerExpandLevels(t *testing.T) {
 	cleanTreeState(t)
 	issues := createDeepTreeIssues()
 	m := ui.NewModel(issues, "")
 	m = enterTreeView(t, m)
 
-	// Press '1' to show only roots
+	initialCount := m.TreeNodeCount()
+
+	// Press '1' — should NOT collapse to roots only
 	m = sendKey(t, m, "1")
-	count := m.TreeNodeCount()
-
-	// Should show 2 roots: epic-1, standalone-1
-	if count != 2 {
-		t.Errorf("pressing '1' should show only 2 roots, got %d", count)
+	if m.TreeNodeCount() != initialCount {
+		t.Errorf("pressing '1' should not change tree, count went from %d to %d", initialCount, m.TreeNodeCount())
 	}
-}
 
-// TestTreeNavLevel2ShowsRootsAndChildren verifies pressing '2' shows roots + direct children.
-func TestTreeNavLevel2ShowsRootsAndChildren(t *testing.T) {
-	cleanTreeState(t)
-	issues := createDeepTreeIssues()
-	m := ui.NewModel(issues, "")
-	m = enterTreeView(t, m)
-
-	// Press '2' to show roots + direct children
-	m = sendKey(t, m, "2")
-	count := m.TreeNodeCount()
-
-	// Should show: epic-1, task-1, task-2, standalone-1 = 4
-	// (subtask-1 at depth 2 should be hidden because level 2 means only depth < 2 expanded)
-	if count != 4 {
-		t.Errorf("pressing '2' should show 4 nodes (roots + children), got %d", count)
-	}
-}
-
-// TestTreeNavLevel3ShowsThreeLevels verifies pressing '3' shows 3 levels deep.
-func TestTreeNavLevel3ShowsThreeLevels(t *testing.T) {
-	cleanTreeState(t)
-	issues := createDeepTreeIssues()
-	m := ui.NewModel(issues, "")
-	m = enterTreeView(t, m)
-
-	// Press '3' to show 3 levels
-	m = sendKey(t, m, "3")
-	count := m.TreeNodeCount()
-
-	// Should show all 5 nodes: epic-1, task-1, subtask-1, task-2, standalone-1
-	if count != 5 {
-		t.Errorf("pressing '3' should show all 5 nodes (3 levels deep), got %d", count)
-	}
-}
-
-// TestTreeNavLevel9ExpandsAll verifies pressing '9' expands everything.
-func TestTreeNavLevel9ExpandsAll(t *testing.T) {
-	cleanTreeState(t)
-	issues := createDeepTreeIssues()
-	m := ui.NewModel(issues, "")
-	m = enterTreeView(t, m)
-
-	// First collapse everything
-	m = sendKey(t, m, "Z")
+	// Press '9' — should NOT expand all
+	m = sendKey(t, m, "Z") // collapse everything first
 	collapsedCount := m.TreeNodeCount()
-
-	// Press '9' to expand all
 	m = sendKey(t, m, "9")
-	count := m.TreeNodeCount()
-
-	if count <= collapsedCount {
-		t.Errorf("pressing '9' should expand all nodes: had %d collapsed, got %d", collapsedCount, count)
-	}
-
-	// Should show all 5 nodes
-	if count != 5 {
-		t.Errorf("pressing '9' should show all 5 nodes, got %d", count)
-	}
-}
-
-// TestTreeNavLevelPreservesCursor verifies that level-based expand preserves cursor position.
-func TestTreeNavLevelPreservesCursor(t *testing.T) {
-	cleanTreeState(t)
-	issues := createDeepTreeIssues()
-	m := ui.NewModel(issues, "")
-	m = enterTreeView(t, m)
-
-	// Select epic-1
-	if m.TreeSelectedID() != "epic-1" {
-		t.Fatalf("expected epic-1, got %q", m.TreeSelectedID())
-	}
-
-	// Press '1' then '3' - cursor should stay on epic-1
-	m = sendKey(t, m, "1")
-	if m.TreeSelectedID() != "epic-1" {
-		t.Errorf("after '1', expected epic-1 still selected, got %q", m.TreeSelectedID())
-	}
-
-	m = sendKey(t, m, "3")
-	if m.TreeSelectedID() != "epic-1" {
-		t.Errorf("after '3', expected epic-1 still selected, got %q", m.TreeSelectedID())
+	if m.TreeNodeCount() != collapsedCount {
+		t.Errorf("pressing '9' should not change tree, count went from %d to %d", collapsedCount, m.TreeNodeCount())
 	}
 }

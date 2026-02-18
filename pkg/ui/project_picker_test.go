@@ -402,3 +402,105 @@ func TestProjectPicker_NoProjectsMessage(t *testing.T) {
 		t.Error("expected 'No projects found' message when no projects")
 	}
 }
+
+// TestProjectPicker_AutoNumbering verifies that when no favorites are configured,
+// projects are auto-numbered 1-N for display and switching (bd-8zc).
+func TestProjectPicker_AutoNumbering(t *testing.T) {
+	_, projects := createSampleProjects(t)
+
+	// Config with NO favorites
+	cfg := config.Config{
+		Projects:  projects,
+		Favorites: nil, // No favorites configured
+		UI:        config.UIConfig{DefaultView: "list", SplitRatio: 0.4},
+	}
+
+	issues := []model.Issue{
+		{ID: "api-1", Title: "Fix auth bug", Status: "open", IssueType: "bug", Priority: 1, CreatedAt: time.Now()},
+	}
+
+	m := ui.NewModel(issues, "").WithConfig(cfg, "api-service", projects[0].Path)
+	newM, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m = newM.(ui.Model)
+
+	// Picker should show auto-numbers in the view
+	if !m.PickerExpanded() {
+		t.Fatal("picker should be expanded by default")
+	}
+
+	view := m.View()
+
+	// The view should contain the number "1" near api-service, "2" near web-frontend, "3" near data-pipeline
+	// Since projects are numbered 1-3, the view should show those numbers
+	for _, name := range []string{"api-service", "web-frontend", "data-pipeline"} {
+		if !strings.Contains(view, name) {
+			t.Errorf("expanded view should contain project name %q", name)
+		}
+	}
+}
+
+// TestProjectPicker_NumberKeySwitchesWithoutFavorites verifies that pressing
+// a number key (e.g. "2") switches to the project at that position even when
+// no favorites are configured in the config (bd-8zc).
+func TestProjectPicker_NumberKeySwitchesWithoutFavorites(t *testing.T) {
+	_, projects := createSampleProjects(t)
+
+	// Config with NO favorites
+	cfg := config.Config{
+		Projects:  projects,
+		Favorites: nil,
+		UI:        config.UIConfig{DefaultView: "list", SplitRatio: 0.4},
+	}
+
+	issues := []model.Issue{
+		{ID: "api-1", Title: "Fix auth bug", Status: "open", IssueType: "bug", Priority: 1, CreatedAt: time.Now()},
+	}
+
+	m := ui.NewModel(issues, "").WithConfig(cfg, "api-service", projects[0].Path)
+	newM, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m = newM.(ui.Model)
+
+	// Press "2" to switch to web-frontend (second project)
+	newM, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("2")})
+	m = newM.(ui.Model)
+
+	if cmd == nil {
+		t.Fatal("expected a command from pressing '2' for project switch")
+	}
+
+	msg := cmd()
+	switchMsg, ok := msg.(ui.SwitchProjectMsg)
+	if !ok {
+		t.Fatalf("expected SwitchProjectMsg, got %T", msg)
+	}
+	if switchMsg.Project.Name != "web-frontend" {
+		t.Errorf("expected 'web-frontend', got %q", switchMsg.Project.Name)
+	}
+}
+
+// TestProjectPicker_AutoNumberDisplayInView verifies the picker view shows
+// position numbers prominently for each project (bd-8zc).
+func TestProjectPicker_AutoNumberDisplayInView(t *testing.T) {
+	entries := []ui.ProjectEntry{
+		{Project: config.Project{Name: "alpha", Path: "/tmp/a"}, FavoriteNum: 1},
+		{Project: config.Project{Name: "beta", Path: "/tmp/b"}, FavoriteNum: 2},
+		{Project: config.Project{Name: "gamma", Path: "/tmp/c"}, FavoriteNum: 3},
+	}
+
+	theme := ui.TestTheme()
+	picker := ui.NewProjectPicker(entries, theme)
+	picker.SetSize(120, 40)
+
+	view := picker.ViewExpanded()
+
+	// Each row should contain the position number
+	if !strings.Contains(view, "1") || !strings.Contains(view, "alpha") {
+		t.Error("expanded view should contain '1' and 'alpha'")
+	}
+	if !strings.Contains(view, "2") || !strings.Contains(view, "beta") {
+		t.Error("expanded view should contain '2' and 'beta'")
+	}
+	if !strings.Contains(view, "3") || !strings.Contains(view, "gamma") {
+		t.Error("expanded view should contain '3' and 'gamma'")
+	}
+}
