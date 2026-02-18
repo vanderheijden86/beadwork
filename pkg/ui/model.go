@@ -514,33 +514,40 @@ func (m Model) buildProjectEntries() []ProjectEntry {
 		} else {
 			// Try to get counts from the project's beads file.
 			// Use silent warning handler to avoid corrupting TUI with stderr output (bd-lll).
+			// Count logic mirrors snapshot.go's counting (bd-qjc).
 			beadsPath := filepath.Join(p.ResolvedPath(), ".beads", "issues.jsonl")
 			silentOpts := loader.ParseOptions{WarningHandler: func(string) {}}
 			if issues, err := loader.LoadIssuesFromFileWithOptions(beadsPath, silentOpts); err == nil {
+				// Build issue map for dependency resolution
+				issMap := make(map[string]model.Issue, len(issues))
 				for _, iss := range issues {
-					switch iss.Status {
-					case "in_progress":
-						entry.OpenCount++
+					issMap[iss.ID] = iss
+				}
+				for _, iss := range issues {
+					if isClosedLikeStatus(iss.Status) {
+						continue
+					}
+					entry.OpenCount++
+					if iss.Status == "in_progress" {
 						entry.InProgressCount++
-					case "open":
-						entry.OpenCount++
-					case "blocked":
+					}
+					if iss.Status == model.StatusBlocked {
 						entry.BlockedCount++
 						continue
 					}
-					if iss.Status == "open" {
-						blocked := false
-						for _, dep := range iss.Dependencies {
-							if dep.Type == "blocked_by" {
-								blocked = true
-								break
-							}
+					// Check if blocked by open dependencies
+					isBlocked := false
+					for _, dep := range iss.Dependencies {
+						if dep == nil || !dep.Type.IsBlocking() {
+							continue
 						}
-						if blocked {
-							entry.BlockedCount++
-						} else {
-							entry.ReadyCount++
+						if blocker, exists := issMap[dep.DependsOnID]; exists && !isClosedLikeStatus(blocker.Status) {
+							isBlocked = true
+							break
 						}
+					}
+					if !isBlocked {
+						entry.ReadyCount++
 					}
 				}
 			}
@@ -1203,6 +1210,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.issueMap = nil
 		m.snapshot = nil
 		m.countOpen, m.countReady, m.countBlocked, m.countClosed = 0, 0, 0, 0
+		// Clear tree filter/search state so new project data isn't hidden (bd-qjc)
+		m.tree.ApplyFilter("all")
+		m.tree.ClearSearch()
 		m.tree.Build(nil)
 		// Start new background worker for the new path (bd-87w, bd-828)
 		// BackgroundWorker creates its own internal file watcher.
@@ -4124,6 +4134,22 @@ func (m Model) TreeSelectedID() string {
 // TreeNodeCount returns the number of visible nodes in the tree.
 func (m Model) TreeNodeCount() int {
 	return m.tree.NodeCount()
+}
+
+// BuildProjectEntries exposes buildProjectEntries for testing (bd-qjc).
+func (m Model) BuildProjectEntries() []ProjectEntry {
+	return m.buildProjectEntries()
+}
+
+// ApplyTreeFilter sets a filter on the tree view for testing (bd-qjc).
+func (m *Model) ApplyTreeFilter(filter string) {
+	m.tree.ApplyFilter(filter)
+}
+
+// TreeFilterActive returns true if the tree has an active filter (bd-qjc).
+func (m Model) TreeFilterActive() bool {
+	f := m.tree.GetFilter()
+	return f != "" && f != "all"
 }
 
 // TreeSortField returns the current sort field of the tree view (bd-x3l).

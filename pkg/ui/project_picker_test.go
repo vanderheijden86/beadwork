@@ -1018,3 +1018,124 @@ func TestModel_PickerArrowNavigation(t *testing.T) {
 		t.Errorf("expected cursor at 0 after up, got %d", m.ProjectPickerCursor())
 	}
 }
+
+// TestPickerCounts_BlockedByDependencies verifies that non-active projects correctly
+// count issues blocked by open dependencies (bd-qjc).
+func TestPickerCounts_BlockedByDependencies(t *testing.T) {
+	root := t.TempDir()
+
+	// Create a project with issues that have blocking dependencies.
+	// Issue dep-1 is open (should be READY — no blockers).
+	// Issue dep-2 is open but blocked by dep-1 (should be BLOCKED, not READY).
+	// Issue dep-3 has status "blocked" explicitly.
+	projDir := filepath.Join(root, "dep-project")
+	beadsDir := filepath.Join(projDir, ".beads")
+	if err := os.MkdirAll(beadsDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	issuesJSONL := `{"id":"dep-1","title":"Base task","status":"open","issue_type":"task","priority":2,"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"}
+{"id":"dep-2","title":"Depends on base","status":"open","issue_type":"task","priority":2,"dependencies":[{"issue_id":"dep-2","depends_on_id":"dep-1","type":"blocks","created_at":"2026-01-01T00:00:00Z","created_by":"test"}],"created_at":"2026-01-02T00:00:00Z","updated_at":"2026-01-02T00:00:00Z"}
+{"id":"dep-3","title":"Explicitly blocked","status":"blocked","issue_type":"bug","priority":1,"created_at":"2026-01-03T00:00:00Z","updated_at":"2026-01-03T00:00:00Z"}
+`
+	if err := os.WriteFile(filepath.Join(beadsDir, "issues.jsonl"), []byte(issuesJSONL), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a separate active project (so dep-project is non-active and counted from disk).
+	activeDir := filepath.Join(root, "active-project")
+	activeBeads := filepath.Join(activeDir, ".beads")
+	if err := os.MkdirAll(activeBeads, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(activeBeads, "issues.jsonl"),
+		[]byte(`{"id":"act-1","title":"Active task","status":"open","issue_type":"task","priority":2,"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"}`+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := config.Config{
+		Projects: []config.Project{
+			{Name: "active-project", Path: activeDir},
+			{Name: "dep-project", Path: projDir},
+		},
+	}
+	activeIssues := []model.Issue{
+		{ID: "act-1", Title: "Active task", Status: "open", IssueType: "task", Priority: 2},
+	}
+	m := ui.NewModel(activeIssues, "").WithConfig(cfg, "active-project", activeDir)
+	newM, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m = newM.(ui.Model)
+
+	entries := m.BuildProjectEntries()
+
+	// Find the dep-project entry
+	var depEntry *ui.ProjectEntry
+	for i := range entries {
+		if entries[i].Project.Name == "dep-project" {
+			depEntry = &entries[i]
+			break
+		}
+	}
+	if depEntry == nil {
+		t.Fatal("dep-project not found in entries")
+	}
+
+	// dep-1: open, no blockers → READY
+	// dep-2: open, blocked by dep-1 (which is open) → NOT ready (blocked by dep)
+	// dep-3: status "blocked" → BLOCKED
+	// OpenCount should be 3 (all non-closed)
+	if depEntry.OpenCount != 3 {
+		t.Errorf("expected OpenCount=3, got %d", depEntry.OpenCount)
+	}
+	// ReadyCount should be 1 (only dep-1 is truly ready)
+	if depEntry.ReadyCount != 1 {
+		t.Errorf("expected ReadyCount=1, got %d", depEntry.ReadyCount)
+	}
+	// BlockedCount should be 1 (dep-3 has explicit "blocked" status)
+	if depEntry.BlockedCount != 1 {
+		t.Errorf("expected BlockedCount=1, got %d", depEntry.BlockedCount)
+	}
+}
+
+// TestProjectSwitch_ClearsTreeFilter verifies that switching projects resets
+// the tree's search/filter state so the new project's issues are fully visible (bd-qjc).
+func TestProjectSwitch_ClearsTreeFilter(t *testing.T) {
+	_, projects := createSampleProjects(t)
+
+	activeIssues := []model.Issue{
+		{ID: "api-1", Title: "Fix auth bug", Status: "open", IssueType: "bug", Priority: 1},
+		{ID: "api-2", Title: "Add rate limiting", Status: "in_progress", IssueType: "feature", Priority: 2},
+		{ID: "api-3", Title: "Update docs", Status: "open", IssueType: "task", Priority: 3},
+	}
+	cfg := config.Config{
+		Projects: projects,
+	}
+
+	m := ui.NewModel(activeIssues, "").WithConfig(cfg, "api-service", projects[0].Path)
+	newM, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m = newM.(ui.Model)
+
+	// Tree should have nodes (3 issues)
+	if m.TreeNodeCount() == 0 {
+		t.Fatal("tree should have nodes before filter")
+	}
+
+	// Apply a "closed" filter — all test issues are open/in_progress, so 0 match.
+	m.ApplyTreeFilter("closed")
+
+	// After applying the filter, the tree should show 0 matching nodes
+	if m.TreeNodeCount() != 0 {
+		t.Errorf("expected 0 nodes after 'closed' filter, got %d", m.TreeNodeCount())
+	}
+
+	// Now switch projects
+	switchMsg := ui.SwitchProjectMsg{Project: projects[1]} // web-frontend
+	newM, _ = m.Update(switchMsg)
+	m = newM.(ui.Model)
+
+	// After switch, the tree filter should be cleared.
+	// The tree is cleared via Build(nil) during switch, so it's empty pending data load.
+	// But critically, the filter should not persist — verify via the tree filter accessor.
+	if m.TreeFilterActive() {
+		t.Error("tree filter should be cleared after project switch")
+	}
+}
