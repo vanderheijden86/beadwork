@@ -1135,7 +1135,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(cmds...)
 
 	case SwitchProjectMsg:
-		// Switch to a different project (bd-q5z, bd-ey3)
+		// Switch to a different project (bd-q5z, bd-ey3, bd-87w)
 		m.activeProjectName = msg.Project.Name
 		m.activeProjectPath = msg.Project.ResolvedPath()
 		m.activeProjectFavN = m.appConfig.ProjectFavoriteNumber(msg.Project.Name)
@@ -1147,20 +1147,33 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.statusIsError = true
 			return m, nil
 		}
-		// Update path and stop old watcher
+		// Stop background worker and old watcher (bd-87w)
+		if m.backgroundWorker != nil {
+			m.backgroundWorker.Stop()
+			m.backgroundWorker = nil
+		}
 		if m.watcher != nil {
 			m.watcher.Stop()
 			m.watcher = nil
 		}
 		m.beadsPath = newPath
-		// Start new watcher
-		w, watchErr := watcher.NewWatcher(newPath)
-		if watchErr == nil {
-			m.watcher = w
-			cmds = append(cmds, WatchFileCmd(w))
+		// Start new background worker for the new path (bd-87w)
+		// BackgroundWorker creates its own internal file watcher.
+		bw, bwErr := NewBackgroundWorker(WorkerConfig{BeadsPath: newPath})
+		if bwErr == nil {
+			bw.Start()
+			m.backgroundWorker = bw
+			m.snapshotInitPending = true
+			cmds = append(cmds, WaitForBackgroundWorkerMsgCmd(bw))
+		} else {
+			// Fallback: no background worker, use watcher + FileChangedMsg
+			w, watchErr := watcher.NewWatcher(newPath)
+			if watchErr == nil {
+				m.watcher = w
+				cmds = append(cmds, WatchFileCmd(w))
+			}
+			cmds = append(cmds, func() tea.Msg { return FileChangedMsg{} })
 		}
-		// Trigger reload via FileChangedMsg which handles all the complex state
-		cmds = append(cmds, func() tea.Msg { return FileChangedMsg{} })
 		m.statusMsg = fmt.Sprintf("Switched to %s", msg.Project.Name)
 		m.statusIsError = false
 		// Rebuild picker entries to reflect new active project (bd-ey3)
