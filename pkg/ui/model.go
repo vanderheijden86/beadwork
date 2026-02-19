@@ -1748,21 +1748,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 
 			case "tab":
-				if m.isSplitView && !m.isBoardView {
-					if m.focused == focusList {
-						m.focused = focusDetail
-					} else if m.focused == focusTree {
-						// Tree to detail: sync selection before switching (skip when detail hidden, bd-80u)
-						if !m.treeDetailHidden {
-							m.syncTreeToDetail()
-							m.focused = focusDetail
-						}
-					} else if m.focused == focusDetail && m.treeViewActive {
-						// Detail back to tree
-						m.focused = focusTree
-					} else {
-						m.focused = focusTree
+				// Tab toggles focus between tree and detail (bd-y0m)
+				if m.focused == focusTree {
+					m.syncTreeToDetail()
+					if m.treeDetailHidden {
+						m.treeDetailHidden = false
 					}
+					m.focused = focusDetail
+					return m, nil
+				} else if m.focused == focusDetail && m.treeViewActive {
+					m.focused = focusTree
+					return m, nil
+				} else if m.focused == focusList {
+					m.focused = focusDetail
+					return m, nil
 				}
 
 			case "<":
@@ -1937,9 +1936,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 
 			case focusDetail:
-				// Enter returns to tree in detail-only (non-split) mode (bd-bys)
-				if m.treeViewActive && m.treeDetailHidden && msg.String() == "enter" {
-					m.focused = focusTree
+				// Enter returns to previous view from detail (bd-y0m, bd-yo4)
+				if msg.String() == "enter" {
+					if m.treeViewActive {
+						m.focused = focusTree
+					} else {
+						m.focused = focusBoard
+					}
 				} else if m.treeViewActive && msg.String() == "d" {
 					// Toggle detail panel from detail focus in tree view (bd-80u)
 					m.treeDetailHidden = !m.treeDetailHidden
@@ -2257,9 +2260,14 @@ func (m Model) handleBoardKeys(msg tea.KeyMsg) Model {
 			m.board.DetailScrollUp(3)
 		}
 
-	// Enter opens detail panel (bd-1of: replaces Tab for detail)
+	// Enter toggles detail view (bd-yo4: full detail like tree view)
 	case "enter":
-		m.board.ToggleDetail()
+		if m.focused == focusDetail {
+			// Already in detail — handled by focusDetail case in Update
+		} else {
+			m.syncBoardToDetail()
+			m.focused = focusDetail
+		}
 	}
 	return m
 }
@@ -2268,6 +2276,21 @@ func (m Model) handleBoardKeys(msg tea.KeyMsg) Model {
 // It finds the matching issue in the list and updates the viewport content.
 func (m *Model) syncTreeToDetail() {
 	selected := m.tree.SelectedIssue()
+	if selected == nil {
+		return
+	}
+	for i, item := range m.list.Items() {
+		if issueItem, ok := item.(IssueItem); ok && issueItem.Issue.ID == selected.ID {
+			m.list.Select(i)
+			break
+		}
+	}
+	m.updateViewportContent()
+}
+
+// syncBoardToDetail synchronizes the detail panel with the currently selected board card (bd-yo4).
+func (m *Model) syncBoardToDetail() {
+	selected := m.board.SelectedIssue()
 	if selected == nil {
 		return
 	}
@@ -2326,13 +2349,6 @@ func (m Model) handleTreeKeys(msg tea.KeyMsg) Model {
 	case "k", "up":
 		m.tree.MoveUp()
 		m.syncTreeToDetail()
-	case "tab":
-		// Tab cycles node visibility in tree-only mode (bd-1of)
-		// In split view with detail visible, Tab is handled by Model.Update for focus switching
-		if m.treeDetailHidden || !m.isSplitView {
-			m.tree.CycleNodeVisibility()
-			m.syncTreeToDetail()
-		}
 	case "shift+tab":
 		// Shift+Tab cycles global visibility (bd-1of)
 		m.tree.CycleGlobalVisibility()

@@ -763,9 +763,9 @@ func TestTreeViewSpaceDoesNothingInSplitMode(t *testing.T) {
 	}
 }
 
-// TestTreeViewTabCyclesVisibilityWhenDetailHidden verifies Tab cycles node
-// visibility even when detail panel is hidden (tree-only mode via d toggle).
-func TestTreeViewTabCyclesVisibilityWhenDetailHidden(t *testing.T) {
+// TestTreeViewTabShowsDetailWhenHidden verifies Tab toggles focus to detail
+// and unhides the detail panel when it was hidden via 'd' toggle (bd-y0m).
+func TestTreeViewTabShowsDetailWhenHidden(t *testing.T) {
 	issues := createTreeTestIssues()
 	m := ui.NewModel(issues, "")
 
@@ -781,18 +781,15 @@ func TestTreeViewTabCyclesVisibilityWhenDetailHidden(t *testing.T) {
 		t.Fatal("expected detail hidden after 'd'")
 	}
 
-	initialCount := m.TreeNodeCount()
-
-	// Tab should cycle node visibility (not toggle focus) when detail is hidden
+	// Tab should toggle focus to detail and unhide it
 	newM, _ = m.Update(tea.KeyMsg{Type: tea.KeyTab})
 	m = newM.(ui.Model)
 
-	afterTab := m.TreeNodeCount()
-	if afterTab == initialCount {
-		t.Errorf("Tab should cycle visibility when detail hidden, but count unchanged at %d", initialCount)
+	if m.FocusState() != "detail" {
+		t.Errorf("Tab should toggle focus to detail, got %q", m.FocusState())
 	}
-	if m.FocusState() != "tree" {
-		t.Errorf("Expected focus to remain 'tree', got %q", m.FocusState())
+	if m.TreeDetailHidden() {
+		t.Error("Tab should unhide detail panel when toggling to detail")
 	}
 }
 
@@ -974,9 +971,8 @@ func TestTreeDetailAutoHideFocusSnap(t *testing.T) {
 // Tests: Key remapping — Tab=fold, Enter=detail, Space=removed (bd-1of)
 // ============================================================================
 
-// TestTreeViewTabCyclesVisibility verifies Tab does CycleNodeVisibility
-// (3-state: collapsed → children → full subtree → collapsed) in tree-only mode.
-func TestTreeViewTabCyclesVisibility(t *testing.T) {
+// TestTreeViewTabTogglesFocusToDetail verifies Tab toggles focus from tree to detail (bd-y0m).
+func TestTreeViewTabTogglesFocusToDetail(t *testing.T) {
 	issues := createTreeTestIssues() // epic-1 with children task-1, task-2
 	m := ui.NewModel(issues, "")
 	m = enterTreeView(t, m)
@@ -986,32 +982,25 @@ func TestTreeViewTabCyclesVisibility(t *testing.T) {
 		t.Fatalf("expected epic-1 selected, got %q", m.TreeSelectedID())
 	}
 
-	initialCount := m.TreeNodeCount()
-	if initialCount < 3 {
-		t.Fatalf("expected at least 3 visible nodes (epic + 2 tasks + standalone), got %d", initialCount)
+	// Focus should start on tree
+	if m.FocusState() != "tree" {
+		t.Fatalf("expected focus 'tree', got %q", m.FocusState())
 	}
 
-	// Press Tab — should collapse epic-1 (CycleNodeVisibility)
+	// Press Tab — should switch focus to detail
 	newM, _ := m.Update(tea.KeyMsg{Type: tea.KeyTab})
 	m = newM.(ui.Model)
 
-	afterCollapse := m.TreeNodeCount()
-	if afterCollapse >= initialCount {
-		t.Errorf("expected fewer nodes after Tab (collapse), got %d (was %d)", afterCollapse, initialCount)
+	if m.FocusState() != "detail" {
+		t.Errorf("Tab should toggle focus to detail, got %q", m.FocusState())
 	}
 
-	// Focus should still be tree, NOT detail
-	if m.FocusState() != "tree" {
-		t.Errorf("Tab should NOT switch focus in tree-only, expected 'tree', got %q", m.FocusState())
-	}
-
-	// Press Tab again — should expand epic-1 (show children again)
+	// Press Tab again — should switch focus back to tree
 	newM, _ = m.Update(tea.KeyMsg{Type: tea.KeyTab})
 	m = newM.(ui.Model)
 
-	afterExpand := m.TreeNodeCount()
-	if afterExpand != initialCount {
-		t.Errorf("expected %d nodes after second Tab (expand), got %d", initialCount, afterExpand)
+	if m.FocusState() != "tree" {
+		t.Errorf("Tab should toggle focus back to tree, got %q", m.FocusState())
 	}
 }
 

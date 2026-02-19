@@ -343,78 +343,38 @@ func createDeepTreeIssues() []model.Issue {
 }
 
 // ============================================================================
-// Tests: Tab cycles node visibility, Enter opens detail, 1-9 project switch (bd-1of)
-// Tab does CycleNodeVisibility (expand/collapse cycling) in tree-only mode.
-// Enter opens detail view (always).
+// Tests: Tab/Enter toggle tree↔detail, Shift+Tab cycles visibility, 1-9 project switch (bd-y0m)
+// Tab toggles focus between tree and detail.
+// Enter toggles between tree and detail.
+// Shift+Tab cycles global visibility.
 // 1-9 are project switching only.
 // ============================================================================
 
-// TestTreeNavTabCycleFolded verifies Tab cycles from folded to children-visible (bd-1of).
-func TestTreeNavTabCycleFolded(t *testing.T) {
+// TestTreeNavTabTogglesFocus verifies Tab toggles focus tree↔detail (bd-y0m).
+func TestTreeNavTabTogglesFocus(t *testing.T) {
 	cleanTreeState(t)
 	issues := createDeepTreeIssues()
 	m := ui.NewModel(issues, "")
 	m = enterTreeView(t, m)
 
-	// Collapse epic-1 first
-	m = sendKey(t, m, "h") // collapse epic-1
-	countAfterCollapse := m.TreeNodeCount()
-
-	// Now Tab should expand to show direct children only
-	newM, _ := m.Update(tea.KeyMsg{Type: tea.KeyTab})
-	m = newM.(ui.Model)
-	countAfterTab := m.TreeNodeCount()
-
-	if countAfterTab <= countAfterCollapse {
-		t.Errorf("Tab should expand folded node: had %d nodes, got %d", countAfterCollapse, countAfterTab)
-	}
-}
-
-// TestTreeNavTabCycleChildrenToSubtree verifies Tab cycles from children-visible to subtree-visible (bd-1of).
-func TestTreeNavTabCycleChildrenToSubtree(t *testing.T) {
-	cleanTreeState(t)
-	issues := createDeepTreeIssues()
-	m := ui.NewModel(issues, "")
-	m = enterTreeView(t, m)
-
-	if m.TreeSelectedID() != "epic-1" {
-		t.Fatalf("expected epic-1, got %q", m.TreeSelectedID())
+	if m.FocusState() != "tree" {
+		t.Fatalf("expected focus 'tree', got %q", m.FocusState())
 	}
 
-	countBefore := m.TreeNodeCount()
-
-	// Tab on epic-1 which already has children visible should expand full subtree
+	// Tab should toggle to detail
 	newM, _ := m.Update(tea.KeyMsg{Type: tea.KeyTab})
 	m = newM.(ui.Model)
-	countAfterFirstTab := m.TreeNodeCount()
 
-	if countAfterFirstTab <= countBefore {
-		t.Errorf("Tab should expand subtree: had %d nodes, got %d", countBefore, countAfterFirstTab)
+	if m.FocusState() != "detail" {
+		t.Errorf("Tab should toggle to detail, got %q", m.FocusState())
 	}
-}
 
-// TestTreeNavTabCycleBackToFolded verifies Tab eventually cycles back to folded state (bd-1of).
-func TestTreeNavTabCycleBackToFolded(t *testing.T) {
-	cleanTreeState(t)
-	issues := createDeepTreeIssues()
-	m := ui.NewModel(issues, "")
-	m = enterTreeView(t, m)
-
-	// First collapse epic-1
-	m = sendKey(t, m, "h")
-	collapsedCount := m.TreeNodeCount()
-
-	// Cycle through: folded -> children -> subtree -> folded
-	newM, _ := m.Update(tea.KeyMsg{Type: tea.KeyTab})
-	m = newM.(ui.Model)
-	newM, _ = m.Update(tea.KeyMsg{Type: tea.KeyTab})
-	m = newM.(ui.Model)
+	// Tab again should return to tree
 	newM, _ = m.Update(tea.KeyMsg{Type: tea.KeyTab})
 	m = newM.(ui.Model)
 
-	finalCount := m.TreeNodeCount()
-	if finalCount != collapsedCount {
-		t.Errorf("Tab cycle should return to folded state: had %d, got %d", collapsedCount, finalCount)
+	if m.FocusState() != "tree" {
+		t.Errorf("Tab should toggle back to tree, got %q", m.FocusState())
 	}
 }
 
