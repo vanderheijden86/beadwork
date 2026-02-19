@@ -105,10 +105,10 @@ func DefaultTheme(r *lipgloss.Renderer) Theme {
 		Closed:     lipgloss.AdaptiveColor{Light: "#555555", Dark: "#6272A4"}, // Gray
 		Tombstone:  lipgloss.AdaptiveColor{Light: "#888888", Dark: "#44475A"}, // Muted gray - deleted
 
-		Bug:     lipgloss.AdaptiveColor{Light: "#CC0000", Dark: "#FF5555"}, // Red
-		Feature: lipgloss.AdaptiveColor{Light: "#B06800", Dark: "#FFB86C"}, // Orange (darker for contrast)
-		Epic:    lipgloss.AdaptiveColor{Light: "#6B47D9", Dark: "#BD93F9"}, // Purple (darker)
-		Task:    lipgloss.AdaptiveColor{Light: "#808000", Dark: "#F1FA8C"}, // Yellow/olive (darker for contrast)
+		Bug:     lipgloss.AdaptiveColor{Light: "#CC0000", Dark: "#FF5555"}, // Red (JIRA bug)
+		Feature: lipgloss.AdaptiveColor{Light: "#36B37E", Dark: "#57D9A3"}, // Green (JIRA story/feature)
+		Epic:    lipgloss.AdaptiveColor{Light: "#6B47D9", Dark: "#BD93F9"}, // Purple (JIRA epic)
+		Task:    lipgloss.AdaptiveColor{Light: "#2684FF", Dark: "#4C9AFF"}, // Blue (JIRA task)
 		Chore:   lipgloss.AdaptiveColor{Light: "#006080", Dark: "#8BE9FD"}, // Cyan (darker)
 
 		Border:    lipgloss.AdaptiveColor{Light: "#AAAAAA", Dark: "#44475A"}, // Border (was #DDDDDD)
@@ -165,15 +165,15 @@ func (t Theme) GetStatusColor(s string) lipgloss.AdaptiveColor {
 func (t Theme) GetTypeIcon(typ string) (string, lipgloss.AdaptiveColor) {
 	switch typ {
 	case "bug":
-		return "!", t.Bug
+		return "●", t.Bug // Red filled circle (JIRA-style)
 	case "feature":
-		return "*", t.Feature
+		return "▲", t.Feature // Green triangle up (JIRA-style story/feature)
 	case "task":
-		return "-", t.Task
+		return "✔", t.Task // Blue checkmark (JIRA-style task)
 	case "epic":
-		return "E", t.Epic
+		return "⚡", t.Epic // Purple lightning (JIRA-style epic)
 	case "chore":
-		return "~", t.Chore
+		return "○", t.Chore // Gray open circle
 	default:
 		return "·", t.Subtext
 	}

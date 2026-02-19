@@ -60,11 +60,11 @@ func TestGetTypeIcon(t *testing.T) {
 		wantIcon string
 		wantCol  lipgloss.AdaptiveColor
 	}{
-		{"bug", "!", theme.Bug},
-		{"feature", "*", theme.Feature},
-		{"task", "-", theme.Task},
-		{"epic", "E", theme.Epic},
-		{"chore", "~", theme.Chore},
+		{"bug", "●", theme.Bug},
+		{"feature", "▲", theme.Feature},
+		{"task", "✔", theme.Task},
+		{"epic", "⚡", theme.Epic},
+		{"chore", "○", theme.Chore},
 		{"unknown", "·", theme.Subtext},
 	}
 
