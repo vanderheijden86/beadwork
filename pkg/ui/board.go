@@ -1265,10 +1265,11 @@ func (b BoardModel) renderCard(issue model.Issue, width int, selected bool, colI
 	isAnyMatch := b.IsSearchMatch(colIdx, rowIdx)          // Any match in search results
 
 	// ══════════════════════════════════════════════════════════════════════════
-	// CARD STYLING - Fixed 4-line height (bv-1daf) with blocking colors (bv-kklp)
+	// CARD STYLING - Fixed 3-line height with full border (bd-20v9)
 	// ══════════════════════════════════════════════════════════════════════════
 	cardStyle := t.Renderer.NewStyle().
 		Width(width).
+		Height(3).
 		Padding(0, 1).
 		MarginBottom(1)
 
@@ -1413,8 +1414,17 @@ func (b BoardModel) renderCard(issue model.Issue, width int, selected bool, colI
 		line3 = strings.Join(meta, " ")
 	}
 
-	// Render card with 3 content lines (line4 removed to eliminate extra vertical gap)
-	return cardStyle.Render(lipgloss.JoinVertical(lipgloss.Left, line1, line2, line3))
+	// Clamp each line to prevent wrapping at narrow widths (bd-20v9)
+	textW := width - 2 // content area after padding
+	if textW < 1 {
+		textW = 1
+	}
+	lineClamp := t.Renderer.NewStyle().MaxWidth(textW)
+	return cardStyle.Render(lipgloss.JoinVertical(lipgloss.Left,
+		lineClamp.Render(line1),
+		lineClamp.Render(line2),
+		lineClamp.Render(line3),
+	))
 }
 
 // renderExpandedCard creates an expanded inline view of a card (bv-i3ii)
