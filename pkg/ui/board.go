@@ -1056,10 +1056,10 @@ func (b BoardModel) View(width, height int) string {
 		// Calculate visible rows (bv-1daf: 3 content lines)
 		// Card height breakdown:
 		// - 3 content lines (line1: meta, line2: title, line3: deps/labels)
-		// - 2 border lines (RoundedBorder adds top + bottom)
+		// - 0 border lines (left-only accent, no top/bottom)
 		// - 1 margin line (MarginBottom(1))
-		// Total: 6 lines per card
-		cardHeight := 6
+		// Total: 4 lines per card
+		cardHeight := 4
 		visibleCards := (colHeight - 1) / cardHeight
 		if visibleCards < 1 {
 			visibleCards = 1
@@ -1090,9 +1090,9 @@ func (b BoardModel) View(width, height int) string {
 			// Check if this card is expanded (bv-i3ii)
 			var card string
 			if b.IsCardExpanded(issue.ID) {
-				card = b.renderExpandedCard(issue, baseWidth-4, colIdx, rowIdx)
+				card = b.renderExpandedCard(issue, baseWidth-3, colIdx, rowIdx)
 			} else {
-				card = b.renderCard(issue, baseWidth-4, isSelected, colIdx, rowIdx)
+				card = b.renderCard(issue, baseWidth-3, isSelected, colIdx, rowIdx)
 			}
 			cards = append(cards, card)
 		}
@@ -1295,20 +1295,20 @@ func (b BoardModel) renderCard(issue model.Issue, width int, selected bool, colI
 		borderColor = t.Border // Default border
 	}
 
+	// Left-only accent border: avoids clashing with column separators (bd-5as)
 	if selected {
 		cardStyle = cardStyle.
 			Background(t.Highlight).
-			Border(lipgloss.RoundedBorder()).
+			Border(lipgloss.NormalBorder(), false, false, false, true).
 			BorderForeground(borderColor)
 	} else if isCurrentMatch {
-		// Highlight current match with subtle background (bv-yg39)
 		cardStyle = cardStyle.
 			Background(lipgloss.AdaptiveColor{Light: "#e1bee7", Dark: "#4a148c"}).
-			Border(lipgloss.RoundedBorder()).
+			Border(lipgloss.NormalBorder(), false, false, false, true).
 			BorderForeground(borderColor)
 	} else {
 		cardStyle = cardStyle.
-			Border(lipgloss.RoundedBorder()).
+			Border(lipgloss.NormalBorder(), false, false, false, true).
 			BorderForeground(borderColor)
 	}
 
@@ -1456,9 +1456,10 @@ func (b BoardModel) renderExpandedCard(issue model.Issue, width int, _, _ int) s
 		borderColor = t.Primary // Selected uses primary
 	}
 
+	// Left-only accent border for expanded card (bd-5as)
 	cardStyle = cardStyle.
 		Background(t.Highlight).
-		Border(lipgloss.DoubleBorder()). // Double border to distinguish expanded state
+		Border(lipgloss.ThickBorder(), false, false, false, true).
 		BorderForeground(borderColor)
 
 	// ══════════════════════════════════════════════════════════════════════════
