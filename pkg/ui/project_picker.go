@@ -2,7 +2,6 @@ package ui
 
 import (
 	"fmt"
-	"os"
 	"sort"
 	"strings"
 
@@ -35,7 +34,7 @@ type ToggleFavoriteMsg struct {
 }
 
 // ProjectPickerModel is an always-visible k9s-style header for selecting projects.
-// It renders as a multi-column panel: stats | project table (# NAME O P R) | shortcuts | B9s logo.
+// It renders as a multi-column panel: project table (# NAME O P R) | shortcuts | B9s logo.
 // Project switching is done via number keys 1-9 or filter mode.
 type ProjectPickerModel struct {
 	entries     []ProjectEntry
@@ -244,8 +243,8 @@ func pickerShortcuts() []struct{ key, desc string } {
 	}
 }
 
-// View renders the k9s-style multi-column project picker panel (bd-b4u).
-// Layout: [stats] [project table with O P R columns] [shortcuts] [B9s logo]
+// View renders the k9s-style multi-column project picker panel (bd-b4u, bd-qyr).
+// Layout: [project table with O P R columns] [shortcuts] [B9s logo]
 // Bottom: title bar divider.
 func (m *ProjectPickerModel) View() string {
 	if m.width == 0 {
@@ -253,27 +252,19 @@ func (m *ProjectPickerModel) View() string {
 	}
 
 	w := m.width
-	t := m.theme
 
 	// --- Build each column as []string of panelRows lines ---
 
-	// Column 1: Stats
-	statsLines := m.renderStatsColumn()
-
-	// Column 2: Project table (# NAME ... O P R)
+	// Column 1: Project table (# NAME ... O P R)
 	tableLines := m.renderProjectTable()
 
-	// Column 3: Shortcuts
+	// Column 2: Shortcuts
 	shortcutLines := m.renderShortcutsColumn()
 
-	// Column 4: B9s logo
+	// Column 3: B9s logo
 	logoLines := m.renderLogoColumn()
 
 	// --- Determine column widths ---
-	statsWidth := m.maxLineWidth(statsLines)
-	if statsWidth < 28 {
-		statsWidth = 28
-	}
 	shortcutsWidth := m.maxLineWidth(shortcutLines)
 	if shortcutsWidth < 16 {
 		shortcutsWidth = 16
@@ -282,28 +273,20 @@ func (m *ProjectPickerModel) View() string {
 	gap := 2 // gap between columns
 
 	// Table gets remaining space
-	tableWidth := w - statsWidth - shortcutsWidth - logoWidth - gap*3
+	tableWidth := w - shortcutsWidth - logoWidth - gap*2
 	if tableWidth < 30 {
 		tableWidth = 30
 	}
 
-	// --- Style each column with fixed width ---
-	statsStyle := t.Renderer.NewStyle().Width(statsWidth)
-	tableStyle := t.Renderer.NewStyle().Width(tableWidth)
-	shortcutsStyle := t.Renderer.NewStyle().Width(shortcutsWidth)
-	logoStyle := t.Renderer.NewStyle().Width(logoWidth)
+	// --- Join columns row by row using padRight for alignment (bd-qyr) ---
 	gapStr := strings.Repeat(" ", gap)
-
-	// --- Join columns row by row ---
 	var rows []string
 	for i := 0; i < panelRows; i++ {
-		row := statsStyle.Render(safeIndex(statsLines, i)) +
+		row := padRight(safeIndex(tableLines, i), tableWidth) +
 			gapStr +
-			tableStyle.Render(safeIndex(tableLines, i)) +
+			padRight(safeIndex(shortcutLines, i), shortcutsWidth) +
 			gapStr +
-			shortcutsStyle.Render(safeIndex(shortcutLines, i)) +
-			gapStr +
-			logoStyle.Render(safeIndex(logoLines, i))
+			safeIndex(logoLines, i)
 		rows = append(rows, row)
 	}
 
@@ -316,52 +299,6 @@ func (m *ProjectPickerModel) View() string {
 // Height returns the number of terminal lines the picker panel uses.
 func (m *ProjectPickerModel) Height() int {
 	return panelRows + 1 // content rows + title bar
-}
-
-// renderStatsColumn renders the left stats column.
-// Lines: Project, Path, Open, In Prog, Ready, Blocked.
-func (m *ProjectPickerModel) renderStatsColumn() []string {
-	t := m.theme
-
-	labelStyle := t.Renderer.NewStyle().
-		Foreground(lipgloss.AdaptiveColor{Light: "#006080", Dark: "#8BE9FD"}).
-		Bold(true)
-	valueStyle := t.Renderer.NewStyle().
-		Foreground(t.Base.GetForeground())
-
-	// Find active project
-	var activeName, activePath string
-	var activeOpen, activeProg, activeReady, activeBlocked int
-	for _, entry := range m.entries {
-		if entry.IsActive {
-			activeName = entry.Project.Name
-			activePath = abbreviatePath(entry.Project.Path)
-			activeOpen = entry.OpenCount
-			activeProg = entry.InProgressCount
-			activeReady = entry.ReadyCount
-			activeBlocked = entry.BlockedCount
-			break
-		}
-	}
-	if activeName == "" && len(m.entries) > 0 {
-		activeName = m.entries[0].Project.Name
-		activePath = abbreviatePath(m.entries[0].Project.Path)
-	}
-
-	// Filter mode: replace path line with filter input
-	pathLine := labelStyle.Render(" Path:    ") + valueStyle.Render(activePath)
-	if m.filtering {
-		pathLine = labelStyle.Render(" Filter:  ") + t.Renderer.NewStyle().Foreground(t.Primary).Render(m.filterInput.View())
-	}
-
-	return []string{
-		labelStyle.Render(" Project: ") + valueStyle.Render(activeName),
-		pathLine,
-		labelStyle.Render(" Open:    ") + valueStyle.Render(fmt.Sprintf("%d", activeOpen)),
-		labelStyle.Render(" In Prog: ") + valueStyle.Render(fmt.Sprintf("%d", activeProg)),
-		labelStyle.Render(" Ready:   ") + valueStyle.Render(fmt.Sprintf("%d", activeReady)),
-		labelStyle.Render(" Blocked: ") + valueStyle.Render(fmt.Sprintf("%d", activeBlocked)),
-	}
 }
 
 // renderProjectTable renders the project list with # NAME and O P R columns.
@@ -400,8 +337,13 @@ func (m *ProjectPickerModel) renderProjectTable() []string {
 
 	lines := make([]string, panelRows)
 
-	// Row 0: column headers (right-aligned O P R above the number columns)
-	lines[0] = headerStyle.Render(fmt.Sprintf("     %-*s  %3s %3s %3s", nameW, "", "O", "P", "R"))
+	// Row 0: column headers or filter input
+	if m.filtering {
+		filterStyle := t.Renderer.NewStyle().Foreground(t.Primary)
+		lines[0] = headerStyle.Render(" > ") + filterStyle.Render(m.filterInput.View())
+	} else {
+		lines[0] = headerStyle.Render(fmt.Sprintf("     %-*s  %3s %3s %3s", nameW, "", "O", "P", "R"))
+	}
 
 	if len(m.filtered) == 0 {
 		lines[1] = dimStyle.Render(" No projects found")
@@ -558,17 +500,6 @@ func safeIndex(lines []string, i int) string {
 	return ""
 }
 
-// abbreviatePath replaces the user's home directory with ~ in a path.
-func abbreviatePath(path string) string {
-	home, err := os.UserHomeDir()
-	if err != nil || home == "" {
-		return path
-	}
-	if strings.HasPrefix(path, home) {
-		return "~" + path[len(home):]
-	}
-	return path
-}
 
 // Filtering returns whether the picker is in filter mode.
 func (m *ProjectPickerModel) Filtering() bool {

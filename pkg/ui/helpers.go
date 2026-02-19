@@ -62,8 +62,10 @@ func truncateRunesHelper(s string, maxWidth int, suffix string) string {
 // padRight pads string s with spaces on the right to reach visual width.
 // Uses go-runewidth to handle wide characters (emojis, CJK) correctly,
 // consistent with truncateRunesHelper which also uses visual width.
+// padRight pads a string to the given visual width using plain spaces.
+// Uses lipgloss.Width for ANSI-safe measurement (bd-qyr).
 func padRight(s string, width int) string {
-	visualWidth := runewidth.StringWidth(s)
+	visualWidth := lipgloss.Width(s)
 	if visualWidth >= width {
 		return s
 	}

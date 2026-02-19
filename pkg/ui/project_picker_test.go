@@ -153,14 +153,6 @@ func TestProjectPicker_ViewContainsProjectInfo(t *testing.T) {
 		t.Error("title bar should contain active project name like projects(api-service)")
 	}
 
-	// Should contain stats labels
-	if !strings.Contains(view, "Project:") {
-		t.Error("view should contain 'Project:' label in stats column")
-	}
-	if !strings.Contains(view, "Open:") {
-		t.Error("view should contain 'Open:' label in stats column")
-	}
-
 	// Should contain O P R column headers
 	if !strings.Contains(view, "O") && !strings.Contains(view, "P") && !strings.Contains(view, "R") {
 		t.Error("view should contain O P R column headers")
@@ -220,7 +212,7 @@ func TestProjectPicker_FixedHeight(t *testing.T) {
 	}
 }
 
-func TestProjectPicker_StatsColumn(t *testing.T) {
+func TestProjectPicker_NoStatsColumn(t *testing.T) {
 	entries := []ui.ProjectEntry{
 		{
 			Project:         config.Project{Name: "my-app", Path: "/home/user/projects/my-app"},
@@ -239,16 +231,11 @@ func TestProjectPicker_StatsColumn(t *testing.T) {
 
 	view := picker.View()
 
-	// Stats should show project info stacked vertically
-	for _, label := range []string{"Project:", "Open:", "In Prog:", "Ready:", "Blocked:"} {
-		if !strings.Contains(view, label) {
-			t.Errorf("view should contain stats label %q", label)
+	// Stats column labels should NOT be present (bd-qyr)
+	for _, label := range []string{"Project:", "Path:", "Open:", "In Prog:", "Ready:", "Blocked:"} {
+		if strings.Contains(view, label) {
+			t.Errorf("view should NOT contain stats label %q (stats column removed)", label)
 		}
-	}
-
-	// Path should be shown (abbreviated)
-	if !strings.Contains(view, "Path:") {
-		t.Error("view should contain 'Path:' label")
 	}
 }
 
