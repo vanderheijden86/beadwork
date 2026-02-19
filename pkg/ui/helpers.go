@@ -300,3 +300,13 @@ func FormatAgeBadge(t time.Time) string {
 		return fmt.Sprintf("%dmo", days/30)
 	}
 }
+
+// shortIDSuffix returns the short suffix of an issue ID, stripping the project prefix.
+// For example, "agents-config-oa9" returns "oa9", "bd-3eh" returns "3eh".
+// If the ID has no separator, returns the full ID.
+func shortIDSuffix(id string) string {
+	if idx := strings.LastIndex(id, "-"); idx >= 0 && idx < len(id)-1 {
+		return id[idx+1:]
+	}
+	return id
+}

@@ -1169,7 +1169,8 @@ func (t *TreeModel) renderEmptyState() string {
 
 // RenderHeader returns a styled header row for the tree view, matching the main
 // list view's column header style: primary background, bold white/dark foreground.
-// Layout: "  TYPE PRI STATUS      ID                     TITLE"
+// Layout: "  [TREE] TYPE PRI STATUS  TITLE  [sort]  ID"
+// ID is a compact column at the end (bd-03l).
 // Includes a [TREE]/[FLAT] mode indicator badge (bd-39v).
 func (t *TreeModel) RenderHeader() string {
 	width := t.width
@@ -1189,8 +1190,8 @@ func (t *TreeModel) RenderHeader() string {
 	if t.occurMode {
 		modeBadge = fmt.Sprintf("OCCUR[%s](%d)", t.occurPattern, len(t.flatList))
 	}
-sortBadge := fmt.Sprintf("%s %s", t.sortField.String(), t.sortDirection.Indicator())
-	headerText := fmt.Sprintf("  [%s] TYPE PRI STATUS      ID                     TITLE  [%s]", modeBadge, sortBadge)
+	sortBadge := fmt.Sprintf("%s %s", t.sortField.String(), t.sortDirection.Indicator())
+	headerText := fmt.Sprintf("  [%s] TYPE PRI STATUS  TITLE  [%s]  ID", modeBadge, sortBadge)
 	return headerStyle.Render(headerText)
 }
 
@@ -1252,26 +1253,12 @@ func (t *TreeModel) renderNode(node *IssueTreeNode, isSelected bool) string {
 	leftSide.WriteString(statusBadge)
 	leftSide.WriteString(" ")
 
-	// ── Issue ID ──
-	idStr := issue.ID
-	idWidth := lipgloss.Width(idStr)
-	if idWidth > 35 {
-		idWidth = 35
-		idStr = truncateRunesHelper(idStr, 35, "…")
-	}
-	idStyle := t.theme.SecondaryText
-	if isSelected {
-		idStyle = idStyle.Bold(true)
-	}
-	leftSide.WriteString(idStyle.Render(idStr))
-	leftSide.WriteString(" ")
-
-	// ── Calculate fixed widths ──
+	// ── Calculate fixed widths (ID moved to right side, bd-03l) ──
 	// prefix + indicator(1) + space(1) + icon(measured) + space(1) + prio(measured) + space(1)
-	// + status(measured) + space(1) + id(measured) + space(1)
-	fixedWidth := prefixWidth + 1 + 1 + iconDisplayWidth + 1 + prioBadgeWidth + 1 + statusBadgeWidth + 1 + idWidth + 1
+	// + status(measured) + space(1)
+	fixedWidth := prefixWidth + 1 + 1 + iconDisplayWidth + 1 + prioBadgeWidth + 1 + statusBadgeWidth + 1
 
-	// ── Right side: age column ──
+	// ── Right side: age + short ID (bd-03l) ──
 	rightWidth := 0
 	var rightParts []string
 
@@ -1280,6 +1267,11 @@ func (t *TreeModel) renderNode(node *IssueTreeNode, isSelected bool) string {
 		rightParts = append(rightParts, t.theme.MutedText.Render(fmt.Sprintf("%8s", ageStr)))
 		rightWidth += 9
 	}
+
+	// Short ID suffix at the far right (bd-03l)
+	shortID := shortIDSuffix(issue.ID)
+	rightParts = append(rightParts, t.theme.SecondaryText.Render(shortID))
+	rightWidth += lipgloss.Width(shortID) + 1
 
 	// ── Bookmark indicator (bd-k4n) ──
 	isBookmarked := t.bookmarks[issue.ID]

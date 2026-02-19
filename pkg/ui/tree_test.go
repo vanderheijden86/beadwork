@@ -434,17 +434,12 @@ func TestTreeViewRendering(t *testing.T) {
 
 	view := tree.View()
 
-	// Should contain both issue IDs
-	if !strings.Contains(view, "epic-1") {
-		t.Errorf("expected epic-1 in view, got:\n%s", view)
-	}
-	if !strings.Contains(view, "task-1") {
-		t.Errorf("expected task-1 in view, got:\n%s", view)
-	}
-
-	// Should contain titles
+	// Should contain both issue titles (full IDs stripped, bd-03l)
 	if !strings.Contains(view, "Epic Issue") {
 		t.Errorf("expected 'Epic Issue' in view, got:\n%s", view)
+	}
+	if !strings.Contains(view, "Task under Epic") {
+		t.Errorf("expected 'Task under Epic' in view, got:\n%s", view)
 	}
 
 	// Should contain tree characters (for child node)
@@ -1395,29 +1390,29 @@ func TestViewRendersOnlyVisible(t *testing.T) {
 		t.Errorf("expected 10 lines (1 header + 8 content + 1 indicator), got %d", len(lines))
 	}
 
-	// Should contain node 50's content (issue-50)
-	if !strings.Contains(output, "issue-50") {
-		t.Error("first visible node (issue-50) not rendered")
+	// Should contain node 50's content (bd-03l: check by title, not full ID)
+	if !strings.Contains(output, "Issue 50") {
+		t.Error("first visible node (Issue 50) not rendered")
 	}
 
 	// Should contain node 57's content (last visible: 50+8-1=57)
-	if !strings.Contains(output, "issue-57") {
-		t.Error("last visible node (issue-57) not rendered")
+	if !strings.Contains(output, "Issue 57") {
+		t.Error("last visible node (Issue 57) not rendered")
 	}
 
 	// Should NOT contain node 0's content
-	if strings.Contains(output, "issue-00") {
-		t.Error("non-visible node (issue-00) incorrectly rendered")
+	if strings.Contains(output, "Issue 0 ") {
+		t.Error("non-visible node (Issue 0) incorrectly rendered")
 	}
 
 	// Should NOT contain node 49's content (just before viewport)
-	if strings.Contains(output, "issue-49") {
-		t.Error("non-visible node (issue-49) incorrectly rendered")
+	if strings.Contains(output, "Issue 49") {
+		t.Error("non-visible node (Issue 49) incorrectly rendered")
 	}
 
 	// Should NOT contain node 58's content (just after viewport)
-	if strings.Contains(output, "issue-58") {
-		t.Error("non-visible node (issue-58) incorrectly rendered")
+	if strings.Contains(output, "Issue 58") {
+		t.Error("non-visible node (Issue 58) incorrectly rendered")
 	}
 }
 
@@ -1435,15 +1430,15 @@ func TestViewRendersSmallTree(t *testing.T) {
 
 	output := tree.View()
 
-	// Should contain all 3 issues
-	if !strings.Contains(output, "issue-1") {
-		t.Error("issue-1 not rendered")
+	// Should contain all 3 issues (check by title; full IDs stripped, bd-03l)
+	if !strings.Contains(output, "Issue 1") {
+		t.Error("Issue 1 not rendered")
 	}
-	if !strings.Contains(output, "issue-2") {
-		t.Error("issue-2 not rendered")
+	if !strings.Contains(output, "Issue 2") {
+		t.Error("Issue 2 not rendered")
 	}
-	if !strings.Contains(output, "issue-3") {
-		t.Error("issue-3 not rendered")
+	if !strings.Contains(output, "Issue 3") {
+		t.Error("Issue 3 not rendered")
 	}
 }
 
@@ -1470,9 +1465,9 @@ func TestViewSelectionHighlightWithOffset(t *testing.T) {
 
 	output := tree.View()
 
-	// The selected issue should be in the output
-	if !strings.Contains(output, "issue-25") {
-		t.Error("selected issue (issue-25) not in output")
+	// The selected issue should be in the output (check by title; full IDs stripped, bd-03l)
+	if !strings.Contains(output, "Issue 25") {
+		t.Error("selected issue (Issue 25) not in output")
 	}
 
 	// Cursor should be visible (use effectiveVisibleCount)
@@ -1505,19 +1500,19 @@ func TestViewAtEndOfList(t *testing.T) {
 
 	output := tree.View()
 
-	// Should contain the last issue
-	if !strings.Contains(output, "issue-99") {
-		t.Error("last issue (issue-99) not rendered")
+	// Should contain the last issue (check by title; full IDs stripped, bd-03l)
+	if !strings.Contains(output, "Issue 99") {
+		t.Error("last issue (Issue 99) not rendered")
 	}
 
 	// height=10, 100 nodes -> effective=8. Last 8 items: 92-99
-	if !strings.Contains(output, "issue-92") {
-		t.Error("issue-92 not rendered (first in last window)")
+	if !strings.Contains(output, "Issue 92") {
+		t.Error("Issue 92 not rendered (first in last window)")
 	}
 
-	// Should NOT contain issue-91 (just before the visible window)
-	if strings.Contains(output, "issue-91") {
-		t.Error("issue-91 incorrectly rendered")
+	// Should NOT contain Issue 91 (just before the visible window, bd-03l)
+	if strings.Contains(output, "Issue 91") {
+		t.Error("Issue 91 incorrectly rendered")
 	}
 }
 
@@ -3725,20 +3720,20 @@ func TestTreeConnectorAlignmentOnSelectedRow(t *testing.T) {
 	view := tree.View()
 	lines := strings.Split(view, "\n")
 
-	// Find lines containing task-1 (selected) and task-2 (not selected) by ID
+	// Find lines containing the child tasks by their titles (bd-03l: IDs are now short suffixes at end)
 	var task1Line, task2Line string
 	for _, line := range lines {
 		plain := stripANSI(line)
-		if strings.Contains(plain, "task-1") {
+		if strings.Contains(plain, "First Child") {
 			task1Line = plain
 		}
-		if strings.Contains(plain, "task-2") {
+		if strings.Contains(plain, "Second Child") {
 			task2Line = plain
 		}
 	}
 
 	if task1Line == "" || task2Line == "" {
-		t.Fatalf("could not find task-1 and task-2 lines in view output:\n%s", view)
+		t.Fatalf("could not find First Child and Second Child lines in view output:\n%s", view)
 	}
 
 	// Find the column position of the branch connector (├ or └) in each line.
@@ -4053,5 +4048,36 @@ func TestTreeSortPersistence(t *testing.T) {
 	}
 	if tree2.GetSortDirection() != SortAscending {
 		t.Fatalf("expected sort direction to persist as Ascending, got %v", tree2.GetSortDirection())
+	}
+}
+
+// bd-03l: ID column should show only short suffix and appear at the end (right side).
+func TestTreeNode_ShortIDAtEnd(t *testing.T) {
+	issues := []model.Issue{
+		{ID: "agents-config-oa9", Title: "My test issue", Status: "open", IssueType: model.TypeTask, Priority: 2, CreatedAt: time.Now()},
+	}
+	tree := NewTreeModel(newTreeTestTheme())
+	tree.Build(issues)
+	tree.SetSize(120, 40)
+
+	view := tree.View()
+
+	// Should contain short ID suffix "oa9", not the full "agents-config-oa9"
+	if !strings.Contains(view, "oa9") {
+		t.Error("expected short ID 'oa9' in tree view")
+	}
+	if strings.Contains(view, "agents-config-oa9") {
+		t.Error("full ID 'agents-config-oa9' should NOT appear in tree view; only short suffix")
+	}
+
+	// Header should show ID at the end, not between STATUS and TITLE
+	header := tree.RenderHeader()
+	statusIdx := strings.Index(header, "STATUS")
+	titleIdx := strings.Index(header, "TITLE")
+	idIdx := strings.Index(header, "ID")
+	if statusIdx >= 0 && titleIdx >= 0 && idIdx >= 0 {
+		if idIdx > statusIdx && idIdx < titleIdx {
+			t.Error("ID column should NOT be between STATUS and TITLE; it should be at the end")
+		}
 	}
 }
