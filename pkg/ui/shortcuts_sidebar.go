@@ -143,6 +143,7 @@ func (s *ShortcutsSidebar) allSections() []shortcutSection {
 				{"i", "Insights"},
 				{"?", "Help"},
 				{";", "This sidebar"},
+				{"P", "Toggle picker"},
 				{"p", "Priority hints"},
 			},
 		},

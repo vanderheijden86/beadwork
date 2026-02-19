@@ -163,9 +163,9 @@ func TestProjectPicker_ViewContainsProjectInfo(t *testing.T) {
 		t.Error("view should contain B9s ASCII logo")
 	}
 
-	// Should contain shortcut hints
-	if !strings.Contains(view, "Filter") {
-		t.Error("view should contain 'Filter' shortcut")
+	// Should contain shortcut hints (bd-2me: real shortcuts)
+	if !strings.Contains(view, "Board") {
+		t.Error("view should contain 'Board' shortcut")
 	}
 }
 
@@ -316,8 +316,8 @@ func TestProjectPicker_ShortcutsColumn(t *testing.T) {
 
 	view := picker.View()
 
-	// Should contain shortcut descriptions
-	for _, desc := range []string{"Filter", "Edit", "Board", "Help", "Sort", "Shortcuts"} {
+	// Should contain real shortcut descriptions (bd-2me)
+	for _, desc := range []string{"Open", "Closed", "Ready", "Board", "Graph", "Help", "Hide", "Sidebar"} {
 		if !strings.Contains(view, desc) {
 			t.Errorf("view should contain shortcut %q", desc)
 		}
@@ -802,16 +802,64 @@ func TestProjectSwitch_ClearsTreeFilter(t *testing.T) {
 	}
 }
 
-func TestProjectPicker_NoPKeyToggle(t *testing.T) {
+func TestProjectPicker_ShiftPToggle(t *testing.T) {
 	m, _ := createModelWithProjects(t)
 
+	// Picker should be visible by default
+	if !m.PickerVisible() {
+		t.Fatal("picker should be visible by default")
+	}
+
+	// Press Shift+P to hide
 	newM, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("P")})
 	m = newM.(ui.Model)
 
-	for _, name := range []string{"api-service", "web-frontend", "data-pipeline"} {
-		view := m.View()
-		if !strings.Contains(view, name) {
-			t.Errorf("after pressing P, view should still contain project name %q", name)
-		}
+	if m.PickerVisible() {
+		t.Error("picker should be hidden after Shift+P")
+	}
+
+	// Project names should NOT appear in view (picker hidden)
+	view := m.View()
+	if strings.Contains(view, "projects(api-service)") {
+		t.Error("picker title bar should not appear when hidden")
+	}
+
+	// Press Shift+P again to show
+	newM, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("P")})
+	m = newM.(ui.Model)
+
+	if !m.PickerVisible() {
+		t.Error("picker should be visible after second Shift+P")
+	}
+
+	// Project names should appear again
+	view = m.View()
+	if !strings.Contains(view, "projects(api-service)") {
+		t.Error("picker title bar should appear when visible")
+	}
+}
+
+func TestProjectPicker_NumberKeysWorkWhenHidden(t *testing.T) {
+	m, _ := createModelWithProjects(t)
+
+	// Hide picker
+	newM, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("P")})
+	m = newM.(ui.Model)
+
+	// Number keys should still switch projects even when picker is hidden
+	newM, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("2")})
+	m = newM.(ui.Model)
+
+	if cmd == nil {
+		t.Fatal("expected a command from pressing '2' with picker hidden")
+	}
+
+	msg := cmd()
+	switchMsg, ok := msg.(ui.SwitchProjectMsg)
+	if !ok {
+		t.Fatalf("expected SwitchProjectMsg, got %T", msg)
+	}
+	if switchMsg.Project.Name != "web-frontend" {
+		t.Errorf("expected 'web-frontend', got %q", switchMsg.Project.Name)
 	}
 }

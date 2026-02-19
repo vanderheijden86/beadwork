@@ -231,15 +231,16 @@ func b9sLogo() []string {
 	}
 }
 
-// pickerShortcuts returns the shortcut definitions for the picker panel.
-func pickerShortcuts() []struct{ key, desc string } {
-	return []struct{ key, desc string }{
-		{"</>", "Filter"},
-		{"<e>", "Edit"},
-		{"<b>", "Board"},
-		{"<?>", "Help"},
-		{"<s>", "Sort"},
-		{"<;>", "Shortcuts"},
+// pickerShortcuts returns the shortcut definitions for the picker panel (bd-2me).
+// Two columns of real keybindings, 6 rows matching panelRows.
+func pickerShortcuts() [panelRows][2]struct{ key, desc string } {
+	return [panelRows][2]struct{ key, desc string }{
+		{{"o", "Open"}, {"b", "Board"}},
+		{{"c", "Closed"}, {"g", "Graph"}},
+		{{"r", "Ready"}, {"h", "History"}},
+		{{"a", "All"}, {"i", "Insights"}},
+		{{"/", "Search"}, {"?", "Help"}},
+		{{"P", "Hide"}, {";", "Sidebar"}},
 	}
 }
 
@@ -402,7 +403,7 @@ func (m *ProjectPickerModel) renderProjectTable() []string {
 	return lines
 }
 
-// renderShortcutsColumn renders the shortcuts column.
+// renderShortcutsColumn renders two columns of real keybindings (bd-2me).
 func (m *ProjectPickerModel) renderShortcutsColumn() []string {
 	t := m.theme
 
@@ -415,9 +416,10 @@ func (m *ProjectPickerModel) renderShortcutsColumn() []string {
 	shortcuts := pickerShortcuts()
 	lines := make([]string, panelRows)
 
-	for i := 0; i < len(shortcuts) && i < panelRows; i++ {
-		s := shortcuts[i]
-		lines[i] = keyStyle.Render(fmt.Sprintf("%-7s", s.key)) + " " + descStyle.Render(s.desc)
+	for i := 0; i < panelRows; i++ {
+		left := keyStyle.Render(shortcuts[i][0].key) + " " + descStyle.Render(fmt.Sprintf("%-8s", shortcuts[i][0].desc))
+		right := keyStyle.Render(shortcuts[i][1].key) + " " + descStyle.Render(shortcuts[i][1].desc)
+		lines[i] = left + " " + right
 	}
 
 	return lines

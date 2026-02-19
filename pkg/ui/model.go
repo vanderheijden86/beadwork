@@ -326,6 +326,7 @@ type Model struct {
 	width                int
 	height               int
 	showShortcutsSidebar bool // bv-3qi5 toggleable shortcuts sidebar
+	pickerVisible        bool // bd-2me: Shift+P toggles picker panel
 
 	// Filter and sort state
 	currentFilter string
@@ -404,10 +405,10 @@ type labelCount struct {
 }
 
 // bodyHeight returns the available height for the main content area,
-// accounting for the picker header and footer (bd-ey3, bd-ylz).
+// accounting for the picker header and footer (bd-ey3, bd-ylz, bd-2me).
 func (m Model) bodyHeight() int {
 	headerH := 1 // default: single-line global header when no projects
-	if len(m.allProjects) > 0 {
+	if len(m.allProjects) > 0 && m.pickerVisible {
 		headerH = m.projectPicker.Height()
 	}
 	h := m.height - headerH - 1 // -1 for footer
@@ -800,6 +801,7 @@ func NewModel(issues []model.Issue, beadsPath string) Model {
 		labelPicker:   labelPicker,
 		statusMsg:     initialStatus,
 		statusIsError: initialStatusErr,
+		pickerVisible: true, // bd-2me: visible by default, Shift+P toggles
 		// Tutorial integration (bv-8y31)
 		tutorialModel: NewTutorialModel(theme),
 		// Issue writer for in-app editing (bd-a83)
@@ -1643,6 +1645,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			} else {
 				m.statusMsg = ""
 			}
+			return m, nil
+		}
+
+		// Handle Shift+P to toggle project picker panel (bd-2me)
+		if msg.String() == "P" && m.list.FilterState() != list.Filtering {
+			m.pickerVisible = !m.pickerVisible
+			// Resize tree/board after toggling to reclaim/yield space
+			m.tree.SetSize(m.width, m.bodyHeight())
 			return m, nil
 		}
 
@@ -2852,17 +2862,20 @@ func (m Model) View() string {
 		return finalStyle.Render(lipgloss.JoinVertical(lipgloss.Left, body, footer))
 	}
 
-	// Always-visible compact project picker header (bd-ey3, bd-ylz)
+	// Compact project picker header, toggleable via Shift+P (bd-ey3, bd-ylz, bd-2me)
 	var pickerHeader string
-	if len(m.allProjects) > 0 {
+	if len(m.allProjects) > 0 && m.pickerVisible {
 		m.projectPicker.SetSize(m.width, m.height)
 		pickerHeader = m.projectPicker.View()
-	} else {
+	} else if len(m.allProjects) == 0 {
 		// No projects configured: fall back to the original global header
 		pickerHeader = m.renderGlobalHeader()
 	}
 
-	return finalStyle.Render(lipgloss.JoinVertical(lipgloss.Left, pickerHeader, body, footer))
+	if pickerHeader != "" {
+		return finalStyle.Render(lipgloss.JoinVertical(lipgloss.Left, pickerHeader, body, footer))
+	}
+	return finalStyle.Render(lipgloss.JoinVertical(lipgloss.Left, body, footer))
 }
 
 func (m Model) renderQuitConfirm() string {
@@ -4099,6 +4112,11 @@ func (m Model) ProjectPickerCursor() int {
 // ProjectPickerFilteredCount returns how many projects match the current filter (bd-q5z.8).
 func (m Model) ProjectPickerFilteredCount() int {
 	return m.projectPicker.FilteredCount()
+}
+
+// PickerVisible returns whether the project picker panel is visible (bd-2me).
+func (m Model) PickerVisible() bool {
+	return m.pickerVisible
 }
 
 // exportToMarkdown exports all issues to a Markdown file with auto-generated filename
