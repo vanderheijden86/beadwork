@@ -3894,17 +3894,17 @@ func truncateString(s string, maxLen int) string {
 func GetTypeIconMD(t string) string {
 	switch t {
 	case "bug":
-		return "🐛"
+		return "●"
 	case "feature":
-		return "✨"
+		return "▲"
 	case "task":
-		return "📋"
+		return "✔"
 	case "epic":
-		return "🚀" // Use rocket instead of mountain - VS-16 variation selector causes width issues
+		return "⚡"
 	case "chore":
-		return "🧹"
+		return "○"
 	default:
-		return "•"
+		return "·"
 	}
 }
 

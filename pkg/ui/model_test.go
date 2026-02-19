@@ -126,13 +126,13 @@ func TestGetTypeIconMD(t *testing.T) {
 		issueType string
 		expected  string
 	}{
-		{"bug", "🐛"},
-		{"feature", "✨"},
-		{"task", "📋"},
-		{"epic", "🚀"},
-		{"chore", "🧹"},
-		{"unknown", "•"},
-		{"", "•"},
+		{"bug", "●"},
+		{"feature", "▲"},
+		{"task", "✔"},
+		{"epic", "⚡"},
+		{"chore", "○"},
+		{"unknown", "·"},
+		{"", "·"},
 	}
 
 	for _, tt := range tests {
