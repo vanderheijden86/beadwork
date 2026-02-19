@@ -1238,6 +1238,13 @@ func (t *TreeModel) renderNode(node *IssueTreeNode, isSelected bool) string {
 	leftSide.WriteString(indicatorStyle.Render(indicator))
 	leftSide.WriteString(" ")
 
+	// ── Type icon (JIRA-style, bd-arxp) ──
+	typeIcon, typeIconColor := t.theme.GetTypeIcon(string(issue.IssueType))
+	typeIconStyle := r.NewStyle().Foreground(typeIconColor)
+	leftSide.WriteString(typeIconStyle.Render(typeIcon))
+	leftSide.WriteString(" ")
+	typeIconWidth := lipgloss.Width(typeIcon) + 1
+
 	// ── Status badge (polished, matching delegate) ──
 	statusBadge := RenderStatusBadge(string(issue.Status))
 	statusBadgeWidth := lipgloss.Width(statusBadge)
@@ -1245,8 +1252,8 @@ func (t *TreeModel) renderNode(node *IssueTreeNode, isSelected bool) string {
 	leftSide.WriteString(" ")
 
 	// ── Calculate fixed widths (ID moved to right side, bd-03l) ──
-	// prefix + indicator(1) + space(1) + status(measured) + space(1)
-	fixedWidth := prefixWidth + 1 + 1 + statusBadgeWidth + 1
+	// prefix + indicator(1) + space(1) + typeIcon + status(measured) + space(1)
+	fixedWidth := prefixWidth + 1 + 1 + typeIconWidth + statusBadgeWidth + 1
 
 	// ── Right side: age + short ID (bd-03l) ──
 	rightWidth := 0
