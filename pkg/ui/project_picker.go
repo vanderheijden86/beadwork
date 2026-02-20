@@ -268,7 +268,7 @@ func (m *ProjectPickerModel) View() string {
 	// Column 4: B9s logo
 	logoLines := m.renderLogoColumn()
 
-	// --- Determine column widths ---
+	// --- Determine column widths, progressively drop columns on narrow terminals (bd-ecmm) ---
 	shortcutsWidth := m.maxLineWidth(shortcutLines)
 	if shortcutsWidth < 16 {
 		shortcutsWidth = 16
@@ -278,25 +278,56 @@ func (m *ProjectPickerModel) View() string {
 		legendWidth = 10
 	}
 	logoWidth := m.maxLineWidth(logoLines)
-	gap := 2 // gap between columns
+	gap := 2
+	minTableWidth := 30
+
+	// Decide which optional columns fit: drop logo first, then legend, then shortcuts
+	showLogo := true
+	showLegend := true
+	showShortcuts := true
+
+	needed := minTableWidth + gap + shortcutsWidth + gap + legendWidth + gap + logoWidth
+	if needed > w {
+		showLogo = false // drop logo first
+		needed = minTableWidth + gap + shortcutsWidth + gap + legendWidth
+	}
+	if needed > w {
+		showLegend = false // then legend
+		needed = minTableWidth + gap + shortcutsWidth
+	}
+	if needed > w {
+		showShortcuts = false // then shortcuts
+	}
 
 	// Table gets remaining space
-	tableWidth := w - shortcutsWidth - legendWidth - logoWidth - gap*3
-	if tableWidth < 30 {
-		tableWidth = 30
+	tableWidth := w
+	if showShortcuts {
+		tableWidth -= shortcutsWidth + gap
+	}
+	if showLegend {
+		tableWidth -= legendWidth + gap
+	}
+	if showLogo {
+		tableWidth -= logoWidth + gap
+	}
+	if tableWidth < minTableWidth {
+		tableWidth = minTableWidth
 	}
 
 	// --- Join columns row by row using padRight for alignment (bd-qyr) ---
 	gapStr := strings.Repeat(" ", gap)
 	var rows []string
 	for i := 0; i < panelRows; i++ {
-		row := padRight(safeIndex(tableLines, i), tableWidth) +
-			gapStr +
-			padRight(safeIndex(shortcutLines, i), shortcutsWidth) +
-			gapStr +
-			padRight(safeIndex(legendLines, i), legendWidth) +
-			gapStr +
-			safeIndex(logoLines, i)
+		row := padRight(safeIndex(tableLines, i), tableWidth)
+		if showShortcuts {
+			row += gapStr + padRight(safeIndex(shortcutLines, i), shortcutsWidth)
+		}
+		if showLegend {
+			row += gapStr + padRight(safeIndex(legendLines, i), legendWidth)
+		}
+		if showLogo {
+			row += gapStr + safeIndex(logoLines, i)
+		}
 		rows = append(rows, row)
 	}
 
