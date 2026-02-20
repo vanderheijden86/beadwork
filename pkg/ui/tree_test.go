@@ -448,7 +448,7 @@ func TestTreeViewRendering(t *testing.T) {
 	}
 
 	// Should contain expand/collapse indicators
-	if !strings.Contains(view, "▾") && !strings.Contains(view, "▸") && !strings.Contains(view, "•") {
+	if !strings.Contains(view, "▾") && !strings.Contains(view, "▸") {
 		t.Errorf("expected expand/collapse indicators in view, got:\n%s", view)
 	}
 }
@@ -457,13 +457,13 @@ func TestTreeViewRendering(t *testing.T) {
 func TestTreeViewIndicators(t *testing.T) {
 	tree := NewTreeModel(newTreeTestTheme())
 
-	// Test leaf node indicator
+	// Test leaf node indicator (space, no visible dot)
 	leafNode := &IssueTreeNode{
 		Issue:    &model.Issue{ID: "leaf"},
 		Children: nil,
 	}
-	if got := tree.getExpandIndicator(leafNode); got != "•" {
-		t.Errorf("leaf indicator = %q, want %q", got, "•")
+	if got := tree.getExpandIndicator(leafNode); got != " " {
+		t.Errorf("leaf indicator = %q, want %q", got, " ")
 	}
 
 	// Test expanded node indicator

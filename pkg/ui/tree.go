@@ -1418,7 +1418,7 @@ func (t *TreeModel) isLastChild(node *IssueTreeNode) bool {
 // getExpandIndicator returns the expand/collapse indicator for a node.
 func (t *TreeModel) getExpandIndicator(node *IssueTreeNode) string {
 	if len(node.Children) == 0 {
-		return "•" // Leaf node
+		return " " // Leaf node: no indicator
 	}
 	if node.Expanded {
 		return "▾" // Expanded
