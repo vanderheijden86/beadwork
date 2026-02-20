@@ -1253,6 +1253,33 @@ func (t *TreeModel) RenderHeader() string {
 	return headerStyle.Render(headerText)
 }
 
+// injectBackground injects a background ANSI sequence that persists through
+// inner SGR resets. It replaces every \x1b[0m (full reset) with a reset followed
+// by the background re-application, so styled segments don't kill the row
+// background. The bgSeq should be like "\x1b[48;2;R;G;Bm" (bd-hdgh).
+func injectBackground(s, bgSeq string) string {
+	// Handle both \x1b[0m and \x1b[m (equivalent reset forms)
+	s = strings.ReplaceAll(s, "\x1b[0m", "\x1b[0m"+bgSeq)
+	s = strings.ReplaceAll(s, "\x1b[m", "\x1b[m"+bgSeq)
+	// Wrap: set bg at start, reset at end
+	s = bgSeq + s + "\x1b[0m"
+	return s
+}
+
+// bgSeqFromColor returns the ANSI 24-bit background escape sequence for a hex color.
+// Falls back to empty string if the color can't be parsed.
+func bgSeqFromColor(c lipgloss.TerminalColor, r *lipgloss.Renderer) string {
+	// Resolve the adaptive color via a dummy render, then extract the bg sequence.
+	// Use a simpler approach: render a space with the background and extract the ANSI prefix.
+	styled := r.NewStyle().Background(c).Render(" ")
+	// Find the SGR sequence before the space
+	idx := strings.Index(styled, " ")
+	if idx > 0 {
+		return styled[:idx]
+	}
+	return ""
+}
+
 // renderNode renders a single tree node with column-aligned layout matching the
 // main list delegate: [tree-prefix] [expand] [type] [prio-badge] [status-badge] [ID] [title] [age]
 func (t *TreeModel) renderNode(node *IssueTreeNode, isSelected bool, maxIDWidth int) string {
@@ -1384,12 +1411,18 @@ func (t *TreeModel) renderNode(node *IssueTreeNode, isSelected bool, maxIDWidth 
 
 	row := leftSide.String() + strings.Repeat(" ", padding) + rightSide
 
-	// Apply row width clamping and selection background (bd-hdgh)
+	// Apply row width clamping (bd-hdgh)
 	rowStyle := r.NewStyle().Width(width).MaxWidth(width)
-	if isSelected {
-		rowStyle = rowStyle.Background(t.theme.Highlight).Bold(true)
-	}
 	row = rowStyle.Render(row)
+
+	// For selected rows, inject the background ANSI code throughout the string
+	// so it persists through inner SGR resets from styled segments (bd-hdgh)
+	if isSelected {
+		bgSeq := bgSeqFromColor(t.theme.Highlight, r)
+		if bgSeq != "" {
+			row = injectBackground(row, bgSeq)
+		}
+	}
 
 	return row
 }
