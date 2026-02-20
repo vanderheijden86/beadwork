@@ -1743,8 +1743,8 @@ func (t *TreeModel) LastSibling() {
 	}
 }
 
-// CycleNodeVisibility implements org-mode TAB cycling on the current node (bd-8of).
-// Cycle: folded -> children visible -> subtree visible -> folded
+// CycleNodeVisibility implements TAB cycling on the current node (bd-8of, bd-g4w7).
+// Cycle: folded -> children visible -> folded (2-state toggle).
 // On a leaf node, does nothing.
 func (t *TreeModel) CycleNodeVisibility() {
 	node := t.SelectedNode()
@@ -1762,9 +1762,13 @@ func (t *TreeModel) CycleNodeVisibility() {
 	state, explicit := t.cycleStates[id]
 	if !explicit {
 		state = t.detectNodeCycleState(node)
+		// Map subtree-expanded (2) to children-visible (1) for 2-state cycle
+		if state == 2 {
+			state = 1
+		}
 	}
 
-	// Advance to next state
+	// Advance to next state (2-state: 0 <-> 1)
 	switch state {
 	case 0: // folded -> children visible
 		node.Expanded = true
@@ -1773,11 +1777,7 @@ func (t *TreeModel) CycleNodeVisibility() {
 			t.setExpandedRecursive(child, false)
 		}
 		t.cycleStates[id] = 1
-	case 1: // children -> subtree visible
-		// Expand entire subtree
-		t.setExpandedRecursive(node, true)
-		t.cycleStates[id] = 2
-	case 2: // subtree -> folded
+	default: // children visible -> folded
 		node.Expanded = false
 		t.setExpandedRecursive(node, false)
 		t.cycleStates[id] = 0

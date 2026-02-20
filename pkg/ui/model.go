@@ -785,6 +785,7 @@ func NewModel(issues []model.Issue, beadsPath string) Model {
 		currentFilter:       "all",
 		focused:             focusTree, // Tree view is the default on launch (bd-dxc)
 		treeViewActive:      true,      // Tree view is the default on launch (bd-dxc)
+		treeDetailHidden:    true,      // Start tree-only; user presses 'd' to show detail (bd-x96a)
 		splitPaneRatio:      0.4,       // Default: list pane gets 40% of width
 		// Initialize as ready with default dimensions to eliminate "Initializing..." phase
 		ready:         true,
@@ -2052,10 +2053,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.treeViewActive && m.focused == focusDetail {
 				m.focused = focusTree
 			}
-		} else if !m.detailHiddenByNarrow {
-			// Auto-show detail when pane fits again (but not after narrow->wide)
-			m.treeDetailHidden = false
 		}
+		// Detail is never auto-shown; user presses 'd' to toggle (bd-x96a)
 
 		m.updateListDelegate()
 

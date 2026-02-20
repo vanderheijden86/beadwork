@@ -670,26 +670,26 @@ func TestTreeViewFollowModeToggleKey(t *testing.T) {
 // Detail panel toggle tests (bd-80u)
 // ============================================================================
 
-// TestTreeViewDetailToggle verifies 'd' key toggles treeDetailHidden.
+// TestTreeViewDetailToggle verifies 'd' key toggles treeDetailHidden (bd-x96a: hidden by default).
 func TestTreeViewDetailToggle(t *testing.T) {
 	issues := createTreeTestIssues()
 	m := ui.NewModel(issues, "")
 	m = enterTreeView(t, m)
 
-	if m.TreeDetailHidden() {
-		t.Error("Expected detail visible by default")
+	if !m.TreeDetailHidden() {
+		t.Error("Expected detail hidden by default (bd-x96a)")
 	}
 
-	// Press 'd' to hide detail
+	// Press 'd' to show detail
+	m = sendKey(t, m, "d")
+	if m.TreeDetailHidden() {
+		t.Error("Expected detail visible after 'd'")
+	}
+
+	// Press 'd' again to hide detail
 	m = sendKey(t, m, "d")
 	if !m.TreeDetailHidden() {
-		t.Error("Expected detail hidden after 'd'")
-	}
-
-	// Press 'd' again to show detail
-	m = sendKey(t, m, "d")
-	if m.TreeDetailHidden() {
-		t.Error("Expected detail visible after second 'd'")
+		t.Error("Expected detail hidden after second 'd'")
 	}
 }
 
@@ -700,10 +700,9 @@ func TestTreeViewEnterInTreeOnlyShowsDetail(t *testing.T) {
 	m := ui.NewModel(issues, "")
 	m = enterTreeView(t, m)
 
-	// Hide detail panel
-	m = sendKey(t, m, "d")
+	// Detail is hidden by default (bd-x96a)
 	if !m.TreeDetailHidden() {
-		t.Fatal("Expected detail hidden after 'd'")
+		t.Fatal("Expected detail hidden by default")
 	}
 
 	// Press Enter - should switch to detail focus (bd-1of)
@@ -720,8 +719,7 @@ func TestTreeViewEscFromDetailOnlyReturnsToTree(t *testing.T) {
 	m := ui.NewModel(issues, "")
 	m = enterTreeView(t, m)
 
-	// Hide detail, enter detail-only via Enter (bd-1of)
-	m = sendKey(t, m, "d")
+	// Detail hidden by default (bd-x96a), enter detail-only via Enter (bd-1of)
 	m = sendSpecialKey(t, m, tea.KeyEnter)
 	if m.FocusState() != "detail" {
 		t.Fatalf("Expected focus 'detail', got %q", m.FocusState())
@@ -750,8 +748,10 @@ func TestTreeViewSpaceDoesNothingInSplitMode(t *testing.T) {
 
 	m = enterTreeView(t, m)
 
+	// Show detail panel with 'd' (hidden by default, bd-x96a)
+	m = sendKey(t, m, "d")
 	if m.TreeDetailHidden() {
-		t.Fatal("Expected detail visible in split mode")
+		t.Fatal("Expected detail visible after 'd'")
 	}
 
 	initialFocus := m.FocusState()
@@ -775,10 +775,9 @@ func TestTreeViewTabFoldsWhenDetailHidden(t *testing.T) {
 
 	m = enterTreeView(t, m)
 
-	// Hide detail to enter tree-only mode
-	m = sendKey(t, m, "d")
+	// Detail hidden by default (bd-x96a)
 	if !m.TreeDetailHidden() {
-		t.Fatal("expected detail hidden after 'd'")
+		t.Fatal("expected detail hidden by default")
 	}
 
 	// Tab should fold, not switch focus
@@ -802,7 +801,10 @@ func TestTreeViewDetailToggleResetsFromDetail(t *testing.T) {
 
 	m = enterTreeView(t, m)
 
-	// Enter to go to detail
+	// Show detail with 'd' (hidden by default, bd-x96a)
+	m = sendKey(t, m, "d")
+
+	// Enter to go to detail focus
 	newM, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = newM.(ui.Model)
 	if m.FocusState() != "detail" {
@@ -832,13 +834,14 @@ func TestTreeDetailAutoHideNarrowTerminal(t *testing.T) {
 	// Enter tree view
 	m = enterTreeView(t, m)
 
-	// Wide terminal with default ratio (0.4) — detail should be visible.
-	// At width 200: availWidth=192, detail=192*0.6=115 (> 40)
+	// Wide terminal with default ratio (0.4)
 	newM, _ := m.Update(tea.WindowSizeMsg{Width: 200, Height: 40})
 	m = newM.(ui.Model)
 
+	// Show detail with 'd' (hidden by default, bd-x96a)
+	m = sendKey(t, m, "d")
 	if m.TreeDetailHidden() {
-		t.Error("Expected detail visible at width 200 with default ratio")
+		t.Error("Expected detail visible after 'd' at width 200")
 	}
 
 	// Increase split pane ratio to 0.8 using '>' key (8 presses from 0.4).
@@ -859,6 +862,8 @@ func TestTreeDetailAutoHideNarrowTerminal(t *testing.T) {
 
 // TestTreeDetailAutoShowOnWiderTerminal verifies that widening the terminal
 // re-shows the detail panel after it was auto-hidden.
+// TestTreeDetailAutoShowOnWiderTerminal verifies that widening the terminal
+// does NOT auto-show the detail panel (bd-x96a: detail never auto-shows).
 func TestTreeDetailAutoShowOnWiderTerminal(t *testing.T) {
 	issues := createTreeTestIssues()
 	m := ui.NewModel(issues, "")
@@ -868,24 +873,17 @@ func TestTreeDetailAutoShowOnWiderTerminal(t *testing.T) {
 	newM, _ := m.Update(tea.WindowSizeMsg{Width: 200, Height: 40})
 	m = newM.(ui.Model)
 
-	// Increase split ratio to 0.8
-	for i := 0; i < 8; i++ {
-		m = sendKey(t, m, ">")
-	}
-
-	// At width 200 with ratio 0.8: detail=38 -> auto-hide
-	newM, _ = m.Update(tea.WindowSizeMsg{Width: 200, Height: 40})
-	m = newM.(ui.Model)
+	// Detail is hidden by default and stays hidden even when wide (bd-x96a)
 	if !m.TreeDetailHidden() {
-		t.Fatal("Expected detail auto-hidden at width 200 with ratio 0.8")
+		t.Error("Expected detail hidden by default, even in wide terminal")
 	}
 
-	// Widen to 260: availWidth=252, detail=252*0.2=50 (> 40 -> visible)
+	// Widen further — still should NOT auto-show
 	newM, _ = m.Update(tea.WindowSizeMsg{Width: 260, Height: 40})
 	m = newM.(ui.Model)
 
-	if m.TreeDetailHidden() {
-		t.Error("Expected detail visible at width 260 with ratio 0.8 (detail pane ~50 chars)")
+	if !m.TreeDetailHidden() {
+		t.Error("Expected detail to remain hidden after resize (no auto-show, bd-x96a)")
 	}
 }
 
@@ -896,24 +894,25 @@ func TestTreeDetailAutoHideManualToggleStillWorks(t *testing.T) {
 	m := ui.NewModel(issues, "")
 	m = enterTreeView(t, m)
 
-	// Wide terminal -- detail visible
+	// Wide terminal
 	newM, _ := m.Update(tea.WindowSizeMsg{Width: 200, Height: 40})
 	m = newM.(ui.Model)
 
-	if m.TreeDetailHidden() {
-		t.Fatal("Expected detail visible at width 200")
+	// Detail hidden by default (bd-x96a)
+	if !m.TreeDetailHidden() {
+		t.Fatal("Expected detail hidden by default")
 	}
 
-	// User manually hides with 'd'
+	// User manually shows with 'd'
+	m = sendKey(t, m, "d")
+	if m.TreeDetailHidden() {
+		t.Error("Expected detail visible after 'd'")
+	}
+
+	// User manually hides with 'd' again
 	m = sendKey(t, m, "d")
 	if !m.TreeDetailHidden() {
-		t.Error("Expected detail hidden after manual 'd' toggle")
-	}
-
-	// User manually shows with 'd' again
-	m = sendKey(t, m, "d")
-	if m.TreeDetailHidden() {
-		t.Error("Expected detail visible after second 'd' toggle")
+		t.Error("Expected detail hidden after second 'd'")
 	}
 }
 
@@ -1117,8 +1116,10 @@ func TestTreeViewTabFoldsInSplitView(t *testing.T) {
 	m = newM.(ui.Model)
 	m = enterTreeView(t, m)
 
+	// Show detail with 'd' (hidden by default, bd-x96a)
+	m = sendKey(t, m, "d")
 	if m.TreeDetailHidden() {
-		t.Fatal("Expected detail visible in split mode")
+		t.Fatal("Expected detail visible after 'd'")
 	}
 
 	initialCount := m.TreeNodeCount()
@@ -1182,6 +1183,64 @@ func TestTreeViewIDColumnAlignment(t *testing.T) {
 	}
 }
 
+// TestTreeViewDefaultsToTreeOnly verifies that on launch with a wide terminal,
+// the detail panel is hidden by default (bd-x96a).
+func TestTreeViewDefaultsToTreeOnly(t *testing.T) {
+	issues := createTreeTestIssues()
+	m := ui.NewModel(issues, "")
+
+	// Wide terminal — would normally show split view
+	newM, _ := m.Update(tea.WindowSizeMsg{Width: 200, Height: 40})
+	m = newM.(ui.Model)
+
+	if !m.TreeDetailHidden() {
+		t.Fatal("expected detail panel hidden by default, even in wide terminal")
+	}
+	if m.FocusState() != "tree" {
+		t.Fatalf("expected focus 'tree', got %q", m.FocusState())
+	}
+}
+
+// TestTreeViewTabCycleTwoStates verifies Tab cycles between exactly 2 states:
+// folded and children-visible (no subtree expand on 3rd press) (bd-g4w7).
+func TestTreeViewTabCycleTwoStates(t *testing.T) {
+	issues := createTreeTestIssues() // epic-1 with children task-1, task-2
+	m := ui.NewModel(issues, "")
+	m = enterTreeView(t, m)
+
+	// Cursor on epic-1 (root with children)
+	if m.TreeSelectedID() != "epic-1" {
+		t.Fatalf("expected epic-1 selected, got %q", m.TreeSelectedID())
+	}
+
+	// Initial: expanded (children visible)
+	initialCount := m.TreeNodeCount()
+
+	// Tab 1: fold (children hidden)
+	newM, _ := m.Update(tea.KeyMsg{Type: tea.KeyTab})
+	m = newM.(ui.Model)
+	afterFold := m.TreeNodeCount()
+	if afterFold >= initialCount {
+		t.Fatalf("expected fewer nodes after fold, got %d (was %d)", afterFold, initialCount)
+	}
+
+	// Tab 2: expand children
+	newM, _ = m.Update(tea.KeyMsg{Type: tea.KeyTab})
+	m = newM.(ui.Model)
+	afterExpand := m.TreeNodeCount()
+	if afterExpand != initialCount {
+		t.Fatalf("expected same count after re-expand, got %d (was %d)", afterExpand, initialCount)
+	}
+
+	// Tab 3: should fold again (2-state cycle), NOT subtree expand
+	newM, _ = m.Update(tea.KeyMsg{Type: tea.KeyTab})
+	m = newM.(ui.Model)
+	afterThirdTab := m.TreeNodeCount()
+	if afterThirdTab != afterFold {
+		t.Errorf("expected 3rd Tab to fold again (count %d), got %d", afterFold, afterThirdTab)
+	}
+}
+
 // TestTreeViewEnterOpensDetailInSplitMode verifies Enter opens detail view
 // in split mode (switches focus to detail pane).
 func TestTreeViewEnterOpensDetailInSplitMode(t *testing.T) {
@@ -1193,8 +1252,10 @@ func TestTreeViewEnterOpensDetailInSplitMode(t *testing.T) {
 	m = newM.(ui.Model)
 	m = enterTreeView(t, m)
 
+	// Show detail with 'd' (hidden by default, bd-x96a)
+	m = sendKey(t, m, "d")
 	if m.TreeDetailHidden() {
-		t.Fatal("Expected detail visible in split mode")
+		t.Fatal("Expected detail visible after 'd'")
 	}
 
 	// Enter should switch focus to detail pane
