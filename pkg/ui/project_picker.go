@@ -240,7 +240,7 @@ func pickerShortcuts() [panelRows][2]struct{ key, desc string } {
 		{{"r", "Ready"}, {"h", "History"}},
 		{{"a", "All"}, {"i", "Insights"}},
 		{{"/", "Search"}, {"?", "Help"}},
-		{{"P", "Hide"}, {"", ""}},
+		{{"", ""}, {"", ""}},
 	}
 }
 

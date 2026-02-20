@@ -3463,9 +3463,9 @@ func (m *Model) renderFooter() string {
 
 	// Add picker toggle hint if multiple projects exist (bd-e4un)
 	if len(m.allProjects) > 1 {
-		pickerLabel := "hide"
+		pickerLabel := "hide projects"
 		if !m.pickerVisible {
-			pickerLabel = "show"
+			pickerLabel = "show projects"
 		}
 		hints = append(hints, hint{"P", pickerLabel})
 	}
