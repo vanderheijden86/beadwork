@@ -1845,8 +1845,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 
 			case "e":
-				if m.focused == focusTree {
-					// Edit in tree view
+				if m.focused == focusTree && !m.tree.IsSearchMode() {
+					// Edit in tree view (skip during search, bd-9k90)
 					if issue := m.getSelectedIssue(); issue != nil {
 						m.editModal = NewEditModal(issue, m.theme)
 						m.editModal.SetSize(m.width, m.height)
