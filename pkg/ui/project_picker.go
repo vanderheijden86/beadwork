@@ -269,6 +269,7 @@ func (m *ProjectPickerModel) View() string {
 	logoLines := m.renderLogoColumn()
 
 	// --- Determine column widths, progressively drop columns on narrow terminals (bd-ecmm) ---
+	actualTableWidth := m.maxLineWidth(tableLines)
 	shortcutsWidth := m.maxLineWidth(shortcutLines)
 	if shortcutsWidth < 16 {
 		shortcutsWidth = 16
@@ -279,43 +280,45 @@ func (m *ProjectPickerModel) View() string {
 	}
 	logoWidth := m.maxLineWidth(logoLines)
 	gap := 2
-	minTableWidth := 30
+
+	// Use actual table width (not a minimum) when deciding which columns fit
+	tableWidth := actualTableWidth
 
 	// Decide which optional columns fit: drop logo first, then legend, then shortcuts
 	showLogo := true
 	showLegend := true
 	showShortcuts := true
 
-	needed := minTableWidth + gap + shortcutsWidth + gap + legendWidth + gap + logoWidth
+	needed := tableWidth + gap + shortcutsWidth + gap + legendWidth + gap + logoWidth
 	if needed > w {
 		showLogo = false // drop logo first
-		needed = minTableWidth + gap + shortcutsWidth + gap + legendWidth
+		needed = tableWidth + gap + shortcutsWidth + gap + legendWidth
 	}
 	if needed > w {
 		showLegend = false // then legend
-		needed = minTableWidth + gap + shortcutsWidth
+		needed = tableWidth + gap + shortcutsWidth
 	}
 	if needed > w {
 		showShortcuts = false // then shortcuts
 	}
 
-	// Table gets remaining space
-	tableWidth := w
-	if showShortcuts {
-		tableWidth -= shortcutsWidth + gap
-	}
-	if showLegend {
-		tableWidth -= legendWidth + gap
-	}
-	if showLogo {
-		tableWidth -= logoWidth + gap
-	}
-	if tableWidth < minTableWidth {
-		tableWidth = minTableWidth
+	// Table gets remaining space (at least its actual content width)
+	if showShortcuts || showLegend || showLogo {
+		tableWidth = w
+		if showShortcuts {
+			tableWidth -= shortcutsWidth + gap
+		}
+		if showLegend {
+			tableWidth -= legendWidth + gap
+		}
+		if showLogo {
+			tableWidth -= logoWidth + gap
+		}
 	}
 
 	// --- Join columns row by row using padRight for alignment (bd-qyr) ---
 	gapStr := strings.Repeat(" ", gap)
+	clipStyle := m.theme.Renderer.NewStyle().MaxWidth(w)
 	var rows []string
 	for i := 0; i < panelRows; i++ {
 		row := padRight(safeIndex(tableLines, i), tableWidth)
@@ -328,6 +331,8 @@ func (m *ProjectPickerModel) View() string {
 		if showLogo {
 			row += gapStr + safeIndex(logoLines, i)
 		}
+		// Clip to terminal width to prevent wrapping
+		row = clipStyle.Render(row)
 		rows = append(rows, row)
 	}
 
@@ -457,7 +462,7 @@ func (m *ProjectPickerModel) renderShortcutsColumn() []string {
 	t := m.theme
 
 	keyStyle := t.Renderer.NewStyle().
-		Foreground(lipgloss.AdaptiveColor{Light: "#7D56F4", Dark: "#BD93F9"}).
+		Foreground(t.Primary).
 		Bold(true)
 	descStyle := t.Renderer.NewStyle().
 		Foreground(t.Base.GetForeground())
@@ -508,7 +513,7 @@ func (m *ProjectPickerModel) renderTypeLegendColumn() []string {
 func (m *ProjectPickerModel) renderLogoColumn() []string {
 	t := m.theme
 	logoStyle := t.Renderer.NewStyle().
-		Foreground(lipgloss.AdaptiveColor{Light: "#CC6600", Dark: "#FF8C00"})
+		Foreground(lipgloss.AdaptiveColor{Light: "#B36B00", Dark: "#E6B800"})
 
 	logo := b9sLogo()
 	lines := make([]string, panelRows)

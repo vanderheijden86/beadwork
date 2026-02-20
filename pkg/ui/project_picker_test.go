@@ -8,6 +8,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/vanderheijden86/beadwork/pkg/config"
 	"github.com/vanderheijden86/beadwork/pkg/model"
 	"github.com/vanderheijden86/beadwork/pkg/ui"
@@ -932,5 +933,45 @@ func TestProjectPicker_MinimizedShowsOnlyTitleBar(t *testing.T) {
 	}
 	if strings.Contains(output, "data-pipeline") {
 		t.Error("minimized view should NOT contain other project name 'data-pipeline'")
+	}
+}
+
+func TestProjectPicker_NarrowTerminalDropsColumns(t *testing.T) {
+	entries := []ui.ProjectEntry{
+		{Project: config.Project{Name: "Oosterweel-sync", Path: "/tmp/a"}, FavoriteNum: 1, OpenCount: 7, InProgressCount: 1, ReadyCount: 8},
+		{Project: config.Project{Name: "agents-config", Path: "/tmp/b"}, FavoriteNum: 2, IsActive: true, OpenCount: 9, InProgressCount: 6, ReadyCount: 13},
+		{Project: config.Project{Name: "b9s", Path: "/tmp/c"}, FavoriteNum: 3, OpenCount: 3, InProgressCount: 1, ReadyCount: 4},
+	}
+
+	theme := ui.TestTheme()
+	picker := ui.NewProjectPicker(entries, theme)
+
+	// At 100 chars wide, no line should exceed terminal width
+	picker.SetSize(100, 40)
+	view := picker.View()
+
+	lines := strings.Split(view, "\n")
+	for i, line := range lines {
+		w := lipgloss.Width(line)
+		if w > 100 {
+			t.Errorf("line %d exceeds terminal width (100): visual width = %d, content = %q", i, w, line)
+		}
+	}
+
+	// At 60 chars wide, no line should exceed terminal width
+	picker.SetSize(60, 40)
+	view = picker.View()
+
+	lines = strings.Split(view, "\n")
+	for i, line := range lines {
+		w := lipgloss.Width(line)
+		if w > 60 {
+			t.Errorf("line %d exceeds terminal width (60): visual width = %d", i, w)
+		}
+	}
+
+	// Logo should NOT appear at narrow widths
+	if strings.Contains(view, `______`) {
+		t.Error("logo should be dropped at 60 chars width")
 	}
 }
