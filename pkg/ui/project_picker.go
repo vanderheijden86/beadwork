@@ -314,6 +314,22 @@ func (m *ProjectPickerModel) View() string {
 		tableWidth = minTableWidth
 	}
 
+	// --- Determine which table row needs highlight (active/cursor project) ---
+	highlightRow := -1 // 1-indexed in panelRows (0 is header)
+	if len(m.filtered) > 0 {
+		visible := len(m.filtered)
+		if visible > maxVisibleProjects {
+			visible = maxVisibleProjects
+		}
+		for i := 0; i < visible; i++ {
+			entry := m.entries[m.filtered[i]]
+			if (m.filtering && i == m.cursor) || entry.IsActive {
+				highlightRow = i + 1 // +1 because row 0 is header
+				break
+			}
+		}
+	}
+
 	// --- Join columns row by row using padRight for alignment (bd-qyr) ---
 	gapStr := strings.Repeat(" ", gap)
 	var rows []string
@@ -327,6 +343,13 @@ func (m *ProjectPickerModel) View() string {
 		}
 		if showLogo {
 			row += gapStr + safeIndex(logoLines, i)
+		}
+		// Full-width highlight for active/cursor project row (bd-hdgh)
+		if i == highlightRow {
+			hlStyle := m.theme.Renderer.NewStyle().
+				Width(w).MaxWidth(w).
+				Background(m.theme.Highlight).Bold(true)
+			row = hlStyle.Render(row)
 		}
 		rows = append(rows, row)
 	}
@@ -528,7 +551,8 @@ func (m *ProjectPickerModel) renderTitleBar(w int) string {
 		Bold(true)
 
 	countText := t.Renderer.NewStyle().
-		Foreground(lipgloss.AdaptiveColor{Light: "#CC6600", Dark: "#FF8C00"})
+		Foreground(lipgloss.AdaptiveColor{Light: "#CC6600", Dark: "#FF8C00"}).
+		Bold(true)
 
 	label := "b9s"
 	countStr := ""
