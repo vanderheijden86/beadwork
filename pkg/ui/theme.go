@@ -112,7 +112,7 @@ func DefaultTheme(r *lipgloss.Renderer) Theme {
 		Chore:   lipgloss.AdaptiveColor{Light: "#006080", Dark: "#8BE9FD"}, // Cyan (darker)
 
 		Border:    lipgloss.AdaptiveColor{Light: "#AAAAAA", Dark: "#44475A"}, // Border (was #DDDDDD)
-		Highlight: lipgloss.AdaptiveColor{Light: "#D0E4F5", Dark: "#1c3a5f"}, // Blue-tinted (k9s-inspired)
+		Highlight: lipgloss.AdaptiveColor{Light: "#B3E5FC", Dark: "#4FC1E9"}, // Bright cyan (k9s-style)
 		Muted:     lipgloss.AdaptiveColor{Light: "#555555", Dark: "#6272A4"}, // Dimmed text (was #888888, now ~7:1)
 	}
 

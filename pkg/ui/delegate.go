@@ -218,7 +218,9 @@ func (d IssueDelegate) Render(w io.Writer, m list.Model, index int, listItem lis
 	// Apply row background for selection and clamp width
 	rowStyle := t.Renderer.NewStyle().Width(width).MaxWidth(width)
 	if isSelected {
-		row = rowStyle.Background(t.Highlight).Render(row)
+		row = rowStyle.Background(t.Highlight).
+			Foreground(lipgloss.AdaptiveColor{Light: "#000000", Dark: "#1A1A1A"}).
+			Bold(true).Render(row)
 	} else {
 		row = rowStyle.Render(row)
 	}

@@ -359,7 +359,7 @@ func (m *ProjectPickerModel) renderProjectTable() []string {
 		Foreground(t.Secondary).
 		Bold(true)
 	numStyle := t.Renderer.NewStyle().
-		Foreground(lipgloss.AdaptiveColor{Light: "#3a5fcd", Dark: "#5f87ff"}).
+		Foreground(lipgloss.AdaptiveColor{Light: "#CC6600", Dark: "#FF8C00"}).
 		Bold(true)
 	activeStyle := t.Renderer.NewStyle().
 		Foreground(t.Primary).
@@ -508,7 +508,7 @@ func (m *ProjectPickerModel) renderTypeLegendColumn() []string {
 func (m *ProjectPickerModel) renderLogoColumn() []string {
 	t := m.theme
 	logoStyle := t.Renderer.NewStyle().
-		Foreground(lipgloss.AdaptiveColor{Light: "#3a5fcd", Dark: "#5f87ff"})
+		Foreground(lipgloss.AdaptiveColor{Light: "#CC6600", Dark: "#FF8C00"})
 
 	logo := b9sLogo()
 	lines := make([]string, panelRows)
@@ -528,7 +528,7 @@ func (m *ProjectPickerModel) renderTitleBar(w int) string {
 		Bold(true)
 
 	countText := t.Renderer.NewStyle().
-		Foreground(lipgloss.AdaptiveColor{Light: "#3a5fcd", Dark: "#5f87ff"})
+		Foreground(lipgloss.AdaptiveColor{Light: "#CC6600", Dark: "#FF8C00"})
 
 	label := "projects"
 	activeNum := 0

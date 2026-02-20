@@ -30,7 +30,7 @@ var (
 	ColorBg          = lipgloss.AdaptiveColor{Light: "#FFFFFF", Dark: "#282A36"}
 	ColorBgDark      = lipgloss.AdaptiveColor{Light: "#F5F5F5", Dark: "#1E1F29"}
 	ColorBgSubtle    = lipgloss.AdaptiveColor{Light: "#E8E8E8", Dark: "#363949"}
-	ColorBgHighlight = lipgloss.AdaptiveColor{Light: "#D0E4F5", Dark: "#1c3a5f"}
+	ColorBgHighlight = lipgloss.AdaptiveColor{Light: "#B3E5FC", Dark: "#4FC1E9"}
 	ColorText        = lipgloss.AdaptiveColor{Light: "#1A1A1A", Dark: "#F8F8F2"}
 	ColorSubtext     = lipgloss.AdaptiveColor{Light: "#555555", Dark: "#BFBFBF"}
 	ColorMuted       = lipgloss.AdaptiveColor{Light: "#666666", Dark: "#6272A4"}

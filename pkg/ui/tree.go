@@ -1036,10 +1036,12 @@ func (t *TreeModel) View() string {
 			rowWidth = 80
 		}
 		if isSelected {
-			// Full-line background highlight (bd-hdgh)
+			// Full-line background highlight with dark text (bd-hdgh)
 			rowStyle := t.theme.Renderer.NewStyle().
 				Width(rowWidth).MaxWidth(rowWidth).
-				Background(t.theme.Highlight).Bold(true)
+				Background(t.theme.Highlight).
+				Foreground(lipgloss.AdaptiveColor{Light: "#000000", Dark: "#1A1A1A"}).
+				Bold(true)
 			line = rowStyle.Render(line)
 		} else {
 			// Non-selected rows get same width for alignment (bd-hdgh)
