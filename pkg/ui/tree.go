@@ -1180,10 +1180,9 @@ func (t *TreeModel) renderEmptyState() string {
 	return sb.String()
 }
 
-// RenderHeader returns a styled header row for the tree view, matching the main
-// list view's column header style: primary background, bold white/dark foreground.
-// Layout: "  [mode] [filter] STATUS  TITLE  [sort]  ID"
-// ID is a compact column at the end (bd-03l).
+// RenderHeader returns a styled header row for the tree view, with column
+// labels aligned to match the row content below (bd-xhyo).
+// Row layout: [gutter 2] [expand 1] [space 1] [icon 1] [space 1] [status 4] [space 1] [title...] ... [age 8] [space 1] [ID maxW]
 func (t *TreeModel) RenderHeader() string {
 	width := t.width
 	if width <= 0 {
@@ -1195,6 +1194,7 @@ func (t *TreeModel) RenderHeader() string {
 		Bold(true).
 		Width(width)
 
+	// Mode/filter badges go before the column labels
 	modeBadge := ""
 	if t.flatMode {
 		modeBadge = "[FLAT] "
@@ -1206,8 +1206,50 @@ func (t *TreeModel) RenderHeader() string {
 	if t.currentFilter != "" && t.currentFilter != "all" {
 		filterBadge = fmt.Sprintf("[%s] ", strings.ToUpper(t.currentFilter))
 	}
-	sortBadge := fmt.Sprintf("%s %s", t.sortField.String(), t.sortDirection.Indicator())
-	headerText := fmt.Sprintf("  %s%sSTATUS  TITLE  [%s]  ID", modeBadge, filterBadge, sortBadge)
+
+	// Build left side to match row column positions:
+	// gutter(2) + expand(1) + space(1) + icon(1) + space(1) = 6 chars before STATUS
+	leftPrefix := "  " + modeBadge + filterBadge
+	leftPrefixWidth := lipgloss.Width(leftPrefix)
+
+	// Pad to align STATUS with the status badge column (position 6 from content start)
+	statusCol := selectionGutterWidth + 1 + 1 + 1 + 1 // gutter + expand + space + icon + space
+	if leftPrefixWidth < statusCol {
+		leftPrefix += strings.Repeat(" ", statusCol-leftPrefixWidth)
+	}
+
+	// Right side: [sort label] padded to age column width, then ID label right-aligned
+	sortBadge := fmt.Sprintf("[%s %s]", t.sortField.String(), t.sortDirection.Indicator())
+
+	// Compute maxIDWidth from visible nodes (same as View does)
+	maxIDWidth := 2 // minimum "ID" label width
+	start, end := t.visibleRange()
+	for i := start; i < end; i++ {
+		node := t.flatList[i]
+		if node == nil || node.Issue == nil {
+			continue
+		}
+		w := lipgloss.Width(shortIDSuffix(node.Issue.ID))
+		if w > maxIDWidth {
+			maxIDWidth = w
+		}
+	}
+
+	// Right side matches row: age(8) + space(1) + ID(maxIDWidth)
+	rightID := fmt.Sprintf("%*s", maxIDWidth, "ID")
+	rightSide := fmt.Sprintf("%8s %s", sortBadge, rightID)
+	rightWidth := lipgloss.Width(rightSide)
+
+	// TITLE fills the space between STATUS and right side
+	statusLabel := "STATUS"
+	titleStart := lipgloss.Width(leftPrefix) + len(statusLabel) + 1 // +1 for space after STATUS
+	titleWidth := width - titleStart - rightWidth - 1               // -1 for trailing padding
+	if titleWidth < 5 {
+		titleWidth = 5
+	}
+	titleLabel := "TITLE" + strings.Repeat(" ", titleWidth-5)
+
+	headerText := leftPrefix + statusLabel + " " + titleLabel + " " + rightSide
 	return headerStyle.Render(headerText)
 }
 
