@@ -1965,7 +1965,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		m.isSplitView = msg.Width > SplitViewThreshold
 		m.ready = true
-		bodyHeight := m.height - 1 // keep 1 row for footer
+		bodyHeight := m.bodyHeight() // accounts for picker header + footer (bd-ins4)
 		if bodyHeight < 5 {
 			bodyHeight = 5
 		}
@@ -3713,7 +3713,7 @@ func (m *Model) recalculateSplitPaneSizes() {
 		return
 	}
 
-	bodyHeight := m.height - 1
+	bodyHeight := m.bodyHeight() // accounts for picker header + footer (bd-ins4)
 	if bodyHeight < 5 {
 		bodyHeight = 5
 	}
