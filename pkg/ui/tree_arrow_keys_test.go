@@ -1137,6 +1137,51 @@ func TestTreeViewTabFoldsInSplitView(t *testing.T) {
 	}
 }
 
+// TestTreeViewIDColumnAlignment verifies that the age column ("ago") on the right side
+// of tree rows aligns to the same column, regardless of ID length (bd-uyzc).
+func TestTreeViewIDColumnAlignment(t *testing.T) {
+	now := time.Now()
+	// Issues with variable-length suffixes: "z66" (3), "z66.4" (5), "u2z" (3), "3bb" (3)
+	issues := []model.Issue{
+		{ID: "beads-z66", Title: "Short ID issue", Status: model.StatusOpen, Priority: 1, IssueType: model.TypeTask, CreatedAt: now},
+		{ID: "beads-z66.4", Title: "Long ID issue", Status: model.StatusOpen, Priority: 2, IssueType: model.TypeBug, CreatedAt: now.Add(-time.Hour)},
+		{ID: "beads-u2z", Title: "Another short ID", Status: model.StatusOpen, Priority: 2, IssueType: model.TypeFeature, CreatedAt: now.Add(-2 * time.Hour)},
+		{ID: "beads-3bb", Title: "Third short ID", Status: model.StatusOpen, Priority: 3, IssueType: model.TypeChore, CreatedAt: now.Add(-3 * time.Hour)},
+	}
+
+	m := ui.NewModel(issues, "")
+	// Width > 60 so the age column is shown
+	newM, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 20})
+	m = newM.(ui.Model)
+	m = enterTreeView(t, m)
+
+	view := m.View()
+	lines := strings.Split(view, "\n")
+
+	// Find lines containing "ago" and check that the "ago" text aligns
+	var agoPositions []int
+	for _, line := range lines {
+		plain := stripAnsiCodes(line)
+		idx := strings.Index(plain, "ago")
+		if idx < 0 {
+			continue
+		}
+		agoPositions = append(agoPositions, idx)
+	}
+
+	if len(agoPositions) < 3 {
+		t.Fatalf("expected at least 3 lines with 'ago', found %d; view:\n%s", len(agoPositions), view)
+	}
+
+	// All "ago" text should start at the same column position
+	expected := agoPositions[0]
+	for i, pos := range agoPositions {
+		if pos != expected {
+			t.Errorf("age column misaligned: line %d has 'ago' at col %d, expected %d", i, pos, expected)
+		}
+	}
+}
+
 // TestTreeViewEnterOpensDetailInSplitMode verifies Enter opens detail view
 // in split mode (switches focus to detail pane).
 func TestTreeViewEnterOpensDetailInSplitMode(t *testing.T) {

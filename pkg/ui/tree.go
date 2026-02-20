@@ -1000,6 +1000,19 @@ func (t *TreeModel) View() string {
 	// Get visible range - O(1) calculation based on viewportOffset and height
 	start, end := t.visibleRange()
 
+	// Compute max short ID width across visible nodes for column alignment (bd-uyzc)
+	maxIDWidth := 0
+	for i := start; i < end; i++ {
+		node := t.flatList[i]
+		if node == nil || node.Issue == nil {
+			continue
+		}
+		w := lipgloss.Width(shortIDSuffix(node.Issue.ID))
+		if w > maxIDWidth {
+			maxIDWidth = w
+		}
+	}
+
 	// Render only visible nodes (bv-db02: windowed rendering)
 	for i := start; i < end; i++ {
 		node := t.flatList[i]
@@ -1008,7 +1021,7 @@ func (t *TreeModel) View() string {
 		}
 
 		isSelected := i == t.cursor
-		line := t.renderNode(node, isSelected)
+		line := t.renderNode(node, isSelected, maxIDWidth)
 
 		if isSelected {
 			// Highlight selected row — the Selected style's left border+padding
@@ -1200,7 +1213,7 @@ func (t *TreeModel) RenderHeader() string {
 
 // renderNode renders a single tree node with column-aligned layout matching the
 // main list delegate: [tree-prefix] [expand] [type] [prio-badge] [status-badge] [ID] [title] [age]
-func (t *TreeModel) renderNode(node *IssueTreeNode, isSelected bool) string {
+func (t *TreeModel) renderNode(node *IssueTreeNode, isSelected bool, maxIDWidth int) string {
 	if node == nil || node.Issue == nil {
 		return ""
 	}
@@ -1238,11 +1251,12 @@ func (t *TreeModel) renderNode(node *IssueTreeNode, isSelected bool) string {
 	leftSide.WriteString(indicatorStyle.Render(indicator))
 	leftSide.WriteString(" ")
 
-	// ── Type badge (Jira-style square, bd-pa0d) ──
-	typeBadge := RenderTypeBadge(string(issue.IssueType))
-	leftSide.WriteString(typeBadge)
+	// ── Type icon (JIRA-style, bd-arxp) ──
+	typeIcon, typeIconColor := t.theme.GetTypeIcon(string(issue.IssueType))
+	typeIconStyle := r.NewStyle().Foreground(typeIconColor)
+	leftSide.WriteString(typeIconStyle.Render(typeIcon))
 	leftSide.WriteString(" ")
-	typeIconWidth := lipgloss.Width(typeBadge) + 1
+	typeIconWidth := lipgloss.Width(typeIcon) + 1
 
 	// ── Status badge (polished, matching delegate) ──
 	statusBadge := RenderStatusBadge(string(issue.Status))
@@ -1264,10 +1278,11 @@ func (t *TreeModel) renderNode(node *IssueTreeNode, isSelected bool) string {
 		rightWidth += 9
 	}
 
-	// Short ID suffix at the far right (bd-03l)
+	// Short ID suffix at the far right, right-aligned to maxIDWidth for column alignment (bd-03l, bd-uyzc)
 	shortID := shortIDSuffix(issue.ID)
-	rightParts = append(rightParts, t.theme.SecondaryText.Render(shortID))
-	rightWidth += lipgloss.Width(shortID) + 1
+	paddedID := fmt.Sprintf("%*s", maxIDWidth, shortID)
+	rightParts = append(rightParts, t.theme.SecondaryText.Render(paddedID))
+	rightWidth += maxIDWidth + 1
 
 	// ── Bookmark indicator (bd-k4n) ──
 	isBookmarked := t.bookmarks[issue.ID]
@@ -2589,9 +2604,9 @@ func (t *TreeModel) renderStickyLine(node *IssueTreeNode) string {
 	mutedStyle := r.NewStyle().Foreground(t.theme.Muted).Faint(true)
 
 	indicator := t.getExpandIndicator(node)
-	typeBadge := RenderTypeBadge(string(issue.IssueType))
+	icon, _ := t.theme.GetTypeIcon(string(issue.IssueType))
 
-	line := fmt.Sprintf("%s %s %s  %s", indicator, typeBadge, issue.ID, issue.Title)
+	line := fmt.Sprintf("%s %s %s  %s", indicator, icon, issue.ID, issue.Title)
 	return mutedStyle.Render(line)
 }
 
