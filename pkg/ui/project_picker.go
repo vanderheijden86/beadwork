@@ -262,7 +262,10 @@ func (m *ProjectPickerModel) View() string {
 	// Column 2: Shortcuts
 	shortcutLines := m.renderShortcutsColumn()
 
-	// Column 3: B9s logo
+	// Column 3: Type legend (bd-5im0)
+	legendLines := m.renderTypeLegendColumn()
+
+	// Column 4: B9s logo
 	logoLines := m.renderLogoColumn()
 
 	// --- Determine column widths ---
@@ -270,11 +273,15 @@ func (m *ProjectPickerModel) View() string {
 	if shortcutsWidth < 16 {
 		shortcutsWidth = 16
 	}
+	legendWidth := m.maxLineWidth(legendLines)
+	if legendWidth < 10 {
+		legendWidth = 10
+	}
 	logoWidth := m.maxLineWidth(logoLines)
 	gap := 2 // gap between columns
 
 	// Table gets remaining space
-	tableWidth := w - shortcutsWidth - logoWidth - gap*2
+	tableWidth := w - shortcutsWidth - legendWidth - logoWidth - gap*3
 	if tableWidth < 30 {
 		tableWidth = 30
 	}
@@ -286,6 +293,8 @@ func (m *ProjectPickerModel) View() string {
 		row := padRight(safeIndex(tableLines, i), tableWidth) +
 			gapStr +
 			padRight(safeIndex(shortcutLines, i), shortcutsWidth) +
+			gapStr +
+			padRight(safeIndex(legendLines, i), legendWidth) +
 			gapStr +
 			safeIndex(logoLines, i)
 		rows = append(rows, row)
@@ -464,6 +473,36 @@ func (m *ProjectPickerModel) renderShortcutsColumn() []string {
 		lines[i] = left + " " + right
 	}
 
+	return lines
+}
+
+// renderTypeLegendColumn renders a legend of issue type icons and labels (bd-5im0).
+func (m *ProjectPickerModel) renderTypeLegendColumn() []string {
+	t := m.theme
+	headerStyle := t.Renderer.NewStyle().
+		Foreground(t.Base.GetForeground()).
+		Bold(true)
+	labelStyle := t.Renderer.NewStyle().
+		Foreground(t.MutedText.GetForeground())
+
+	types := []struct {
+		typ   string
+		label string
+	}{
+		{"bug", "Bug"},
+		{"feature", "Feature"},
+		{"task", "Task"},
+		{"epic", "Epic"},
+		{"chore", "Chore"},
+	}
+
+	lines := make([]string, panelRows)
+	lines[0] = headerStyle.Render("Types")
+	for i, tp := range types {
+		icon, color := t.GetTypeIcon(tp.typ)
+		iconStyled := t.Renderer.NewStyle().Foreground(color).Render(icon)
+		lines[i+1] = iconStyled + " " + labelStyle.Render(tp.label)
+	}
 	return lines
 }
 

@@ -301,6 +301,32 @@ func TestProjectPicker_B9sLogo(t *testing.T) {
 	}
 }
 
+// TestProjectPicker_TypeLegend verifies the full-mode picker shows a type legend
+// with all issue type icons and labels (bd-5im0).
+func TestProjectPicker_TypeLegend(t *testing.T) {
+	entries := []ui.ProjectEntry{
+		{
+			Project:     config.Project{Name: "test", Path: "/tmp/test"},
+			FavoriteNum: 1,
+			IsActive:    true,
+		},
+	}
+
+	theme := ui.TestTheme()
+	picker := ui.NewProjectPicker(entries, theme)
+	picker.SetSize(140, 40)
+
+	view := picker.View()
+	plain := stripAnsiCodes(view)
+
+	// Should contain each type label
+	for _, label := range []string{"Bug", "Feature", "Task", "Epic", "Chore"} {
+		if !strings.Contains(plain, label) {
+			t.Errorf("type legend should contain %q, view:\n%s", label, plain)
+		}
+	}
+}
+
 func TestProjectPicker_ShortcutsColumn(t *testing.T) {
 	entries := []ui.ProjectEntry{
 		{
