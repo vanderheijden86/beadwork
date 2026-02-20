@@ -1238,12 +1238,11 @@ func (t *TreeModel) renderNode(node *IssueTreeNode, isSelected bool) string {
 	leftSide.WriteString(indicatorStyle.Render(indicator))
 	leftSide.WriteString(" ")
 
-	// ── Type icon (JIRA-style, bd-arxp) ──
-	typeIcon, typeIconColor := t.theme.GetTypeIcon(string(issue.IssueType))
-	typeIconStyle := r.NewStyle().Foreground(typeIconColor)
-	leftSide.WriteString(typeIconStyle.Render(typeIcon))
+	// ── Type badge (Jira-style square, bd-pa0d) ──
+	typeBadge := RenderTypeBadge(string(issue.IssueType))
+	leftSide.WriteString(typeBadge)
 	leftSide.WriteString(" ")
-	typeIconWidth := lipgloss.Width(typeIcon) + 1
+	typeIconWidth := lipgloss.Width(typeBadge) + 1
 
 	// ── Status badge (polished, matching delegate) ──
 	statusBadge := RenderStatusBadge(string(issue.Status))
@@ -2590,9 +2589,9 @@ func (t *TreeModel) renderStickyLine(node *IssueTreeNode) string {
 	mutedStyle := r.NewStyle().Foreground(t.theme.Muted).Faint(true)
 
 	indicator := t.getExpandIndicator(node)
-	icon, _ := t.theme.GetTypeIcon(string(issue.IssueType))
+	typeBadge := RenderTypeBadge(string(issue.IssueType))
 
-	line := fmt.Sprintf("%s %s %s  %s", indicator, icon, issue.ID, issue.Title)
+	line := fmt.Sprintf("%s %s %s  %s", indicator, typeBadge, issue.ID, issue.Title)
 	return mutedStyle.Render(line)
 }
 

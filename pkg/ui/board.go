@@ -375,17 +375,14 @@ func (b *BoardModel) regroupIssues() {
 }
 
 // getColumnHeaders returns the column header titles based on swimlane mode (bv-wjs0)
-func (b *BoardModel) getColumnHeaders() ([]string, []string) {
+func (b *BoardModel) getColumnHeaders() []string {
 	switch b.swimLaneMode {
 	case SwimByPriority:
-		return []string{"P0 CRITICAL", "P1 HIGH", "P2 MEDIUM", "P3+ OTHER"},
-			[]string{"🔥", "⚡", "🔹", "💤"}
+		return []string{"P0 CRITICAL", "P1 HIGH", "P2 MEDIUM", "P3+ OTHER"}
 	case SwimByType:
-		return []string{"BUG", "FEATURE", "TASK", "EPIC"},
-			[]string{"🐛", "✨", "📋", "🎯"}
+		return []string{"BUG", "FEATURE", "TASK", "EPIC"}
 	default: // SwimByStatus
-		return []string{"OPEN", "IN PROGRESS", "BLOCKED", "CLOSED"},
-			[]string{"📋", "🔄", "🚫", "✅"}
+		return []string{"OPEN", "IN PROGRESS", "BLOCKED", "CLOSED"}
 	}
 }
 
@@ -951,7 +948,7 @@ func (b BoardModel) View(width, height int) string {
 	}
 
 	// Get dynamic column headers based on swimlane mode (bv-wjs0)
-	columnTitles, columnEmoji := b.getColumnHeaders()
+	columnTitles := b.getColumnHeaders()
 
 	// Column colors - use appropriate colors based on mode
 	var columnColors []lipgloss.AdaptiveColor
@@ -991,7 +988,7 @@ func (b BoardModel) View(width, height int) string {
 		// - Medium (100-140): Count + P0/P1 counts
 		// - Wide (>140): Full stats including oldest age
 		var headerText string
-		baseHeader := fmt.Sprintf("%s %s (%d)", columnEmoji[colIdx], columnTitles[colIdx], issueCount)
+		baseHeader := fmt.Sprintf("%s (%d)", columnTitles[colIdx], issueCount)
 
 		if width < 100 {
 			// Narrow: just the base header
@@ -1319,7 +1316,7 @@ func (b BoardModel) renderCard(issue model.Issue, width int, selected bool, colI
 	// ══════════════════════════════════════════════════════════════════════════
 	// LINE 1: Type icon + Priority (P0/P1/P2) + ID + Age with color (bv-1daf)
 	// ══════════════════════════════════════════════════════════════════════════
-	icon, iconColor := t.GetTypeIcon(string(issue.IssueType))
+	typeBadge := RenderTypeBadge(string(issue.IssueType))
 
 	// Priority as P0/P1/P2 text (clearer than emoji flame levels)
 	prioText := formatPriority(issue.Priority)
@@ -1331,7 +1328,7 @@ func (b BoardModel) renderCard(issue model.Issue, width int, selected bool, colI
 	}
 
 	// Truncate ID for narrow cards - reserve space for age indicator
-	maxIDLen := width - 14 // Icon(2) + space + P#(2) + space + age(6) + spacing
+	maxIDLen := width - 14 // Badge(1) + space + P#(2) + space + age(6) + spacing
 	if maxIDLen < 6 {
 		maxIDLen = 6
 	}
@@ -1346,7 +1343,7 @@ func (b BoardModel) renderCard(issue model.Issue, width int, selected bool, colI
 	ageStyled := t.Renderer.NewStyle().Foreground(ageColor).Render(ageText)
 
 	line1 := fmt.Sprintf("%s %s %s %s",
-		t.Renderer.NewStyle().Foreground(iconColor).Render(icon),
+		typeBadge,
 		prioStyle.Render(prioText),
 		t.Renderer.NewStyle().Bold(true).Foreground(t.Secondary).Render(displayID),
 		ageStyled,
@@ -1488,7 +1485,7 @@ func (b BoardModel) renderExpandedCard(issue model.Issue, width int, _, _ int) s
 	// ══════════════════════════════════════════════════════════════════════════
 	// HEADER: Type icon + Priority + ID + Expand indicator
 	// ══════════════════════════════════════════════════════════════════════════
-	icon, iconColor := t.GetTypeIcon(string(issue.IssueType))
+	typeBadge := RenderTypeBadge(string(issue.IssueType))
 	prioText := formatPriority(issue.Priority)
 	prioStyle := t.Renderer.NewStyle().Bold(true)
 	if issue.Priority <= 1 {
@@ -1498,7 +1495,7 @@ func (b BoardModel) renderExpandedCard(issue model.Issue, width int, _, _ int) s
 	}
 
 	header := fmt.Sprintf("%s %s %s ▼",
-		t.Renderer.NewStyle().Foreground(iconColor).Render(icon),
+		typeBadge,
 		prioStyle.Render(prioText),
 		t.Renderer.NewStyle().Bold(true).Foreground(t.Primary).Render(issue.ID),
 	)
@@ -1649,8 +1646,8 @@ func (b *BoardModel) renderDetailPanel(width, height int) string {
 			var content strings.Builder
 
 			// Header with ID and type
-			icon, _ := t.GetTypeIcon(string(issue.IssueType))
-			content.WriteString(fmt.Sprintf("## %s %s\n\n", icon, issue.ID))
+			typeChar, _ := t.GetTypeIcon(string(issue.IssueType))
+			content.WriteString(fmt.Sprintf("## [%s] %s\n\n", typeChar, issue.ID))
 
 			// Title
 			content.WriteString(fmt.Sprintf("**%s**\n\n", issue.Title))

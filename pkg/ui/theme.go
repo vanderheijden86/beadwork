@@ -165,15 +165,15 @@ func (t Theme) GetStatusColor(s string) lipgloss.AdaptiveColor {
 func (t Theme) GetTypeIcon(typ string) (string, lipgloss.AdaptiveColor) {
 	switch typ {
 	case "bug":
-		return "●", t.Bug // Red filled circle (JIRA-style)
+		return "B", t.Bug
 	case "feature":
-		return "▲", t.Feature // Green triangle up (JIRA-style story/feature)
+		return "F", t.Feature
 	case "task":
-		return "✔", t.Task // Blue checkmark (JIRA-style task)
+		return "T", t.Task
 	case "epic":
-		return "⚡", t.Epic // Purple lightning (JIRA-style epic)
+		return "E", t.Epic
 	case "chore":
-		return "○", t.Chore // Gray open circle
+		return "C", t.Chore
 	default:
 		return "·", t.Subtext
 	}

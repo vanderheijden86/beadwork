@@ -50,14 +50,14 @@ func (d IssueDelegate) Render(w io.Writer, m list.Model, index int, listItem lis
 	// ══════════════════════════════════════════════════════════════════════════
 
 	// Get all the data
-	icon, iconColor := t.GetTypeIcon(string(i.Issue.IssueType))
+	typeBadge := RenderTypeBadge(string(i.Issue.IssueType))
 	idStr := i.Issue.ID
 	title := i.Issue.Title
 	ageStr := FormatTimeRel(i.Issue.CreatedAt)
 	commentCount := len(i.Issue.Comments)
 
-	// Measure actual icon display width (emojis vary: 1-2 cells)
-	iconDisplayWidth := lipgloss.Width(icon)
+	// All type badges are exactly 1 cell wide (bd-pa0d)
+	iconDisplayWidth := lipgloss.Width(typeBadge)
 
 	// Calculate widths for right-side columns (fixed)
 	rightWidth := 0
@@ -166,8 +166,8 @@ func (d IssueDelegate) Render(w io.Writer, m list.Model, index int, listItem lis
 		leftSide.WriteString(" ")
 	}
 
-	// Type icon with color
-	leftSide.WriteString(t.Renderer.NewStyle().Foreground(iconColor).Render(icon))
+	// Type badge (Jira-style, bd-pa0d)
+	leftSide.WriteString(typeBadge)
 	leftSide.WriteString(" ")
 
 	// Priority badge (polished)

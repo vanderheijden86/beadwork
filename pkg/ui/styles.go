@@ -77,12 +77,15 @@ var (
 	ColorPrioMediumBg   = lipgloss.AdaptiveColor{Light: "#FFF3CD", Dark: "#3D3D1A"}
 	ColorPrioLowBg      = lipgloss.AdaptiveColor{Light: "#D4EDDA", Dark: "#1A3D2A"}
 
-	// Type colors
-	ColorTypeBug     = lipgloss.AdaptiveColor{Light: "#CC0000", Dark: "#FF5555"}
-	ColorTypeFeature = lipgloss.AdaptiveColor{Light: "#B06800", Dark: "#FFB86C"}
-	ColorTypeTask    = lipgloss.AdaptiveColor{Light: "#808000", Dark: "#F1FA8C"}
-	ColorTypeEpic    = lipgloss.AdaptiveColor{Light: "#6B47D9", Dark: "#BD93F9"}
-	ColorTypeChore   = lipgloss.AdaptiveColor{Light: "#006080", Dark: "#8BE9FD"}
+	// Type badge text color (white on colored background)
+	ColorTypeBadgeText = lipgloss.AdaptiveColor{Light: "#FFFFFF", Dark: "#FFFFFF"}
+
+	// Type background colors (Jira-style saturated badge backgrounds, bd-pa0d)
+	ColorTypeBugBg     = lipgloss.AdaptiveColor{Light: "#CC0000", Dark: "#E5493A"} // Red
+	ColorTypeFeatureBg = lipgloss.AdaptiveColor{Light: "#36B37E", Dark: "#36B37E"} // Green
+	ColorTypeTaskBg    = lipgloss.AdaptiveColor{Light: "#2684FF", Dark: "#4C9AFF"} // Blue
+	ColorTypeEpicBg    = lipgloss.AdaptiveColor{Light: "#6B47D9", Dark: "#904EE2"} // Purple
+	ColorTypeChoreBg   = lipgloss.AdaptiveColor{Light: "#6B778C", Dark: "#6B778C"} // Gray
 )
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -166,6 +169,34 @@ func RenderStatusBadge(status string) string {
 		Foreground(fg).
 		Background(bg).
 		Padding(0, 0).
+		Render(label)
+}
+
+// RenderTypeBadge returns a Jira-style colored square badge with single letter (bd-pa0d)
+// All badges are exactly 1 cell wide for consistent alignment.
+func RenderTypeBadge(typ string) string {
+	var bg lipgloss.AdaptiveColor
+	var label string
+
+	switch typ {
+	case "bug":
+		bg, label = ColorTypeBugBg, "B"
+	case "feature":
+		bg, label = ColorTypeFeatureBg, "F"
+	case "task":
+		bg, label = ColorTypeTaskBg, "T"
+	case "epic":
+		bg, label = ColorTypeEpicBg, "E"
+	case "chore":
+		bg, label = ColorTypeChoreBg, "C"
+	default:
+		bg, label = ColorBgSubtle, "·"
+	}
+
+	return lipgloss.NewStyle().
+		Foreground(ColorTypeBadgeText).
+		Background(bg).
+		Bold(true).
 		Render(label)
 }
 
