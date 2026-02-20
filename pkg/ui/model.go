@@ -823,10 +823,28 @@ func (m Model) WithConfig(cfg config.Config, projectName, projectPath string) Mo
 	m.activeProjectPath = projectPath
 	m.activeProjectFavN = cfg.ProjectFavoriteNumber(projectName)
 	projects, errs := config.DiscoverProjectsWithErrors(cfg)
-	m.allProjects = projects
 	for _, e := range errs {
 		debug.Log("project discovery: skipping %s", e)
 	}
+
+	// Ensure the current project is always in the list, even without
+	// scan_paths or registered projects in config (bd-i21s).
+	if projectPath != "" {
+		found := false
+		for _, p := range projects {
+			if p.ResolvedPath() == projectPath {
+				found = true
+				break
+			}
+		}
+		if !found {
+			projects = append(projects, config.Project{
+				Name: projectName,
+				Path: projectPath,
+			})
+		}
+	}
+	m.allProjects = projects
 	entries := m.buildProjectEntries()
 	m.projectPicker = NewProjectPicker(entries, m.theme)
 	return m
