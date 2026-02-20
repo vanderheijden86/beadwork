@@ -521,6 +521,33 @@ func TestProjectPicker_NumberKeySwitchesWithoutFavorites(t *testing.T) {
 	}
 }
 
+// TestProjectPicker_SingleProjectNoScanDir verifies that the project picker
+// is shown even when the config has no registered projects and no scan_paths.
+// The current project (passed to WithConfig) should always appear. (bd-i21s)
+func TestProjectPicker_SingleProjectNoScanDir(t *testing.T) {
+	issues := []model.Issue{
+		{ID: "t-1", Title: "Task one", Status: "open", IssueType: "task", Priority: 2, CreatedAt: time.Now()},
+	}
+
+	// Empty config: no registered projects, no scan paths
+	cfg := config.Config{}
+
+	m := ui.NewModel(issues, "").WithConfig(cfg, "my-project", "/tmp/fake/my-project")
+	newM, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m = newM.(ui.Model)
+
+	// The current project should always be in the picker
+	if m.ProjectPickerFilteredCount() != 1 {
+		t.Errorf("expected 1 project in picker (the current project), got %d", m.ProjectPickerFilteredCount())
+	}
+
+	// Picker should be visible and show the project name
+	view := m.View()
+	if !strings.Contains(view, "my-project") {
+		t.Error("view should contain the current project name in the picker")
+	}
+}
+
 // TestProjectPicker_AutoNumberDisplayInView verifies the picker view shows
 // position numbers prominently for each project (bd-8zc).
 func TestProjectPicker_AutoNumberDisplayInView(t *testing.T) {
@@ -845,10 +872,10 @@ func TestProjectPicker_ShiftPToggle(t *testing.T) {
 		t.Error("picker should be hidden after Shift+P")
 	}
 
-	// Project names should NOT appear in view (picker hidden)
+	// Minimized view should still show title bar with active project
 	view := m.View()
-	if strings.Contains(view, "projects(api-service)") {
-		t.Error("picker title bar should not appear when hidden")
+	if !strings.Contains(view, "projects(api-service)") {
+		t.Error("minimized title bar should appear when picker is hidden")
 	}
 
 	// Press Shift+P again to show
@@ -888,5 +915,30 @@ func TestProjectPicker_NumberKeysWorkWhenHidden(t *testing.T) {
 	}
 	if switchMsg.Project.Name != "web-frontend" {
 		t.Errorf("expected 'web-frontend', got %q", switchMsg.Project.Name)
+	}
+}
+
+func TestProjectPicker_MinimizedShowsOnlyTitleBar(t *testing.T) {
+	m, _ := createModelWithProjects(t)
+
+	// Hide picker to get minimized view
+	newM, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("P")})
+	m = newM.(ui.Model)
+
+	output := m.View()
+
+	// The minimized view should contain the title bar with active project
+	if !strings.Contains(output, "projects(") {
+		t.Error("minimized view should contain 'projects(' title bar prefix")
+	}
+	if !strings.Contains(output, "api-service") {
+		t.Error("minimized view should contain active project name 'api-service'")
+	}
+	// Should NOT contain other project names as numbered entries
+	if strings.Contains(output, "web-frontend") {
+		t.Error("minimized view should NOT contain other project name 'web-frontend'")
+	}
+	if strings.Contains(output, "data-pipeline") {
+		t.Error("minimized view should NOT contain other project name 'data-pipeline'")
 	}
 }

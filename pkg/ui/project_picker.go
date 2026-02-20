@@ -342,46 +342,13 @@ func (m *ProjectPickerModel) Height() int {
 	return panelRows + 1 // content rows + title bar
 }
 
-// ViewMinimized renders a single-line bar showing project numbers + names.
-// The active project is highlighted with bold + primary color (bd-4s6).
+// ViewMinimized renders a single-line title bar showing the active project.
 func (m *ProjectPickerModel) ViewMinimized() string {
-	t := m.theme
 	w := m.width
 	if w <= 0 {
 		w = 80
 	}
-
-	numStyle := t.Renderer.NewStyle().
-		Foreground(lipgloss.AdaptiveColor{Light: "#006080", Dark: "#8BE9FD"}).
-		Bold(true)
-	activeStyle := t.Renderer.NewStyle().
-		Foreground(t.Primary).
-		Bold(true)
-	normalStyle := t.Renderer.NewStyle().
-		Foreground(t.Base.GetForeground())
-	sepStyle := t.Renderer.NewStyle().
-		Foreground(t.Border)
-
-	var parts []string
-	for i, idx := range m.filtered {
-		if i >= 9 {
-			break
-		}
-		entry := m.entries[idx]
-		num := numStyle.Render(fmt.Sprintf("%d", i+1))
-		name := entry.Project.Name
-		if entry.IsActive {
-			name = activeStyle.Render(name)
-		} else {
-			name = normalStyle.Render(name)
-		}
-		parts = append(parts, num+":"+name)
-	}
-
-	content := strings.Join(parts, sepStyle.Render(" | "))
-
-	barStyle := t.Renderer.NewStyle().Width(w)
-	return barStyle.Render(" " + content)
+	return m.renderTitleBar(w)
 }
 
 // renderProjectTable renders the project list with # NAME and O P R columns.
