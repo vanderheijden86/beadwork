@@ -40,8 +40,8 @@ func TestVersionFlag_IncludesBuildInfo(t *testing.T) {
 	}
 
 	output := string(out)
-	if !strings.Contains(strings.ToLower(output), "bv") && !strings.Contains(strings.ToLower(output), "bw") {
-		t.Errorf("expected 'bv' or 'bw' in version output, got: %s", output)
+	if !strings.Contains(strings.ToLower(output), "b9s") {
+		t.Errorf("expected 'b9s' in version output, got: %s", output)
 	}
 }
 
@@ -81,7 +81,7 @@ func TestUpdateFlag_RequiresNetwork(t *testing.T) {
 
 	cmd := exec.Command(bv, "--update", "-y")
 	cmd.Dir = tmpDir
-	cmd.Env = append(os.Environ(), "BW_UPDATE_TIMEOUT=2s")
+	cmd.Env = append(os.Environ(), "B9S_UPDATE_TIMEOUT=2s")
 	out, _ := cmd.CombinedOutput()
 
 	output := string(out)

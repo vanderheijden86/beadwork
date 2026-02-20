@@ -334,7 +334,7 @@ func parseIssuesWithOptions(r io.Reader, opts ParseOptions, usePool bool) ([]mod
 	// Default warning handler prints to stderr (suppressed in robot mode).
 	warn := opts.WarningHandler
 	if warn == nil {
-		if os.Getenv("BW_ROBOT") == "1" {
+		if os.Getenv("B9S_ROBOT") == "1" {
 			warn = func(string) {}
 		} else {
 			warn = func(msg string) {

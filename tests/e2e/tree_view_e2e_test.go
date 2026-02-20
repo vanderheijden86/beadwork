@@ -130,7 +130,7 @@ func runTreeTUI(t *testing.T, dir string, autoCloseMs int, keys []keyStep) ([]by
 	cmd.Dir = dir
 	cmd.Env = append(os.Environ(),
 		"TERM=xterm-256color",
-		fmt.Sprintf("BW_TUI_AUTOCLOSE_MS=%d", autoCloseMs),
+		fmt.Sprintf("B9S_TUI_AUTOCLOSE_MS=%d", autoCloseMs),
 	)
 
 	stdinR, stdinW := io.Pipe()

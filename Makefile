@@ -1,4 +1,4 @@
-# bv Makefile
+# b9s Makefile
 #
 # Build with SQLite FTS5 (full-text search) support enabled
 
@@ -8,13 +8,13 @@
 export CGO_CFLAGS := -DSQLITE_ENABLE_FTS5
 
 build:
-	go build -o bw ./cmd/bw
+	go build -o b9s ./cmd/b9s
 
 install:
-	go install ./cmd/bw
+	go install ./cmd/b9s
 
 clean:
-	rm -f bv
+	rm -f b9s
 	go clean
 
 test:

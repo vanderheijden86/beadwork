@@ -1,4 +1,4 @@
-// Package config handles loading and saving bw configuration.
+// Package config handles loading and saving b9sconfiguration.
 //
 // Configuration follows the XDG Base Directory specification:
 //   - Config:  ~/.config/bw/config.yaml
@@ -39,7 +39,7 @@ type ExperimentalConfig struct {
 	BackgroundMode *bool `yaml:"background_mode,omitempty"`
 }
 
-// Config is the top-level configuration for bw.
+// Config is the top-level configuration for b9s.
 type Config struct {
 	Projects     []Project          `yaml:"projects,omitempty"`
 	Favorites    map[int]string     `yaml:"favorites,omitempty"` // Number key (1-9) -> project name
@@ -62,40 +62,40 @@ func DefaultConfig() Config {
 	}
 }
 
-// ConfigDir returns the XDG config directory for bw.
+// ConfigDir returns the XDG config directory for b9s.
 func ConfigDir() string {
 	if dir := os.Getenv("XDG_CONFIG_HOME"); dir != "" {
-		return filepath.Join(dir, "bw")
+		return filepath.Join(dir, "b9s")
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return ""
 	}
-	return filepath.Join(home, ".config", "bw")
+	return filepath.Join(home, ".config", "b9s")
 }
 
-// DataDir returns the XDG data directory for bw.
+// DataDir returns the XDG data directory for b9s.
 func DataDir() string {
 	if dir := os.Getenv("XDG_DATA_HOME"); dir != "" {
-		return filepath.Join(dir, "bw")
+		return filepath.Join(dir, "b9s")
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return ""
 	}
-	return filepath.Join(home, ".local", "share", "bw")
+	return filepath.Join(home, ".local", "share", "b9s")
 }
 
-// StateDir returns the XDG state directory for bw.
+// StateDir returns the XDG state directory for b9s.
 func StateDir() string {
 	if dir := os.Getenv("XDG_STATE_HOME"); dir != "" {
-		return filepath.Join(dir, "bw")
+		return filepath.Join(dir, "b9s")
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return ""
 	}
-	return filepath.Join(home, ".local", "state", "bw")
+	return filepath.Join(home, ".local", "state", "b9s")
 }
 
 // ConfigPath returns the full path to config.yaml.

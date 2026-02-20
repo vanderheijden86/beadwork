@@ -54,7 +54,7 @@ func ParseSprints(r io.Reader) ([]model.Sprint, error) {
 	warn := func(msg string) {
 		fmt.Fprintf(os.Stderr, "Warning: %s\n", msg)
 	}
-	if os.Getenv("BW_ROBOT") == "1" {
+	if os.Getenv("B9S_ROBOT") == "1" {
 		warn = func(string) {}
 	}
 

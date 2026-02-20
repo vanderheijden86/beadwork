@@ -1,4 +1,4 @@
-# Beadwork (bw)
+# Beadwork (b9s)
 
 ![Go Version](https://img.shields.io/github/go-mod/go-version/vanderheijden86/beadwork?style=for-the-badge&color=6272a4)
 ![License](https://img.shields.io/badge/License-MIT-50fa7b?style=for-the-badge)
@@ -58,7 +58,7 @@ Per the upstream project's [contribution guidelines](https://github.com/Dicklesw
 ### Homebrew (macOS/Linux)
 
 ```bash
-brew install vanderheijden86/tap/bw
+brew install vanderheijden86/tap/b9s
 ```
 
 ### From source
@@ -71,7 +71,7 @@ cd beadwork
 make install
 ```
 
-This installs the `bw` binary to your `$GOPATH/bin`. Make sure that directory is on your `PATH`.
+This installs the `b9s` binary to your `$GOPATH/bin`. Make sure that directory is on your `PATH`.
 
 For best display, use a terminal with a [Nerd Font](https://www.nerdfonts.com/).
 
@@ -80,7 +80,7 @@ For best display, use a terminal with a [Nerd Font](https://www.nerdfonts.com/).
 Navigate to any project initialized with `bd init` and run:
 
 ```bash
-bw
+b9s
 ```
 
 Press `?` for keyboard shortcuts or `` ` `` (backtick) for the interactive tutorial.
@@ -94,7 +94,7 @@ Press `?` for keyboard shortcuts or `` ` `` (backtick) for the interactive tutor
 | `/` | Fuzzy search | `s` | Cycle sort mode |
 | `o` / `c` / `r` / `a` | Filter: Open / Closed / Ready / All | `l` | Label picker |
 
-| Key | View |
+| Key | View |p
 |-----|------|
 | `b` | Kanban board |
 | `E` | Tree view |

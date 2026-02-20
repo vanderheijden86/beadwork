@@ -36,10 +36,10 @@ func TestBackgroundWorker_NewWithoutPath(t *testing.T) {
 }
 
 func TestBackgroundWorker_NewWithoutPath_EnvDefaults(t *testing.T) {
-	t.Setenv("BW_DEBOUNCE_MS", "123")
-	t.Setenv("BW_CHANNEL_BUFFER", "3")
-	t.Setenv("BW_HEARTBEAT_INTERVAL_S", "9")
-	t.Setenv("BW_WATCHDOG_INTERVAL_S", "11")
+	t.Setenv("B9S_DEBOUNCE_MS", "123")
+	t.Setenv("B9S_CHANNEL_BUFFER", "3")
+	t.Setenv("B9S_HEARTBEAT_INTERVAL_S", "9")
+	t.Setenv("B9S_WATCHDOG_INTERVAL_S", "11")
 
 	worker, err := NewBackgroundWorker(WorkerConfig{BeadsPath: ""})
 	if err != nil {
@@ -62,12 +62,12 @@ func TestBackgroundWorker_NewWithoutPath_EnvDefaults(t *testing.T) {
 }
 
 func TestEnvMaxLineSizeBytes(t *testing.T) {
-	t.Setenv("BW_MAX_LINE_SIZE_MB", "12")
+	t.Setenv("B9S_MAX_LINE_SIZE_MB", "12")
 	if got := envMaxLineSizeBytes(); got != 12*1024*1024 {
 		t.Errorf("envMaxLineSizeBytes()=%d, want %d", got, 12*1024*1024)
 	}
 
-	t.Setenv("BW_MAX_LINE_SIZE_MB", "-1")
+	t.Setenv("B9S_MAX_LINE_SIZE_MB", "-1")
 	if got := envMaxLineSizeBytes(); got != 0 {
 		t.Errorf("envMaxLineSizeBytes() with invalid env=%d, want %d", got, 0)
 	}
@@ -344,7 +344,7 @@ func TestBackgroundWorker_ContentHashChanges(t *testing.T) {
 }
 
 func TestBackgroundWorker_MetricsSnapshot(t *testing.T) {
-	t.Setenv("BW_WORKER_METRICS", "1")
+	t.Setenv("B9S_WORKER_METRICS", "1")
 
 	tmpDir := t.TempDir()
 	beadsPath := filepath.Join(tmpDir, "beads.jsonl")

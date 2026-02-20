@@ -30,7 +30,7 @@ func main() {
 	cpuProfile := flag.String("cpu-profile", "", "Write CPU profile to file")
 	help := flag.Bool("help", false, "Show help")
 	versionFlag := flag.Bool("version", false, "Show version")
-	updateFlag := flag.Bool("update", false, "Update bw to the latest version")
+	updateFlag := flag.Bool("update", false, "Update b9s to the latest version")
 	checkUpdateFlag := flag.Bool("check-update", false, "Check if a new version is available")
 	rollbackFlag := flag.Bool("rollback", false, "Rollback to the previous version (from backup)")
 	yesFlag := flag.Bool("yes", false, "Skip confirmation prompts (use with --update)")
@@ -55,14 +55,14 @@ func main() {
 	}
 
 	if *help {
-		fmt.Println("Usage: bw [options]")
+		fmt.Println("Usage: b9s [options]")
 		fmt.Println("\nA TUI viewer for beads issue tracker.")
 		flag.PrintDefaults()
 		os.Exit(0)
 	}
 
 	if *versionFlag {
-		fmt.Printf("bw %s\n", version.Version)
+		fmt.Printf("b9s %s\n", version.Version)
 		os.Exit(0)
 	}
 
@@ -76,9 +76,9 @@ func main() {
 		if available {
 			fmt.Printf("New version available: %s (current: %s)\n", newVersion, version.Version)
 			fmt.Printf("Download: %s\n", releaseURL)
-			fmt.Println("\nRun 'bw --update' to update automatically")
+			fmt.Println("\nRun 'b9s --update' to update automatically")
 		} else {
-			fmt.Printf("bw is up to date (version %s)\n", version.Version)
+			fmt.Printf("b9s is up to date (version %s)\n", version.Version)
 		}
 		os.Exit(0)
 	}
@@ -93,12 +93,12 @@ func main() {
 
 		available, newVersion, _, _ := updater.CheckUpdateAvailable()
 		if !available {
-			fmt.Printf("bw is already up to date (version %s)\n", version.Version)
+			fmt.Printf("b9s is already up to date (version %s)\n", version.Version)
 			os.Exit(0)
 		}
 
 		if !*yesFlag {
-			fmt.Printf("Update bw from %s to %s? [Y/n]: ", version.Version, newVersion)
+			fmt.Printf("Update b9s from %s to %s? [Y/n]: ", version.Version, newVersion)
 			var response string
 			fmt.Scanln(&response)
 			response = strings.ToLower(strings.TrimSpace(response))
@@ -120,7 +120,7 @@ func main() {
 		fmt.Println(result.Message)
 		if result.BackupPath != "" {
 			fmt.Printf("Backup saved to: %s\n", result.BackupPath)
-			fmt.Println("Run 'bw --rollback' to restore if needed")
+			fmt.Println("Run 'b9s --rollback' to restore if needed")
 		}
 		os.Exit(0)
 	}
@@ -174,24 +174,24 @@ func main() {
 		os.Exit(2)
 	}
 	if *backgroundMode {
-		_ = os.Setenv("BW_BACKGROUND_MODE", "1")
+		_ = os.Setenv("B9S_BACKGROUND_MODE", "1")
 	} else if *noBackgroundMode {
-		_ = os.Setenv("BW_BACKGROUND_MODE", "0")
-	} else if v, ok := os.LookupEnv("BW_BACKGROUND_MODE"); ok && strings.TrimSpace(v) != "" {
+		_ = os.Setenv("B9S_BACKGROUND_MODE", "0")
+	} else if v, ok := os.LookupEnv("B9S_BACKGROUND_MODE"); ok && strings.TrimSpace(v) != "" {
 		// Respect explicit user env var.
 		_ = v
 	} else if appCfg.Experimental.BackgroundMode != nil {
 		if *appCfg.Experimental.BackgroundMode {
-			_ = os.Setenv("BW_BACKGROUND_MODE", "1")
+			_ = os.Setenv("B9S_BACKGROUND_MODE", "1")
 		} else {
-			_ = os.Setenv("BW_BACKGROUND_MODE", "0")
+			_ = os.Setenv("B9S_BACKGROUND_MODE", "0")
 		}
 	} else if enabled, ok := loadBackgroundModeFromUserConfig(); ok {
 		// Legacy fallback: check ~/.config/bv/config.yaml
 		if enabled {
-			_ = os.Setenv("BW_BACKGROUND_MODE", "1")
+			_ = os.Setenv("B9S_BACKGROUND_MODE", "1")
 		} else {
-			_ = os.Setenv("BW_BACKGROUND_MODE", "0")
+			_ = os.Setenv("B9S_BACKGROUND_MODE", "0")
 		}
 	}
 
@@ -242,8 +242,8 @@ func runTUIProgram(m ui.Model) error {
 		p.Kill()
 	}()
 
-	// Optional auto-quit for automated tests: set BW_TUI_AUTOCLOSE_MS.
-	if v := os.Getenv("BW_TUI_AUTOCLOSE_MS"); v != "" {
+	// Optional auto-quit for automated tests: set B9S_TUI_AUTOCLOSE_MS.
+	if v := os.Getenv("B9S_TUI_AUTOCLOSE_MS"); v != "" {
 		if ms, err := strconv.Atoi(v); err == nil && ms > 0 {
 			go func() {
 				timer := time.NewTimer(time.Duration(ms) * time.Millisecond)

@@ -192,11 +192,11 @@ const (
 )
 
 func freshnessWarnThreshold() time.Duration {
-	return envDurationSeconds("BW_FRESHNESS_WARN_S", 30*time.Second)
+	return envDurationSeconds("B9S_FRESHNESS_WARN_S", 30*time.Second)
 }
 
 func freshnessStaleThreshold() time.Duration {
-	return envDurationSeconds("BW_FRESHNESS_STALE_S", 2*time.Minute)
+	return envDurationSeconds("B9S_FRESHNESS_STALE_S", 2*time.Minute)
 }
 
 func workerPollTickCmd() tea.Cmd {
@@ -437,7 +437,7 @@ func (m Model) currentViewName() string {
 // Format:  bw | projectname (1)      list view | ○12 ◉5 ◈3 ●2
 func (m Model) renderGlobalHeader() string {
 	// Left side: app name + project
-	appName := lipgloss.NewStyle().Bold(true).Foreground(ColorText).Render("bw")
+	appName := lipgloss.NewStyle().Bold(true).Foreground(ColorText).Render("b9s")
 	sep := lipgloss.NewStyle().Foreground(ColorMuted).Render(" | ")
 
 	projectLabel := m.activeProjectName
@@ -720,7 +720,7 @@ func NewModel(issues []model.Issue, beadsPath string) Model {
 	var backgroundWorker *BackgroundWorker
 	var backgroundModeErr error
 	backgroundModeRequested := false
-	if v := strings.TrimSpace(os.Getenv("BW_BACKGROUND_MODE")); v != "" {
+	if v := strings.TrimSpace(os.Getenv("B9S_BACKGROUND_MODE")); v != "" {
 		switch strings.ToLower(v) {
 		case "1", "true", "yes", "on":
 			backgroundModeRequested = true
@@ -1455,12 +1455,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			addTiming("total", "total")
 			m.statusMsg += "]"
 		}
-		// Auto-enable background mode after slow sync reloads (opt-out via BW_BACKGROUND_MODE=0).
+		// Auto-enable background mode after slow sync reloads (opt-out via B9S_BACKGROUND_MODE=0).
 		autoEnabled := false
 		slowReload := reloadDuration >= time.Second
 		if slowReload && m.backgroundWorker == nil && m.beadsPath != "" {
 			autoAllowed := true
-			if v := strings.TrimSpace(os.Getenv("BW_BACKGROUND_MODE")); v != "" {
+			if v := strings.TrimSpace(os.Getenv("B9S_BACKGROUND_MODE")); v != "" {
 				switch strings.ToLower(v) {
 				case "0", "false", "no", "off":
 					autoAllowed = false
@@ -1490,7 +1490,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if autoEnabled {
 				m.statusMsg += "; background mode auto-enabled"
 			} else {
-				m.statusMsg += "; consider BW_BACKGROUND_MODE=1"
+				m.statusMsg += "; consider B9S_BACKGROUND_MODE=1"
 			}
 		}
 		m.statusIsError = false

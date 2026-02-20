@@ -125,7 +125,7 @@ func (w *Watcher) Start() error {
 	w.forcePollEnv = false
 	w.fsType = FSTypeUnknown
 
-	if envBool("BW_FORCE_POLLING") || envBool("BW_FORCE_POLL") {
+	if envBool("B9S_FORCE_POLLING") || envBool("B9S_FORCE_POLL") {
 		w.forcePollEnv = true
 	}
 

@@ -267,16 +267,16 @@ func NewBackgroundWorker(cfg WorkerConfig) (*BackgroundWorker, error) {
 	}()
 
 	if cfg.DebounceDelay == 0 {
-		cfg.DebounceDelay = envDurationMilliseconds("BW_DEBOUNCE_MS", 200*time.Millisecond)
+		cfg.DebounceDelay = envDurationMilliseconds("B9S_DEBOUNCE_MS", 200*time.Millisecond)
 	}
 	if cfg.MessageBuffer <= 0 {
-		cfg.MessageBuffer = envPositiveIntOr("BW_CHANNEL_BUFFER", 8)
+		cfg.MessageBuffer = envPositiveIntOr("B9S_CHANNEL_BUFFER", 8)
 	}
 	if cfg.HeartbeatInterval == 0 {
-		cfg.HeartbeatInterval = envDurationSeconds("BW_HEARTBEAT_INTERVAL_S", 5*time.Second)
+		cfg.HeartbeatInterval = envDurationSeconds("B9S_HEARTBEAT_INTERVAL_S", 5*time.Second)
 	}
 	if cfg.WatchdogInterval == 0 {
-		cfg.WatchdogInterval = envDurationSeconds("BW_WATCHDOG_INTERVAL_S", 10*time.Second)
+		cfg.WatchdogInterval = envDurationSeconds("B9S_WATCHDOG_INTERVAL_S", 10*time.Second)
 	}
 	if cfg.HeartbeatTimeout == 0 {
 		cfg.HeartbeatTimeout = 30 * time.Second
@@ -288,10 +288,10 @@ func NewBackgroundWorker(cfg WorkerConfig) (*BackgroundWorker, error) {
 		cfg.MaxRecoveries = 3
 	}
 
-	logLevel := parseWorkerLogLevel(os.Getenv("BW_WORKER_LOG_LEVEL"))
-	metricsEnabled := envBool("BW_WORKER_METRICS")
-	tracePath := strings.TrimSpace(os.Getenv("BW_WORKER_TRACE"))
-	logJSON := os.Getenv("BW_ROBOT") == "1"
+	logLevel := parseWorkerLogLevel(os.Getenv("B9S_WORKER_LOG_LEVEL"))
+	metricsEnabled := envBool("B9S_WORKER_METRICS")
+	tracePath := strings.TrimSpace(os.Getenv("B9S_WORKER_TRACE"))
+	logJSON := os.Getenv("B9S_ROBOT") == "1"
 
 	idleGCConfig := IdleGCConfig{
 		Enabled:     true,
@@ -546,7 +546,7 @@ func (w *BackgroundWorker) Start() error {
 	})
 
 	// Avoid mutating global GC percent in tests (it can interfere with parallel test execution).
-	if os.Getenv("BW_TEST_MODE") != "" {
+	if os.Getenv("B9S_TEST_MODE") != "" {
 		idleGCGCPercent = 0
 	}
 
@@ -1517,7 +1517,7 @@ func countJSONLLines(path string) (int, error) {
 }
 
 func envMaxLineSizeBytes() int {
-	mb, ok := envPositiveInt("BW_MAX_LINE_SIZE_MB")
+	mb, ok := envPositiveInt("B9S_MAX_LINE_SIZE_MB")
 	if !ok {
 		return 0
 	}

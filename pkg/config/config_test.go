@@ -268,7 +268,7 @@ func TestConfigDir_XDGOverride(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", dir)
 
 	got := ConfigDir()
-	expected := filepath.Join(dir, "bw")
+	expected := filepath.Join(dir, "b9s")
 	if got != expected {
 		t.Errorf("expected %q, got %q", expected, got)
 	}
@@ -279,7 +279,7 @@ func TestDataDir_XDGOverride(t *testing.T) {
 	t.Setenv("XDG_DATA_HOME", dir)
 
 	got := DataDir()
-	expected := filepath.Join(dir, "bw")
+	expected := filepath.Join(dir, "b9s")
 	if got != expected {
 		t.Errorf("expected %q, got %q", expected, got)
 	}
@@ -290,7 +290,7 @@ func TestStateDir_XDGOverride(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", dir)
 
 	got := StateDir()
-	expected := filepath.Join(dir, "bw")
+	expected := filepath.Join(dir, "b9s")
 	if got != expected {
 		t.Errorf("expected %q, got %q", expected, got)
 	}

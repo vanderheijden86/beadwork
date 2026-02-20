@@ -1,9 +1,9 @@
 version: 2
 
-project_name: bw
+project_name: b9s
 builds:
-  - main: ./cmd/bw
-    binary: bw
+  - main: ./cmd/b9s
+    binary: b9s
     ldflags:
       - -s -w
       - -X github.com/vanderheijden86/beadwork/pkg/version.Version=v{{.Version}}
@@ -35,7 +35,7 @@ changelog:
 
 # Homebrew tap publishing
 brews:
-  - name: bw
+  - name: b9s
     repository:
       owner: vanderheijden86
       name: homebrew-tap
@@ -46,6 +46,6 @@ brews:
     description: "Fast, focused TUI viewer and editor for beads projects"
     license: "MIT"
     install: |
-      bin.install "bw"
+      bin.install "b9s"
     test: |
-      system "#{bin}/bw", "--version"
+      system "#{bin}/b9s", "--version"

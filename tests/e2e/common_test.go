@@ -23,8 +23,8 @@ var (
 
 func TestMain(m *testing.M) {
 	// Prevent any test from accidentally opening a browser
-	os.Setenv("BW_NO_BROWSER", "1")
-	os.Setenv("BW_TEST_MODE", "1")
+	os.Setenv("B9S_NO_BROWSER", "1")
+	os.Setenv("B9S_TEST_MODE", "1")
 
 	// Build the binary once for all tests
 	if err := buildBvOnce(); err != nil {
@@ -77,7 +77,7 @@ func detectScriptTUICapability(bvPath string) (bool, string) {
 	cmd.Dir = tempDir
 	cmd.Env = append(os.Environ(),
 		"TERM=xterm-256color",
-		"BW_TUI_AUTOCLOSE_MS=250",
+		"B9S_TUI_AUTOCLOSE_MS=250",
 	)
 
 	outFile := filepath.Join(tempDir, "script.out")
@@ -114,7 +114,7 @@ func buildBvOnce() error {
 	}
 	binPath := filepath.Join(tempDir, binName)
 
-	cmd := exec.Command("go", "build", "-o", binPath, "../../cmd/bw")
+	cmd := exec.Command("go", "build", "-o", binPath, "../../cmd/b9s")
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("go build failed: %v\n%s", err, out)
 	}

@@ -1,8 +1,8 @@
 // Package debug provides conditional debug logging for bv.
 //
-// Debug logging is enabled by setting the BW_DEBUG environment variable:
+// Debug logging is enabled by setting the B9S_DEBUG environment variable:
 //
-//	BW_DEBUG=1 bv --robot-triage
+//	B9S_DEBUG=1 bv --robot-triage
 //
 // When enabled, debug messages are written to stderr with timestamps.
 // When disabled (default), all debug functions are no-ops with zero overhead.
@@ -26,16 +26,16 @@ import (
 )
 
 var (
-	// enabled is true when BW_DEBUG env var is set
+	// enabled is true when B9S_DEBUG env var is set
 	enabled bool
-	// logger writes to stderr with [BW_DEBUG] prefix
+	// logger writes to stderr with [B9S_DEBUG] prefix
 	logger *log.Logger
 )
 
 func init() {
-	if os.Getenv("BW_DEBUG") != "" {
+	if os.Getenv("B9S_DEBUG") != "" {
 		enabled = true
-		logger = log.New(os.Stderr, "[BW_DEBUG] ", log.Ltime|log.Lmicroseconds)
+		logger = log.New(os.Stderr, "[B9S_DEBUG] ", log.Ltime|log.Lmicroseconds)
 	}
 }
 
@@ -49,7 +49,7 @@ func Enabled() bool {
 func SetEnabled(e bool) {
 	enabled = e
 	if e && logger == nil {
-		logger = log.New(os.Stderr, "[BW_DEBUG] ", log.Ltime|log.Lmicroseconds)
+		logger = log.New(os.Stderr, "[B9S_DEBUG] ", log.Ltime|log.Lmicroseconds)
 	}
 }
 
