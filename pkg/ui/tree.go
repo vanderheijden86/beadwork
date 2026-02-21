@@ -1240,12 +1240,13 @@ func (t *TreeModel) RenderHeader() string {
 	rightWidth := lipgloss.Width(rightSide)
 
 	// Fill space between "Issue" label and right columns
-	fillWidth := width - leftPrefixWidth - rightWidth
+	// -1 accounts for the " " prefix before rightSide, matching row layout (line ~1419)
+	fillWidth := width - leftPrefixWidth - rightWidth - 1
 	if fillWidth < 0 {
 		fillWidth = 0
 	}
 
-	headerText := leftPrefix + strings.Repeat(" ", fillWidth) + rightSide
+	headerText := leftPrefix + strings.Repeat(" ", fillWidth) + " " + rightSide
 	return headerStyle.Render(headerText)
 }
 
