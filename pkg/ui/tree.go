@@ -1188,7 +1188,7 @@ func (t *TreeModel) RenderHeader() string {
 		width = 80
 	}
 	headerStyle := t.theme.Renderer.NewStyle().
-		Foreground(lipgloss.AdaptiveColor{Light: "#333333", Dark: "#F8F8F2"}).
+		Foreground(lipgloss.AdaptiveColor{Light: "#666666", Dark: "#6272A4"}).
 		Bold(true).
 		Width(width)
 
