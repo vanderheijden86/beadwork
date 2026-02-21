@@ -483,7 +483,7 @@ func (m *ProjectPickerModel) renderShortcutsColumn() []string {
 func (m *ProjectPickerModel) renderTypeLegendColumn() []string {
 	t := m.theme
 	headerStyle := t.Renderer.NewStyle().
-		Foreground(lipgloss.AdaptiveColor{Light: "#666666", Dark: "#6272A4"}).
+		Foreground(t.Base.GetForeground()).
 		Bold(true)
 	labelStyle := t.Renderer.NewStyle().
 		Foreground(t.MutedText.GetForeground())
