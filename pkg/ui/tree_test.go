@@ -12,8 +12,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/vanderheijden86/beadwork/pkg/model"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/vanderheijden86/beadwork/pkg/model"
 )
 
 // testTheme returns a minimal Theme for testing.
@@ -1923,7 +1923,6 @@ func TestTreeSetGlobalIssueMap(t *testing.T) {
 		t.Error("expected test-1 in globalIssueMap")
 	}
 }
-
 
 // =============================================================================
 // SortField/SortDirection type refactor tests (bd-x3l)
@@ -4080,6 +4079,38 @@ func TestTreeNode_ShortIDAtEnd(t *testing.T) {
 		if idIdx > statusIdx && idIdx < titleIdx {
 			t.Error("ID column should NOT be between STATUS and TITLE; it should be at the end")
 		}
+	}
+}
+
+func TestTreeHeaderIDAlignedWithRowIDStart(t *testing.T) {
+	issues := []model.Issue{
+		{ID: "agents-config-7w79", Title: "Header alignment test", Status: "open", IssueType: model.TypeTask, Priority: 2, CreatedAt: time.Now()},
+	}
+	tree := NewTreeModel(newTreeTestTheme())
+	tree.Build(issues)
+	tree.SetSize(120, 20)
+
+	view := stripANSI(tree.View())
+	lines := strings.Split(view, "\n")
+	if len(lines) < 2 {
+		t.Fatalf("expected header + at least one row, got %d lines", len(lines))
+	}
+	header := lines[0]
+	row := lines[1]
+
+	idHeaderIdx := strings.Index(header, "ID")
+	if idHeaderIdx < 0 {
+		t.Fatalf("header missing ID label: %q", header)
+	}
+
+	shortID := shortIDSuffix(issues[0].ID)
+	idRowIdx := strings.Index(row, shortID)
+	if idRowIdx < 0 {
+		t.Fatalf("row missing short id %q: %q", shortID, row)
+	}
+
+	if idHeaderIdx != idRowIdx {
+		t.Fatalf("ID header should be left-aligned with row ID start: header idx=%d row idx=%d\nheader=%q\nrow=%q", idHeaderIdx, idRowIdx, header, row)
 	}
 }
 

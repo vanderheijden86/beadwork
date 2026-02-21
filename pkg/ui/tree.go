@@ -10,9 +10,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/vanderheijden86/beadwork/pkg/model"
 	"github.com/charmbracelet/bubbles/viewport"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/vanderheijden86/beadwork/pkg/model"
 )
 
 // TreeState represents the persistent state of the tree view (bv-zv7p).
@@ -35,11 +35,11 @@ import (
 //   - Version field enables future schema migrations
 //   - Corrupted/missing file = use defaults (graceful degradation)
 type TreeState struct {
-	Version       int             `json:"version"`                    // Schema version (currently 1)
-	Expanded      map[string]bool `json:"expanded"`                   // Issue ID -> explicitly set state
-	Bookmarks     []string        `json:"bookmarks,omitempty"`        // Bookmarked issue IDs (bd-k4n)
-	SortField     *int            `json:"sort_field,omitempty"`       // Persisted sort field (bd-2qw)
-	SortDirection *int            `json:"sort_direction,omitempty"`   // Persisted sort direction (bd-2qw)
+	Version       int             `json:"version"`                  // Schema version (currently 1)
+	Expanded      map[string]bool `json:"expanded"`                 // Issue ID -> explicitly set state
+	Bookmarks     []string        `json:"bookmarks,omitempty"`      // Bookmarked issue IDs (bd-k4n)
+	SortField     *int            `json:"sort_field,omitempty"`     // Persisted sort field (bd-2qw)
+	SortDirection *int            `json:"sort_direction,omitempty"` // Persisted sort direction (bd-2qw)
 }
 
 // TreeStateVersion is the current schema version for tree persistence
@@ -296,7 +296,6 @@ type TreeModel struct {
 	occurMode    bool   // Is occur mode active?
 	occurPattern string // Current occur pattern
 
-
 }
 
 // NewTreeModel creates an empty tree model
@@ -305,8 +304,8 @@ func NewTreeModel(theme Theme) TreeModel {
 		theme:         theme,
 		mode:          TreeModeHierarchy,
 		issueMap:      make(map[string]*IssueTreeNode),
-		sortField:     SortFieldCreated,    // Default: newest first (bd-ctu)
-		sortDirection: SortDescending,      // Default: newest first (bd-ctu)
+		sortField:     SortFieldCreated, // Default: newest first (bd-ctu)
+		sortDirection: SortDescending,   // Default: newest first (bd-ctu)
 	}
 }
 
@@ -1239,14 +1238,15 @@ func (t *TreeModel) RenderHeader() string {
 	rightSide := fmt.Sprintf("%-12s  %-*s", sortBadge, maxIDWidth, "ID")
 	rightWidth := lipgloss.Width(rightSide)
 
-	// Fill space between "Issue" label and right columns
-	// -1 accounts for the " " prefix before rightSide, matching row layout (line ~1419)
-	fillWidth := width - leftPrefixWidth - rightWidth - 1
+	// Fill space between "Issue" label and right columns.
+	// Keep the right cluster offset in sync with renderNode() so "ID" starts on
+	// the same column as row values (bd-y0ct).
+	fillWidth := width - leftPrefixWidth - rightWidth - 2
 	if fillWidth < 0 {
 		fillWidth = 0
 	}
 
-	headerText := leftPrefix + strings.Repeat(" ", fillWidth) + " " + rightSide
+	headerText := leftPrefix + strings.Repeat(" ", fillWidth) + rightSide
 	return headerStyle.Render(headerText)
 }
 
