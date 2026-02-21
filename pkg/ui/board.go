@@ -13,6 +13,8 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+var selectedCardTextColor = lipgloss.AdaptiveColor{Light: "#101010", Dark: "#101010"}
+
 // BoardModel represents the Kanban board view with adaptive columns
 type BoardModel struct {
 	columns      [4][]model.Issue
@@ -155,6 +157,36 @@ func formatOldestAge(d time.Duration) string {
 	}
 	months := days / 30
 	return fmt.Sprintf("%dmo", months)
+}
+
+// buildBoardColumnHeaderText formats board column header metadata with
+// compact plain-text tokens (k9s-style, no emoji decorations).
+func buildBoardColumnHeaderText(baseHeader string, stats ColumnStats, width int, swimLaneMode SwimLaneMode, colIdx int) string {
+	if width < 100 {
+		return baseHeader
+	}
+
+	parts := make([]string, 0, 4)
+	if stats.P0Count > 0 {
+		parts = append(parts, fmt.Sprintf("P0:%d", stats.P0Count))
+	}
+	if stats.P1Count > 0 {
+		parts = append(parts, fmt.Sprintf("P1:%d", stats.P1Count))
+	}
+
+	if width >= 140 {
+		if swimLaneMode == SwimByStatus && colIdx == ColInProgress && stats.BlockedCount > 0 {
+			parts = append(parts, fmt.Sprintf("BLK:%d", stats.BlockedCount))
+		}
+		if stats.OldestAge > 0 && stats.Total > 0 {
+			parts = append(parts, "AGE:"+formatOldestAge(stats.OldestAge))
+		}
+	}
+
+	if len(parts) == 0 {
+		return baseHeader
+	}
+	return baseHeader + " " + strings.Join(parts, " ")
 }
 
 // sortIssuesByPriorityAndDate sorts issues by priority (ascending) then by creation date (descending)
@@ -983,72 +1015,42 @@ func (b BoardModel) View(width, height int) string {
 		// Compute column statistics (bv-nl8a)
 		stats := computeColumnStats(issues, b.issueMap)
 
-		// Build header text with adaptive stats based on terminal width (bv-nl8a)
-		// - Narrow (<100): Just count
-		// - Medium (100-140): Count + P0/P1 counts
-		// - Wide (>140): Full stats including oldest age
-		var headerText string
 		baseHeader := fmt.Sprintf("%s (%d)", columnTitles[colIdx], issueCount)
+		headerText := buildBoardColumnHeaderText(baseHeader, stats, width, b.swimLaneMode, colIdx)
+		headerParts := strings.SplitN(headerText, " ", 3)
 
-		if width < 100 {
-			// Narrow: just the base header
-			headerText = baseHeader
-		} else if width < 140 {
-			// Medium: add P0/P1 indicators if any exist
-			var indicators []string
-			if stats.P0Count > 0 {
-				indicators = append(indicators, fmt.Sprintf("%d🔴", stats.P0Count))
-			}
-			if stats.P1Count > 0 {
-				indicators = append(indicators, fmt.Sprintf("%d🟡", stats.P1Count))
-			}
-			if len(indicators) > 0 {
-				headerText = baseHeader + " " + strings.Join(indicators, " ")
-			} else {
-				headerText = baseHeader
-			}
-		} else {
-			// Wide: full stats including oldest age
-			var indicators []string
-			if stats.P0Count > 0 {
-				indicators = append(indicators, fmt.Sprintf("%d🔴", stats.P0Count))
-			}
-			if stats.P1Count > 0 {
-				indicators = append(indicators, fmt.Sprintf("%d🟡", stats.P1Count))
-			}
-			// Show blocked count in In Progress column (colIdx == ColInProgress when in status mode)
-			if b.swimLaneMode == SwimByStatus && colIdx == ColInProgress && stats.BlockedCount > 0 {
-				indicators = append(indicators, fmt.Sprintf("⚠️%d", stats.BlockedCount))
-			}
-			// Show oldest age with color indicator
-			if stats.OldestAge > 0 && issueCount > 0 {
-				ageStr := formatOldestAge(stats.OldestAge)
-				indicators = append(indicators, fmt.Sprintf("⏱%s", ageStr))
-			}
-			if len(indicators) > 0 {
-				headerText = baseHeader + " " + strings.Join(indicators, " ")
-			} else {
-				headerText = baseHeader
-			}
+		titlePart := headerText
+		metaPart := ""
+		if len(headerParts) >= 2 {
+			titlePart = headerParts[0] + " " + headerParts[1]
+		}
+		if len(headerParts) == 3 {
+			metaPart = headerParts[2]
 		}
 
-		headerStyle := t.Renderer.NewStyle().
-			Width(baseWidth).
-			Align(lipgloss.Center).
-			Bold(true).
-			Padding(0, 1)
-
+		prefix := "  "
+		prefixStyle := t.Renderer.NewStyle().Foreground(t.Secondary)
+		titleColor := columnColors[colIdx]
 		if isFocused {
-			headerStyle = headerStyle.
-				Background(columnColors[colIdx]).
-				Foreground(lipgloss.AdaptiveColor{Light: "#FFFFFF", Dark: "#1a1a1a"})
-		} else {
-			headerStyle = headerStyle.
-				Background(lipgloss.AdaptiveColor{Light: "#E0E0E0", Dark: "#2a2a2a"}).
-				Foreground(columnColors[colIdx])
+			prefix = "▸ "
+			prefixStyle = prefixStyle.Foreground(t.Primary).Bold(true)
+			titleColor = t.Primary
 		}
 
-		header := headerStyle.Render(headerText)
+		titleStyle := t.Renderer.NewStyle().
+			Foreground(titleColor).
+			Bold(true)
+		metaStyle := t.Renderer.NewStyle().
+			Foreground(t.Secondary)
+
+		headerLine := prefixStyle.Render(prefix) + titleStyle.Render(titlePart)
+		if metaPart != "" {
+			headerLine += " " + metaStyle.Render(metaPart)
+		}
+		header := t.Renderer.NewStyle().
+			Width(baseWidth).
+			Padding(0, 1).
+			Render(headerLine)
 
 		// Calculate visible rows (bv-1daf: 3 content lines)
 		// Card height breakdown:
@@ -1300,6 +1302,7 @@ func (b BoardModel) renderCard(issue model.Issue, width int, selected bool, colI
 	if selected {
 		cardStyle = cardStyle.
 			Background(t.Highlight).
+			Foreground(selectedCardTextColor).
 			Border(lipgloss.ThickBorder()).
 			BorderForeground(borderColor)
 	} else if isCurrentMatch {
@@ -1324,7 +1327,11 @@ func (b BoardModel) renderCard(issue model.Issue, width int, selected bool, colI
 	if issue.Priority <= 1 {
 		prioStyle = prioStyle.Foreground(lipgloss.AdaptiveColor{Light: "#c62828", Dark: "#ef5350"})
 	} else {
-		prioStyle = prioStyle.Foreground(t.Secondary)
+		if selected {
+			prioStyle = prioStyle.Foreground(selectedCardTextColor)
+		} else {
+			prioStyle = prioStyle.Foreground(t.Secondary)
+		}
 	}
 
 	// Truncate ID for narrow cards - reserve space for age indicator
@@ -1340,12 +1347,20 @@ func (b BoardModel) renderCard(issue model.Issue, width int, selected bool, colI
 		ageText = truncateRunesHelper(ageText, 6, "")
 	}
 	ageColor := getAgeColor(issue.UpdatedAt)
+	if selected {
+		ageColor = selectedCardTextColor
+	}
 	ageStyled := t.Renderer.NewStyle().Foreground(ageColor).Render(ageText)
+	idColor := t.Secondary
+	if selected {
+		idColor = selectedCardTextColor
+		iconColor = selectedCardTextColor
+	}
 
 	line1 := fmt.Sprintf("%s %s %s %s",
 		t.Renderer.NewStyle().Foreground(iconColor).Render(icon),
 		prioStyle.Render(prioText),
-		t.Renderer.NewStyle().Bold(true).Foreground(t.Secondary).Render(displayID),
+		t.Renderer.NewStyle().Bold(true).Foreground(idColor).Render(displayID),
 		ageStyled,
 	)
 
@@ -1360,7 +1375,7 @@ func (b BoardModel) renderCard(issue model.Issue, width int, selected bool, colI
 
 	titleStyle := t.Renderer.NewStyle()
 	if selected {
-		titleStyle = titleStyle.Foreground(t.Primary).Bold(true)
+		titleStyle = titleStyle.Foreground(selectedCardTextColor).Bold(true)
 	} else {
 		titleStyle = titleStyle.Foreground(t.Base.GetForeground())
 	}
@@ -1376,22 +1391,31 @@ func (b BoardModel) renderCard(issue model.Issue, width int, selected bool, colI
 	for _, dep := range issue.Dependencies {
 		if dep != nil && dep.Type.IsBlocking() {
 			blockerID := truncateRunesHelper(dep.DependsOnID, 10, "…")
-			blockedStyle := t.Renderer.NewStyle().Foreground(t.Blocked)
 			// Try to get blocker title for better context
 			blockerBadge := "🚫←" + blockerID
 			if blocker, ok := b.issueMap[dep.DependsOnID]; ok && blocker != nil {
 				titleSnippet := truncateRunesHelper(blocker.Title, 12, "…")
 				blockerBadge = fmt.Sprintf("🚫←%s (%s)", blockerID, titleSnippet)
 			}
-			meta = append(meta, blockedStyle.Render(blockerBadge))
+			if selected {
+				meta = append(meta, blockerBadge)
+			} else {
+				blockedStyle := t.Renderer.NewStyle().Foreground(t.Blocked)
+				meta = append(meta, blockedStyle.Render(blockerBadge))
+			}
 			break // Only show first blocker
 		}
 	}
 
 	// Blocks count: ⚡→N (this card blocks N others) - from reverse index
 	if blockedIDs, ok := b.blocksIndex[issue.ID]; ok && len(blockedIDs) > 0 {
-		blocksStyle := t.Renderer.NewStyle().Foreground(t.Feature)
-		meta = append(meta, blocksStyle.Render(fmt.Sprintf("⚡→%d", len(blockedIDs))))
+		blocksText := fmt.Sprintf("⚡→%d", len(blockedIDs))
+		if selected {
+			meta = append(meta, blocksText)
+		} else {
+			blocksStyle := t.Renderer.NewStyle().Foreground(t.Feature)
+			meta = append(meta, blocksStyle.Render(blocksText))
+		}
 	}
 
 	// Labels: show 2-3 label names (no "+N" count per spec)
@@ -1405,13 +1429,20 @@ func (b BoardModel) renderCard(issue model.Issue, width int, selected bool, colI
 			labelParts = append(labelParts, truncateRunesHelper(issue.Labels[i], 8, ""))
 		}
 		labelText := strings.Join(labelParts, ",")
-		labelStyle := t.Renderer.NewStyle().Foreground(t.InProgress)
-		meta = append(meta, labelStyle.Render(labelText))
+		if selected {
+			meta = append(meta, labelText)
+		} else {
+			labelStyle := t.Renderer.NewStyle().Foreground(t.InProgress)
+			meta = append(meta, labelStyle.Render(labelText))
+		}
 	}
 
 	line3 := ""
 	if len(meta) > 0 {
 		line3 = strings.Join(meta, " ")
+		if selected {
+			line3 = t.Renderer.NewStyle().Foreground(selectedCardTextColor).Render(line3)
+		}
 	}
 
 	// Clamp + pad each line to exactly width chars (bd-20v9)
@@ -1479,6 +1510,7 @@ func (b BoardModel) renderExpandedCard(issue model.Issue, width int, _, _ int) s
 	// Full rectangle border for expanded card (bd-f7g)
 	cardStyle = cardStyle.
 		Background(t.Highlight).
+		Foreground(selectedCardTextColor).
 		Border(lipgloss.ThickBorder()).
 		BorderForeground(borderColor)
 
@@ -1491,19 +1523,20 @@ func (b BoardModel) renderExpandedCard(issue model.Issue, width int, _, _ int) s
 	if issue.Priority <= 1 {
 		prioStyle = prioStyle.Foreground(lipgloss.AdaptiveColor{Light: "#c62828", Dark: "#ef5350"})
 	} else {
-		prioStyle = prioStyle.Foreground(t.Secondary)
+		prioStyle = prioStyle.Foreground(selectedCardTextColor)
 	}
+	iconColor = selectedCardTextColor
 
 	header := fmt.Sprintf("%s %s %s ▼",
 		t.Renderer.NewStyle().Foreground(iconColor).Render(icon),
 		prioStyle.Render(prioText),
-		t.Renderer.NewStyle().Bold(true).Foreground(t.Primary).Render(issue.ID),
+		t.Renderer.NewStyle().Bold(true).Foreground(selectedCardTextColor).Render(issue.ID),
 	)
 
 	// ══════════════════════════════════════════════════════════════════════════
 	// TITLE: Full title (not truncated)
 	// ══════════════════════════════════════════════════════════════════════════
-	titleStyle := t.Renderer.NewStyle().Foreground(t.Primary).Bold(true)
+	titleStyle := t.Renderer.NewStyle().Foreground(selectedCardTextColor).Bold(true)
 	title := titleStyle.Render(issue.Title)
 
 	// ══════════════════════════════════════════════════════════════════════════
