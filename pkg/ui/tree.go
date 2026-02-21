@@ -1181,8 +1181,8 @@ func (t *TreeModel) renderEmptyState() string {
 }
 
 // RenderHeader returns a styled header row for the tree view, with column
-// labels aligned to match the row content below (bd-xhyo).
-// Row layout: [gutter 2] [expand 1] [space 1] [icon 1] [space 1] [status 4] [space 1] [title...] ... [age 8] [space 1] [ID maxW]
+// labels aligned to match the row content below (bd-xhyo, bd-y0ct).
+// Row layout: [gutter 2] [expand 1] [space 1] [icon 1] [space 1] [status 4] [space 1] [title...] ... [age 12] [space 2] [ID maxW]
 func (t *TreeModel) RenderHeader() string {
 	width := t.width
 	if width <= 0 {
@@ -1193,7 +1193,7 @@ func (t *TreeModel) RenderHeader() string {
 		Bold(true).
 		Width(width)
 
-	// Mode/filter badges go before the column labels
+	// Mode/filter badges
 	modeBadge := ""
 	if t.flatMode {
 		modeBadge = "[FLAT] "
@@ -1206,16 +1206,7 @@ func (t *TreeModel) RenderHeader() string {
 		filterBadge = fmt.Sprintf("[%s] ", strings.ToUpper(t.currentFilter))
 	}
 
-	// Build left side to match row column positions:
-	// expand(1) + space(1) + icon(1) + space(1) = 4 chars before STATUS (bd-hdgh)
 	leftPrefix := modeBadge + filterBadge
-	leftPrefixWidth := lipgloss.Width(leftPrefix)
-
-	// Pad to align STATUS with the status badge column
-	statusCol := 1 + 1 + 1 + 1 // expand + space + icon + space
-	if leftPrefixWidth < statusCol {
-		leftPrefix += strings.Repeat(" ", statusCol-leftPrefixWidth)
-	}
 
 	// Right side: [sort label] padded to age column width, then ID label right-aligned
 	sortBadge := fmt.Sprintf("[%s %s]", t.sortField.String(), t.sortDirection.Indicator())
@@ -1234,21 +1225,18 @@ func (t *TreeModel) RenderHeader() string {
 		}
 	}
 
-	// Right side matches row: age(8) + space(1) + ID(maxIDWidth)
+	// Right side matches row: age(12) + space(2) + ID(maxIDWidth)
 	rightID := fmt.Sprintf("%*s", maxIDWidth, "ID")
-	rightSide := fmt.Sprintf("%8s %s", sortBadge, rightID)
+	rightSide := fmt.Sprintf("%12s  %s", sortBadge, rightID)
 	rightWidth := lipgloss.Width(rightSide)
 
-	// TITLE fills the space between STATUS and right side
-	statusLabel := "STATUS"
-	titleStart := lipgloss.Width(leftPrefix) + len(statusLabel) + 1 // +1 for space after STATUS
-	titleWidth := width - titleStart - rightWidth - 1               // -1 for trailing padding
-	if titleWidth < 5 {
-		titleWidth = 5
+	// Fill space between left badges and right columns
+	fillWidth := width - lipgloss.Width(leftPrefix) - rightWidth
+	if fillWidth < 0 {
+		fillWidth = 0
 	}
-	titleLabel := "TITLE" + strings.Repeat(" ", titleWidth-5)
 
-	headerText := leftPrefix + statusLabel + " " + titleLabel + " " + rightSide
+	headerText := leftPrefix + strings.Repeat(" ", fillWidth) + rightSide
 	return headerStyle.Render(headerText)
 }
 
@@ -1348,8 +1336,8 @@ func (t *TreeModel) renderNode(node *IssueTreeNode, isSelected bool, maxIDWidth 
 		if isSelected {
 			ageStyle = r.NewStyle().Foreground(darkFg)
 		}
-		rightParts = append(rightParts, ageStyle.Render(fmt.Sprintf("%8s", ageStr)))
-		rightWidth += 9
+		rightParts = append(rightParts, ageStyle.Render(fmt.Sprintf("%12s", ageStr)))
+		rightWidth += 14 // 12 age + 2 gap before ID
 	}
 
 	// Short ID suffix at the far right, right-aligned to maxIDWidth for column alignment (bd-03l, bd-uyzc)
@@ -1407,7 +1395,7 @@ func (t *TreeModel) renderNode(node *IssueTreeNode, isSelected bool, maxIDWidth 
 	}
 
 	// ── Right side ──
-	rightSide := strings.Join(rightParts, " ")
+	rightSide := strings.Join(rightParts, "  ")
 	rightLen := lipgloss.Width(rightSide)
 
 	// ── Build highlighted portion (title + padding + right) separately (bd-hdgh) ──
